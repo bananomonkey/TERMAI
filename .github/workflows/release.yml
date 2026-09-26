@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      - name: Build
+        run: go build -ldflags "-s -w" -o termai-linux-amd64 .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termai-linux-amd64
+          path: termai-linux-amd64
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: false
+          install: mingw-w64-x86_64-gcc
+          path-type: inherit
+      - name: Build
+        shell: msys2 {0}
+        run: go build -ldflags "-s -w" -o termai-windows-amd64.exe .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termai-windows-amd64.exe
+          path: termai-windows-amd64.exe
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - { goarch: arm64, suffix: macos-arm64 }
+          - { goarch: amd64, suffix: macos-amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Build
+        run: GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w" -o termai-${{ matrix.suffix }} .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termai-${{ matrix.suffix }}
+          path: termai-${{ matrix.suffix }}
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Install fyne-cross
+        run: go install github.com/fyne-io/fyne-cross@latest
+      - name: Build APK
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          fyne-cross android -app-id com.vlad.termai -name TERMAI -icon icon.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termai-android.apk
+          path: fyne-cross/dist/android/TERMAI.apk
+
+  release:
+    needs: [linux, windows, macos, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

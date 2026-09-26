@@ -1,0 +1,26 @@
+# бинарники и сборка
+termai
+termai-*
+TERMAI*
+docker-trainer
+*.exe
+*.apk
+fyne-cross/
+dist/
+build/
+release/
+
+# локальные данные
+*.db
+*.db-shm
+*.db-wal
+*.part
+*.json.bak
+
+# конфиги с API-ключами — НИКОГДА в репозиторий
+docker-trainer.json
+termai.json
+*config*.json
+
+# мусор
+.DS_Store
