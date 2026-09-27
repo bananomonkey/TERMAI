@@ -68,6 +68,9 @@ type Task struct {
     Goal       string       `json:"goal"`
     Hints      []string     `json:"hints"`
     Check      string       `json:"check"`
+    Expected   string       `json:"expected_output,omitempty"`
+    Solution   string       `json:"solution,omitempty"`
+    Peeked     bool         `json:"peeked,omitempty"`
     Start      SandboxState `json:"start_state"`
 }
 

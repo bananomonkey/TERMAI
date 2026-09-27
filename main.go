@@ -527,12 +527,28 @@ type App struct {
 	courseSel    *widget.Select
 	taskTitle    *widget.Label
 	taskMeta     *widget.Label
-	taskCards    *fyne.Container
 
 	chatBubbleBox *fyne.Container
 	chatMsgs      []chatMsg
 
 	mobileTabCaps map[string]*canvas.Text
+
+	// мобильный «как в Coddy»: карта курсов → список задач → слайды урока
+	graphBox      *fyne.Container
+	graphArea     *fyne.Container
+	courseListBox *fyne.Container
+	homeStack     *fyne.Container
+	homeView      int
+	lessonSlides  *fyne.Container
+	slideTabs     map[string]*widget.Button
+	curSlide      string
+	solutionBox   *fyne.Container
+	solutionHold  *holdButton
+	solutionLoad  bool
+	expectedBox   *fyne.Container
+	undoBuf       []undoEntry
+	searchEntry   *widget.Entry
+
 	theoryBox    *fyne.Container
 	quizBox      *fyne.Container
 	goalBox      *fyne.Container
@@ -707,14 +723,7 @@ func (a *App) buildUI() {
 		},
 	)
 	a.list.OnSelected = func(i widget.ListItemID) { a.onTaskClicked(int(i)) }
-	var listPane fyne.CanvasObject
-	if a.mobile {
-		// карточки уроков вместо строки-списка: каждое задание в своём «окне»
-		a.taskCards = container.NewVBox()
-		listPane = panel(container.NewVScroll(a.taskCards), colPanel)
-	} else {
-		listPane = container.NewPadded(a.list)
-	}
+	listPane := container.NewPadded(a.list)
 
 	// Label (не canvas.Text): у canvas нет переноса строк, и длинный заголовок
 	// распирает панель задачи шире экрана — из-за этого приходится «двигать экран».
@@ -898,15 +907,89 @@ func (a *App) buildUI() {
 			container.NewPadded(chatInput),
 			nil, nil, a.chatScroll,
 		)
-		stack := container.NewStack(listPane, theoryPane, termPane, chatFull)
+
+		// ---- главный экран: карта курсов кружками, соединёнными линиями ----
+		a.graphBox = container.NewWithoutLayout()
+		a.graphArea = container.NewVBox()
+		a.courseListBox = container.NewVBox()
+		a.homeStack = container.NewStack(
+			panel(container.NewVScroll(a.graphArea), colPanel),
+			panel(container.NewVScroll(a.courseListBox), colPanel))
+		a.showHomeView(0)
+
+		// ---- слайды урока: Справка / Задача / Терминал / Решение ----
+		a.searchEntry = widget.NewEntry()
+		a.searchEntry.PlaceHolder = "Поиск справочных материалов…"
+		a.searchEntry.OnChanged = func(q string) { a.filterTheory(q) }
+
+		explainBtn := widget.NewButtonWithIcon("Объяснить задание", theme.QuestionIcon(), a.mentorExplainTask)
+		slideTask := panel(container.NewVScroll(container.NewPadded(container.NewVBox(
+			a.taskTitle, a.taskMeta,
+			spacerV(12), a.goalCard,
+			spacerV(10), explainBtn,
+			spacerV(10), a.quizCard, spacerV(14), actions,
+			spacerV(10), a.hintsCard,
+		))), colPanel)
+
+		slideHelp := panel(container.NewVScroll(container.NewPadded(container.NewVBox(
+			a.searchEntry, spacerV(10), a.theoryCard,
+		))), colPanel)
+
+		a.expectedBox = container.NewVBox()
+		expectedCard := cardBox(a.expectedBox, nrgba(0x2c2b29))
+		undoBtn := widget.NewButtonWithIcon("Отменить", theme.ContentUndoIcon(), a.undoCommand)
+		termHead := container.NewBorder(nil, nil, termCaption,
+			container.NewHBox(undoBtn, resetSandboxBtn))
+		runBtn := widget.NewButtonWithIcon("Запустить", theme.MediaPlayIcon(), func() {
+			a.runCommand(a.termIn.Text)
+		})
+		termInputRow := container.NewBorder(nil, nil,
+			container.NewHBox(a.termSpin, prompt), runBtn, termField)
+		filesBtnM := widget.NewButtonWithIcon("Файлы", theme.FolderIcon(), a.showFiles)
+		submitBtnM := widget.NewButtonWithIcon("Отправить на проверку", theme.ConfirmIcon(), a.onFinishTask)
+		submitBtnM.Importance = widget.HighImportance
+		termBottom := container.NewVBox(
+			container.NewPadded(termInputRow),
+			container.NewPadded(container.NewBorder(nil, nil, filesBtnM, nil, submitBtnM)),
+		)
+		slideTerm := container.NewBorder(
+			container.NewVBox(container.NewPadded(expectedCard), widget.NewSeparator()),
+			termBottom, nil, nil,
+			container.NewVBox(container.NewPadded(termHead), termInner),
+		)
+
+		a.solutionBox = container.NewVBox()
+		a.solutionHold = newHoldButton(func() {
+			dialog.ShowInformation("Показать решение",
+				"Удерживай кнопку 5 секунд. За подсмотренное решение XP не начисляются.", a.win)
+		}, a.onSolutionHoldDone)
+		slideSolution := panel(container.NewVScroll(container.NewPadded(a.solutionBox)), colPanel)
+
+		a.lessonSlides = container.NewStack(slideHelp, slideTask, slideTerm, slideSolution)
+		a.slideTabs = map[string]*widget.Button{}
+		mkSlideTab := func(key, title string) *widget.Button {
+			b := widget.NewButton(title, nil)
+			a.slideTabs[key] = b
+			b.OnTapped = func() { a.showSlide(key) }
+			return b
+		}
+		backBtn := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() { a.switchTab("tasks") })
+		slideBar := container.NewBorder(nil, nil, backBtn, nil, container.NewHBox(
+			mkSlideTab("help", "Справка"), mkSlideTab("task", "Задача"),
+			mkSlideTab("term", "Терминал"), mkSlideTab("solution", "Решение")))
+		lessonPane := container.NewBorder(
+			container.NewVBox(container.NewPadded(slideBar), widget.NewSeparator()),
+			nil, nil, nil, a.lessonSlides)
+		a.showSlide("task")
+
+		stack := container.NewStack(a.homeStack, lessonPane, chatFull)
 		a.winMobileStack = stack
 		navDefs := []struct {
 			key, title string
 			icon       fyne.Resource
 		}{
-			{"tasks", "Задачи", theme.ListIcon()},
-			{"theory", "Теория", theme.DocumentIcon()},
-			{"term", "Терминал", theme.StorageIcon()},
+			{"home", "Задачи", theme.ListIcon()},
+			{"lesson", "Урок", theme.DocumentIcon()},
 			{"chat", "Ментор", theme.MailComposeIcon()},
 		}
 		navCells := make([]fyne.CanvasObject, 0, len(navDefs))
@@ -914,18 +997,32 @@ func (a *App) buildUI() {
 			nd := nd
 			b := widget.NewButtonWithIcon("", nd.icon, nil)
 			a.mobileTabs[nd.key] = b
-			b.OnTapped = func() { a.switchTab(mobileTabName(nd.key)) }
+			b.OnTapped = func() { a.switchTab(nd.key) }
 			cap := canvas.NewText(nd.title, colMuted)
 			cap.TextSize = 10
 			cap.Alignment = fyne.TextAlignCenter
 			a.mobileTabCaps[nd.key] = cap
 			navCells = append(navCells, container.NewVBox(b, cap))
 		}
-		nav := container.NewGridWithColumns(4, navCells...)
-		a.showMobileTab("tasks")
+		nav := container.NewGridWithColumns(3, navCells...)
+		a.showMobileTab("home")
 		navBar := container.NewVBox(widget.NewSeparator(),
 			container.NewPadded(fixedHeight(54, nav)))
-		root = container.NewBorder(header, navBar, nil, nil, stack)
+
+		realRoot := container.NewBorder(header, navBar, nil, nil, stack)
+		// сплэш-анимация открытия: логотип, затем скрывается
+		logoBig := canvas.NewText("TERMAI", colAccent)
+		logoBig.TextSize = 34
+		logoBig.TextStyle = fyne.TextStyle{Bold: true}
+		splash := container.NewStack(canvas.NewRectangle(nrgba(0x1a1a1a)),
+			container.NewCenter(container.NewVBox(logoBig,
+				caption("тренажёр с ИИ-наставником", colMuted))))
+		root = container.NewStack(realRoot, splash)
+		fyne.Do(func() {
+			time.AfterFunc(900*time.Millisecond, func() {
+				fyne.Do(func() { splash.Hide() })
+			})
+		})
 	} else {
 		a.contentStack = container.NewStack(theoryPane, termPane)
 		right := container.NewBorder(container.NewPadded(tabs), nil, nil, nil, a.contentStack)
@@ -950,6 +1047,7 @@ func (a *App) showOnboarding() {
 	hint := wlabel("Ключ хранится только на этом устройстве.")
 	linkURL, _ := url.Parse("https://platform.deepseek.com/api_keys")
 	link := widget.NewHyperlink("Получить ключ: platform.deepseek.com", linkURL)
+	var d dialog.Dialog
 	save := widget.NewButton("Сохранить и начать", func() {
 		k := strings.TrimSpace(key.Text)
 		if k == "" {
@@ -961,6 +1059,7 @@ func (a *App) showOnboarding() {
 		a.termLine("  ✓ ключ сохранён — песочница готова")
 		a.refreshTerminal()
 		a.mentorSay("mentor", "Ключ на месте. Выбери курс и жми — я помогу дойти до оффера.")
+		d.Hide()
 	})
 	save.Importance = widget.HighImportance
 	content := container.NewVBox(
@@ -971,7 +1070,7 @@ func (a *App) showOnboarding() {
 		spacerV(10),
 		save,
 	)
-	d := dialog.NewCustom("Настройка", "Позже", content, a.win)
+	d = dialog.NewCustom("Настройка", "Позже", content, a.win)
 	a.resizeDialog(d, 480, 380)
 	d.Show()
 }
@@ -1186,18 +1285,11 @@ func networkNames(st SandboxState) []string {
 	return append([]string(nil), st.Networks...)
 }
 
-func mobileTabName(key string) string {
-	if key == "term" {
-		return "terminal"
-	}
-	return key
-}
-
 func (a *App) showMobileTab(key string) {
 	if a.winMobileStack == nil {
 		return
 	}
-	idx := map[string]int{"tasks": 0, "theory": 1, "term": 2, "chat": 3}[key]
+	idx := map[string]int{"home": 0, "lesson": 1, "chat": 2}[key]
 	for i, o := range a.winMobileStack.Objects {
 		if i == idx {
 			o.Show()
@@ -1226,13 +1318,20 @@ func (a *App) showMobileTab(key string) {
 func (a *App) switchTab(tab string) {
 	a.tab = tab
 	if a.mobile {
-		key := tab
-		if key == "terminal" {
-			key = "term"
-		}
-		switch key {
-		case "tasks", "theory", "term", "chat":
-			a.showMobileTab(key)
+		switch tab {
+		case "theory", "lesson":
+			a.showMobileTab("lesson")
+			a.showSlide("task")
+		case "terminal", "term":
+			a.showMobileTab("lesson")
+			a.showSlide("term")
+		case "solution":
+			a.showMobileTab("lesson")
+			a.showSlide("solution")
+		case "tasks", "home":
+			a.showMobileTab("home")
+		case "chat":
+			a.showMobileTab("chat")
 		}
 		return
 	}
@@ -1431,7 +1530,7 @@ func (a *App) refreshCourseOptions() {
 
 func (a *App) refreshList() {
 	a.list.Refresh()
-	a.syncTaskCards()
+	a.syncHome()
 }
 
 // ---------- панель задачи ----------
@@ -1460,7 +1559,7 @@ func (a *App) taskRowSegments(i int) []widget.RichTextSegment {
 }
 
 func (a *App) renderTaskPanel() {
-	a.syncTaskCards()
+	a.syncExpected()
 	if a.exam != nil && a.exam.Active && a.exam.Idx < len(a.exam.Tasks) {
 		ex := a.exam
 		t := &ex.Tasks[ex.Idx]
@@ -1594,56 +1693,354 @@ func cardBox(content fyne.CanvasObject, stroke color.Color) fyne.CanvasObject {
 	return container.NewStack(bg, line, container.NewPadded(content))
 }
 
-// syncTaskCards — список уроков как карточки: статус (✓/▶/○), название,
-// сложность и XP. Обновляется вместе со списком и панелью задачи.
-func (a *App) syncTaskCards() {
-	if a.taskCards == nil {
+// undoEntry — снимок состояния песочницы и текста терминала до команды
+// (кнопка «Отменить» на слайде терминала).
+type undoEntry struct {
+	key  string
+	st   SandboxState
+	term string
+}
+
+// showHomeView — главный экран: 0 = карта курсов, 1 = список задач курса.
+func (a *App) showHomeView(v int) {
+	a.homeView = v
+	if a.homeStack == nil || len(a.homeStack.Objects) < 2 {
 		return
 	}
-	a.taskCards.Objects = nil
-	tasks := a.cur().Tasks
-	if len(tasks) == 0 {
-		a.taskCards.Add(wlabel("Задач пока нет — ИИ напишет первую для курса."))
+	if v == 1 {
+		a.syncCourseTaskList()
+		a.homeStack.Objects[0].Hide()
+		a.homeStack.Objects[1].Show()
+	} else {
+		a.buildCourseGraph()
+		a.homeStack.Objects[0].Show()
+		a.homeStack.Objects[1].Hide()
 	}
-	for i := range tasks {
-		t := &tasks[i]
-		var glyph string
-		var gc color.Color
-		switch {
-		case a.completed()[t.ID]:
-			glyph, gc = "✓", colGood
-		case i == a.frontier:
-			glyph, gc = "▶", colAccent
-		default:
-			glyph, gc = "○", colMuted
-		}
-		g := canvas.NewText(glyph, gc)
-		g.TextSize = 15
+}
 
-		title := wlabel(t.Title)
-		title.TextStyle = fyne.TextStyle{Bold: true}
-		kind := "практика"
-		if t.Kind == taskQuiz {
-			kind = "тест"
-		}
-		d := clamp(t.Difficulty, 1, 5)
-		dots := strings.Repeat("●", d) + strings.Repeat("○", 5-d)
-		sub := canvas.NewText(kind+" · "+dots+" · +"+fmt.Sprint(15*d+15)+" XP", colMuted)
-		sub.TextSize = 11
+// syncHome — обновляет экран «Задачи» в текущем виде (карта или список).
+func (a *App) syncHome() {
+	if a.homeView == 1 {
+		a.syncCourseTaskList()
+	} else {
+		a.buildCourseGraph()
+	}
+}
 
-		rowStroke := nrgba(0x2c2b29)
-		if glyph == "▶" {
-			rowStroke = colAccent
+// buildCourseGraph — кружки курсов, соединённые линиями, как сеть.
+// Тап по кружку открывает список задач этого курса.
+func (a *App) buildCourseGraph() {
+	if a.graphBox == nil || a.graphArea == nil {
+		return
+	}
+	a.graphBox.Objects = nil
+	n := len(a.courses)
+	if n == 0 {
+		a.graphArea.Objects = []fyne.CanvasObject{wlabel("Курсов пока нет — создай через «Ещё» → «Курс от ИИ».")}
+		a.graphArea.Refresh()
+		return
+	}
+	const d float32 = 84 // диаметр кружка
+	const gapX float32 = 128
+	const gapY float32 = 130
+	centers := make([]fyne.Position, n)
+	for i := range a.courses {
+		col := float32(i % 3)
+		row := float32(i / 3)
+		x := float32(24) + col*gapX + (row-row/2*2)*46 // шахматный сдвиг рядов
+		y := float32(16) + row*gapY
+		centers[i] = fyne.NewPos(x+d/2, y+d/2)
+	}
+	// сначала линии — они под кружками
+	for i := 0; i+1 < n; i++ {
+		ln := canvas.NewLine(nrgba(0x3a3835))
+		ln.StrokeWidth = 1.5
+		ln.Position1 = centers[i]
+		ln.Position2 = centers[i+1]
+		a.graphBox.Objects = append(a.graphBox.Objects, ln)
+	}
+	for i := 0; i+2 < n; i += 2 {
+		ln := canvas.NewLine(nrgba(0x2c2b29))
+		ln.StrokeWidth = 1
+		ln.Position1 = centers[i]
+		ln.Position2 = centers[i+2]
+		a.graphBox.Objects = append(a.graphBox.Objects, ln)
+	}
+	// затем кружки и подписи
+	for i := range a.courses {
+		col := float32(i % 3)
+		row := float32(i / 3)
+		x := float32(24) + col*gapX + (row-row/2*2)*46
+		y := float32(16) + row*gapY
+		c := &a.courses[i]
+		node := canvas.NewCircle(nrgba(0x252423))
+		if i == a.courseIdx {
+			node.StrokeColor = colAccent
+		} else {
+			node.StrokeColor = nrgba(0x3a3835)
 		}
-		card := cardBox(container.NewHBox(g, container.NewVBox(title, sub)), rowStroke)
+		node.StrokeWidth = 2
+		node.Resize(fyne.NewSize(d, d))
+		node.Move(fyne.NewPos(x, y))
+
+		name := c.Title
+		if r := []rune(name); len(r) > 16 {
+			name = string(r[:15]) + "…"
+		}
+		lb := canvas.NewText(name, colFg)
+		lb.TextSize = 10
+		lb.Alignment = fyne.TextAlignCenter
+		lb.Resize(fyne.NewSize(d+48, 14))
+		lb.Move(fyne.NewPos(x-24, y+d+6))
+
 		ii := i
-		a.taskCards.Add(newTappable(card, func() {
-			a.onTaskClicked(ii)
-			a.switchTab("theory")
-		}))
-		a.taskCards.Add(spacerV(8))
+		tap := newTappable(node, func() { a.openCourseTasks(ii) })
+		tap.Resize(fyne.NewSize(d, d))
+		tap.Move(fyne.NewPos(x, y))
+
+		a.graphBox.Objects = append(a.graphBox.Objects, tap, lb)
 	}
-	a.taskCards.Refresh()
+	rows := (n + 2) / 3
+	H := float32(rows)*gapY + 40
+	a.graphArea.Objects = []fyne.CanvasObject{fixedHeight(H, a.graphBox)}
+	a.graphArea.Refresh()
+}
+
+// openCourseTasks — тап по кружку курса: переключаемся и показываем задачи.
+func (a *App) openCourseTasks(ci int) {
+	if ci < 0 || ci >= len(a.courses) {
+		return
+	}
+	a.homeView = 1
+	if ci != a.courseIdx {
+		a.switchCourse(ci)
+	}
+	a.showHomeView(1)
+}
+
+// syncCourseTaskList — задачи курса, сгруппированные по темам программы:
+// «5 задач: инспектирование контейнеров» — разделитель — следующая тема.
+func (a *App) syncCourseTaskList() {
+	if a.courseListBox == nil {
+		return
+	}
+	a.courseListBox.Objects = nil
+	c := a.cur()
+	tasks := c.Tasks
+	if len(tasks) == 0 {
+		a.courseListBox.Add(wlabel("ИИ пишет первые задачи курса «" + c.Title + "»…"))
+		a.courseListBox.Refresh()
+		return
+	}
+	for start := 0; start < len(tasks); start += 5 {
+		end := min(start+5, len(tasks))
+		topic := c.Title
+		if len(c.Syllabus) > 0 {
+			topic = c.Syllabus[min(start/5, len(c.Syllabus)-1)]
+		}
+		a.courseListBox.Add(caption(fmt.Sprintf("%d задач: %s", end-start, topic), colAccent))
+		a.courseListBox.Add(spacerV(6))
+		for i := start; i < end; i++ {
+			t := &tasks[i]
+			var glyph string
+			var gc color.Color
+			switch {
+			case a.completed()[t.ID]:
+				glyph, gc = "✓", colGood
+			case i == a.frontier:
+				glyph, gc = "▶", colAccent
+			default:
+				glyph, gc = "○", colMuted
+			}
+			g := canvas.NewText(glyph, gc)
+			g.TextSize = 14
+			title := wlabel(t.Title)
+			title.TextStyle = fyne.TextStyle{Bold: true}
+			kind := "практика"
+			if t.Kind == taskQuiz {
+				kind = "тест"
+			}
+			sub := canvas.NewText(kind, colMuted)
+			sub.TextSize = 11
+			row := cardBox(container.NewHBox(g, container.NewVBox(title, sub)), nrgba(0x2c2b29))
+			ii := i
+			a.courseListBox.Add(newTappable(row, func() { a.onTaskClicked(ii) }))
+			a.courseListBox.Add(spacerV(6))
+		}
+		a.courseListBox.Add(widget.NewSeparator())
+		a.courseListBox.Add(spacerV(10))
+	}
+	a.courseListBox.Refresh()
+}
+
+// showSlide — переключение слайдов урока (Справка/Задача/Терминал/Решение).
+func (a *App) showSlide(key string) {
+	if a.lessonSlides == nil {
+		return
+	}
+	a.curSlide = key
+	idx := map[string]int{"help": 0, "task": 1, "term": 2, "solution": 3}[key]
+	for i, o := range a.lessonSlides.Objects {
+		if i == idx {
+			o.Show()
+		} else {
+			o.Hide()
+		}
+	}
+	for n, b := range a.slideTabs {
+		if n == key {
+			b.Importance = widget.HighImportance
+		} else {
+			b.Importance = widget.MediumImportance
+		}
+		b.Refresh()
+	}
+	if key == "term" {
+		a.syncExpected()
+		a.refreshTerminal()
+	}
+	if key == "solution" {
+		a.syncSolutionSlide()
+	}
+}
+
+// filterTheory — поиск по справочным материалам текущей задачи.
+func (a *App) filterTheory(q string) {
+	if a.theoryBox == nil {
+		return
+	}
+	q = strings.ToLower(strings.TrimSpace(q))
+	tasks := a.cur().Tasks
+	if a.viewIdx < 0 || a.viewIdx >= len(tasks) {
+		a.theoryBox.Objects = nil
+		a.theoryBox.Refresh()
+		return
+	}
+	t := &tasks[a.viewIdx]
+	if q == "" {
+		a.theoryBox.Objects = paraList(t.Theory)
+		a.theoryBox.Refresh()
+		return
+	}
+	var objs []fyne.CanvasObject
+	for _, p := range t.Theory {
+		if strings.Contains(strings.ToLower(p), q) {
+			objs = append(objs, mdTheory(p))
+		}
+	}
+	if len(objs) == 0 {
+		objs = append(objs, wlabel("В справке этой задачи ничего не найдено."))
+	}
+	a.theoryBox.Objects = objs
+	a.theoryBox.Refresh()
+}
+
+// syncExpected — карточка «Ожидаемый вывод» на слайде терминала.
+func (a *App) syncExpected() {
+	if a.expectedBox == nil {
+		return
+	}
+	t := a.currentTask()
+	if t != nil && t.Expected != "" {
+		a.expectedBox.Objects = []fyne.CanvasObject{
+			caption("ОЖИДАЕМЫЙ ВЫВОД", colMuted), mdTheory(t.Expected)}
+		a.expectedBox.Show()
+	} else {
+		a.expectedBox.Hide()
+	}
+	a.expectedBox.Refresh()
+}
+
+// syncSolutionSlide — слайд «Решение»: скрыто до удержания кнопки,
+// после — текст от ИИ; за подсмотренное решение XP не начисляются.
+func (a *App) syncSolutionSlide() {
+	if a.solutionBox == nil || a.solutionHold == nil {
+		return
+	}
+	a.solutionBox.Objects = nil
+	t := a.currentTask()
+	switch {
+	case t == nil:
+		a.solutionBox.Add(wlabel("Активной задачи нет."))
+	case t.Solution == "":
+		a.solutionBox.Add(wlabel("Решение скрыто. Сначала попробуй сам — ментор подскажет в чате."))
+		if a.solutionLoad {
+			a.solutionBox.Add(wlabel("…ИИ пишет решение…"))
+		}
+		a.solutionBox.Add(spacerV(12))
+		a.solutionBox.Add(a.solutionHold.Button)
+		a.solutionBox.Add(a.solutionHold.Progress())
+	case !t.Peeked:
+		a.solutionBox.Add(cardBox(wlabel("▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\n▒▒▒  решение скрыто  ▒▒▒\n▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"), nrgba(0x2c2b29)))
+		a.solutionBox.Add(spacerV(12))
+		a.solutionBox.Add(a.solutionHold.Button)
+	default:
+		a.solutionBox.Add(mdTheory(t.Solution))
+	}
+	a.solutionBox.Refresh()
+}
+
+// onSolutionHoldDone — удержание завершилось: берём решение у ИИ (или показываем кэш).
+func (a *App) onSolutionHoldDone() {
+	t := a.currentTask()
+	if t == nil {
+		return
+	}
+	if t.Solution != "" {
+		t.Peeked = true
+		a.syncSolutionSlide()
+		return
+	}
+	if a.solutionLoad {
+		return
+	}
+	if a.ai == nil {
+		a.mentorSay("system", "Нет API-ключа — решение готовит ИИ. Введи ключ в настройках.")
+		return
+	}
+	a.solutionLoad = true
+	a.syncSolutionSlide()
+	task := t
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		ans, err := a.ai.Mentor(ctx, a.cur(), task, a.statePtr(), nil, nil,
+			"Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.", nil)
+		fyne.Do(func() {
+			a.solutionLoad = false
+			if err == nil && strings.TrimSpace(ans) != "" {
+				task.Solution = ans
+				task.Peeked = true
+			} else {
+				a.mentorSay("system", "Не удалось получить решение: "+fmt.Sprint(err))
+			}
+			a.syncSolutionSlide()
+		})
+	}()
+}
+
+// mentorExplainTask — «Объяснить задание»: открывает чат с вопросом ментору.
+func (a *App) mentorExplainTask() {
+	q := "Объясни текущую задачу: что требуется и в каком порядке действовать. Не давай сразу готовых команд — сначала идея."
+	if t := a.currentTask(); t != nil {
+		q = fmt.Sprintf("Объясни задачу «%s»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.", t.Title)
+	}
+	a.switchTab("chat")
+	a.sendChatText(q)
+}
+
+// undoCommand — «Отменить»: откатывает последнюю команду (состояние + текст терминала).
+func (a *App) undoCommand() {
+	if len(a.undoBuf) == 0 {
+		a.termLine("  нечего отменять")
+		a.refreshTerminal()
+		return
+	}
+	u := a.undoBuf[len(a.undoBuf)-1]
+	a.undoBuf = a.undoBuf[:len(a.undoBuf)-1]
+	a.states[u.key] = u.st
+	a.termText = u.term + "  ↩ отменено\n"
+	a.refreshTerminal()
 }
 
 // buildQuizCards — тест на мобильном: варианты — крупные карточки во всю
@@ -2102,6 +2499,11 @@ func (a *App) runCommand(cmd string) {
 		return
 	}
 	a.termIn.SetText("")
+	// снимок до выполнения — для кнопки «Отменить»
+	a.undoBuf = append(a.undoBuf, undoEntry{key: a.stateKey(), st: cloneState(a.state()), term: a.termText})
+	if len(a.undoBuf) > 20 {
+		a.undoBuf = a.undoBuf[len(a.undoBuf)-20:]
+	}
 	a.termLine(a.termPrompt() + cmd)
 
 	if len(a.cmdHist) == 0 || a.cmdHist[len(a.cmdHist)-1] != cmd {
@@ -2328,6 +2730,9 @@ func (a *App) completeTask(t *Task, note string, checkerDiff int) {
 		t.Difficulty = diff
 	}
 	xp := 15*diff + 15
+	if t.Peeked {
+		xp = 0
+	}
 	a.completed()[t.ID] = true
 	a.prog.XP += xp
 	a.prog.DiffCount[fmt.Sprintf("d%d", diff)]++
@@ -2344,7 +2749,11 @@ func (a *App) completeTask(t *Task, note string, checkerDiff int) {
 	}
 
 	a.saveProgress()
-	a.termLine(fmt.Sprintf("  ✓ решено: %s (+%d XP, сложность %d/5)", t.Title, xp, diff))
+	if t.Peeked {
+		a.termLine(fmt.Sprintf("  ✓ решено: %s (решение подсмотрено — без XP)", t.Title))
+	} else {
+		a.termLine(fmt.Sprintf("  ✓ решено: %s (+%d XP, сложность %d/5)", t.Title, xp, diff))
+	}
 	if note != "" {
 		a.termLine("  " + note)
 	}
