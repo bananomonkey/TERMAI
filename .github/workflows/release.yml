@@ -41,12 +41,7 @@ jobs:
           update: false
           install: mingw-w64-x86_64-gcc
           path-type: inherit
-      - name: Embed exe icon
-        shell: pwsh
-        run: |
-          go install github.com/tc-hib/goversioninfo@latest
-          $env:Path = "$(go env GOPATH)\bin;" + $env:Path
-          goversioninfo -icon=termai.ico -product-version=1.3.0.0 -o=resource.syso
+      # иконка exe встроена через resource.syso (в репо, собран rsrc -ico termai.ico)
       - name: Build
         shell: msys2 {0}
         run: go build -ldflags "-s -w" -o termai-windows-amd64.exe .
