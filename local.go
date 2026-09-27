@@ -695,7 +695,7 @@ func (a *App) captureHotkey(action string, btn *widget.Button) {
 			a.capturing = ""
 		}
 	}, a.win)
-	d.Resize(a.fitSize(440, 200))
+	a.resizeDialog(d, 440, 200)
 	d.Show()
 	a.win.Canvas().Focus(ce)
 	a.capturing = action
@@ -836,7 +836,7 @@ func (a *App) whisperSetupDialog() {
 		wlabel("2) В настройках TERMAI нажми «Скачать модель ggml-base» (~148 МБ)\n    или укажи пути к whisper-cli и модели вручную.\n    Для большей точности возьми ggml-small.bin."),
 	)
 	d := dialog.NewCustom("Диктовка: настройка", "Понятно", content, a.win)
-	d.Resize(a.fitSize(580, 340))
+	a.resizeDialog(d, 580, 340)
 	d.Show()
 }
 

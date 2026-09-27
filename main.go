@@ -527,7 +527,12 @@ type App struct {
 	courseSel    *widget.Select
 	taskTitle    *widget.Label
 	taskMeta     *widget.Label
-	chatLabelM   *widget.Label
+	taskCards    *fyne.Container
+
+	chatBubbleBox *fyne.Container
+	chatMsgs      []chatMsg
+
+	mobileTabCaps map[string]*canvas.Text
 	theoryBox    *fyne.Container
 	quizBox      *fyne.Container
 	goalBox      *fyne.Container
@@ -631,6 +636,7 @@ func main() {
 func (a *App) buildUI() {
 	a.mobile = fyne.CurrentDevice().IsMobile()
 	a.mobileTabs = map[string]*widget.Button{}
+	a.mobileTabCaps = map[string]*canvas.Text{}
 
 	if a.mobile {
 		a.win = a.fyneApp.NewWindow("TERMAI")
@@ -669,12 +675,15 @@ func (a *App) buildUI() {
 	var header fyne.CanvasObject
 	if a.mobile {
 		moreBtn := widget.NewButtonWithIcon("", theme.MoreHorizontalIcon(), a.showMoreMenu)
-		// GridWrap ограничивает селектор курса 150px: длинное название курса
-		// иначе распирает шапку и выталкивает кнопки за экран
-		courseSel := container.NewGridWrap(fyne.NewSize(150, 37), a.courseSel)
-		top := container.NewBorder(nil, nil, a.xpText,
-			container.NewHBox(moreBtn, settingsBtn), courseSel)
-		header = container.NewVBox(container.NewPadded(top), widget.NewSeparator())
+		// «апбар» как в Coddy: логотип слева, XP и настройки справа;
+		// селектор курса — отдельной строкой на всю ширину
+		logo := canvas.NewText("TERMAI", colAccent)
+		logo.TextSize = 18
+		logo.TextStyle = fyne.TextStyle{Bold: true}
+		top := container.NewBorder(nil, nil, logo,
+			container.NewHBox(a.xpText, settingsBtn, moreBtn))
+		header = container.NewVBox(container.NewPadded(top),
+			container.NewPadded(a.courseSel), widget.NewSeparator())
 	} else {
 		headerRow := container.NewBorder(nil, nil, container.NewHBox(a.xpText, a.timerText), container.NewHBox(
 			container.NewGridWrap(fyne.NewSize(180, 37), a.courseSel),
@@ -698,7 +707,14 @@ func (a *App) buildUI() {
 		},
 	)
 	a.list.OnSelected = func(i widget.ListItemID) { a.onTaskClicked(int(i)) }
-	listPane := container.NewPadded(a.list)
+	var listPane fyne.CanvasObject
+	if a.mobile {
+		// карточки уроков вместо строки-списка: каждое задание в своём «окне»
+		a.taskCards = container.NewVBox()
+		listPane = panel(container.NewVScroll(a.taskCards), colPanel)
+	} else {
+		listPane = container.NewPadded(a.list)
+	}
 
 	// Label (не canvas.Text): у canvas нет переноса строк, и длинный заголовок
 	// распирает панель задачи шире экрана — из-за этого приходится «двигать экран».
@@ -758,6 +774,7 @@ func (a *App) buildUI() {
 	theoryPane := panel(container.NewVScroll(theoryInner), colPanel)
 
 	termBg := canvas.NewRectangle(colTerm)
+	termBg.CornerRadius = 12
 	var termInner *fyne.Container
 	if a.mobile {
 		a.termGrid = widget.NewTextGrid()
@@ -824,16 +841,15 @@ func (a *App) buildUI() {
 			a.chatOut.SetText(a.chatText)
 		}
 	}
-	a.chatScroll = container.NewScroll(a.chatOut)
-
 	chatCaption := canvas.NewText("ментор", colMuted)
 	chatCaption.TextSize = 12
 
-	// на мобильном лог чата — Label: не открывает клавиатуру при тапе и переносит строки
 	if a.mobile {
-		a.chatLabelM = widget.NewLabel("")
-		a.chatLabelM.Wrapping = fyne.TextWrapWord
-		a.chatScroll = container.NewVScroll(a.chatLabelM)
+		// лог чата как в мессенджере: пузыри сообщений; тап не открывает клавиатуру
+		a.chatBubbleBox = container.NewVBox()
+		a.chatScroll = container.NewVScroll(a.chatBubbleBox)
+	} else {
+		a.chatScroll = container.NewScroll(a.chatOut)
 	}
 
 	a.chatSpin = widget.NewActivity()
@@ -884,19 +900,32 @@ func (a *App) buildUI() {
 		)
 		stack := container.NewStack(listPane, theoryPane, termPane, chatFull)
 		a.winMobileStack = stack
-		navDefs := []struct{ key, title string }{
-			{"tasks", "Задачи"}, {"theory", "Теория"}, {"term", "Терминал"}, {"chat", "Ментор"},
+		navDefs := []struct {
+			key, title string
+			icon       fyne.Resource
+		}{
+			{"tasks", "Задачи", theme.ListIcon()},
+			{"theory", "Теория", theme.DocumentIcon()},
+			{"term", "Терминал", theme.StorageIcon()},
+			{"chat", "Ментор", theme.MailComposeIcon()},
 		}
+		navCells := make([]fyne.CanvasObject, 0, len(navDefs))
 		for _, nd := range navDefs {
 			nd := nd
-			b := widget.NewButton(nd.title, nil)
+			b := widget.NewButtonWithIcon("", nd.icon, nil)
 			a.mobileTabs[nd.key] = b
 			b.OnTapped = func() { a.switchTab(mobileTabName(nd.key)) }
+			cap := canvas.NewText(nd.title, colMuted)
+			cap.TextSize = 10
+			cap.Alignment = fyne.TextAlignCenter
+			a.mobileTabCaps[nd.key] = cap
+			navCells = append(navCells, container.NewVBox(b, cap))
 		}
-		nav := container.NewGridWithColumns(4,
-			a.mobileTabs["tasks"], a.mobileTabs["theory"], a.mobileTabs["term"], a.mobileTabs["chat"])
+		nav := container.NewGridWithColumns(4, navCells...)
 		a.showMobileTab("tasks")
-		root = container.NewBorder(header, container.NewPadded(fixedHeight(58, nav)), nil, nil, stack)
+		navBar := container.NewVBox(widget.NewSeparator(),
+			container.NewPadded(fixedHeight(54, nav)))
+		root = container.NewBorder(header, navBar, nil, nil, stack)
 	} else {
 		a.contentStack = container.NewStack(theoryPane, termPane)
 		right := container.NewBorder(container.NewPadded(tabs), nil, nil, nil, a.contentStack)
@@ -943,7 +972,7 @@ func (a *App) showOnboarding() {
 		save,
 	)
 	d := dialog.NewCustom("Настройка", "Позже", content, a.win)
-	d.Resize(a.fitSize(480, 380))
+	a.resizeDialog(d, 480, 380)
 	d.Show()
 }
 
@@ -991,11 +1020,11 @@ func sectionCard(title string, accent color.Color, content *fyne.Container) *fyn
 	body := container.NewVBox(head, spacerV(6), content)
 
 	bg := canvas.NewRectangle(nrgba(0x252423))
-	bg.CornerRadius = 6
+	bg.CornerRadius = 12
 	border := canvas.NewRectangle(color.NRGBA{A: 0})
 	border.StrokeColor = nrgba(0x2c2b29)
 	border.StrokeWidth = 1
-	border.CornerRadius = 6
+	border.CornerRadius = 12
 
 	bar := container.NewGridWrap(fyne.NewSize(3, 1), canvas.NewRectangle(accent))
 	inner := container.NewBorder(nil, nil, bar, nil, container.NewPadded(body))
@@ -1179,8 +1208,16 @@ func (a *App) showMobileTab(key string) {
 	for n, b := range a.mobileTabs {
 		if n == key {
 			b.Importance = widget.HighImportance
+			if a.mobileTabCaps[n] != nil {
+				a.mobileTabCaps[n].Color = colAccent
+				a.mobileTabCaps[n].Refresh()
+			}
 		} else {
 			b.Importance = widget.MediumImportance
+			if a.mobileTabCaps[n] != nil {
+				a.mobileTabCaps[n].Color = colMuted
+				a.mobileTabCaps[n].Refresh()
+			}
 		}
 		b.Refresh()
 	}
@@ -1226,7 +1263,7 @@ func (a *App) showMoreMenu() {
 		widget.NewButton("Статистика и достижения", a.showStats),
 	)
 	d := dialog.NewCustom("Ещё", "Закрыть", content, a.win)
-	d.Resize(a.fitSize(360, 460))
+	a.resizeDialog(d, 360, 460)
 	d.Show()
 }
 
@@ -1392,7 +1429,10 @@ func (a *App) refreshCourseOptions() {
 	a.courseSel.Refresh()
 }
 
-func (a *App) refreshList() { a.list.Refresh() }
+func (a *App) refreshList() {
+	a.list.Refresh()
+	a.syncTaskCards()
+}
 
 // ---------- панель задачи ----------
 
@@ -1420,6 +1460,7 @@ func (a *App) taskRowSegments(i int) []widget.RichTextSegment {
 }
 
 func (a *App) renderTaskPanel() {
+	a.syncTaskCards()
 	if a.exam != nil && a.exam.Active && a.exam.Idx < len(a.exam.Tasks) {
 		ex := a.exam
 		t := &ex.Tasks[ex.Idx]
@@ -1474,7 +1515,11 @@ func (a *App) renderTaskPanel() {
 
 	needQuiz := len(t.Quiz) > 0 && !a.quizDone(t.ID) && !a.completed()[t.ID]
 	if needQuiz {
-		a.quizBox.Objects = a.buildQuiz(t)
+		if a.mobile {
+			a.quizBox.Objects = a.buildQuizCards(t)
+		} else {
+			a.quizBox.Objects = a.buildQuiz(t)
+		}
 		a.finishBtn.Hide()
 		a.hintsBox.Objects = nil
 		a.bookmarkBtn.Show()
@@ -1504,6 +1549,187 @@ func bookmarkText(a *App, taskID string) string {
 		return "★ В закладках"
 	}
 	return "☆ В закладки"
+}
+
+// ---------- мобильные карточки (стиль Coddy) ----------
+
+// chatMsg — сообщение ментора/студента для пузырей мобильного чата.
+type chatMsg struct {
+	role string // "user" | "mentor" | "system"
+	text string
+}
+
+// tappable — обёртка, реагирующая на тап по всей площади (карточки уроков,
+// варианты теста). Обычный Button добавляет свои отступы и фон.
+type tappable struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+	onTap   func()
+}
+
+func newTappable(content fyne.CanvasObject, onTap func()) *tappable {
+	t := &tappable{content: content, onTap: onTap}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tappable) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.content)
+}
+
+func (t *tappable) Tapped(*fyne.PointEvent) {
+	if t.onTap != nil {
+		t.onTap()
+	}
+}
+
+// cardBox — «окно»-карточка: скруглённый фон и рамка (активная подсвечена).
+func cardBox(content fyne.CanvasObject, stroke color.Color) fyne.CanvasObject {
+	bg := canvas.NewRectangle(nrgba(0x252423))
+	bg.CornerRadius = 12
+	line := canvas.NewRectangle(color.NRGBA{A: 0})
+	line.StrokeColor = stroke
+	line.StrokeWidth = 1.5
+	line.CornerRadius = 12
+	return container.NewStack(bg, line, container.NewPadded(content))
+}
+
+// syncTaskCards — список уроков как карточки: статус (✓/▶/○), название,
+// сложность и XP. Обновляется вместе со списком и панелью задачи.
+func (a *App) syncTaskCards() {
+	if a.taskCards == nil {
+		return
+	}
+	a.taskCards.Objects = nil
+	tasks := a.cur().Tasks
+	if len(tasks) == 0 {
+		a.taskCards.Add(wlabel("Задач пока нет — ИИ напишет первую для курса."))
+	}
+	for i := range tasks {
+		t := &tasks[i]
+		var glyph string
+		var gc color.Color
+		switch {
+		case a.completed()[t.ID]:
+			glyph, gc = "✓", colGood
+		case i == a.frontier:
+			glyph, gc = "▶", colAccent
+		default:
+			glyph, gc = "○", colMuted
+		}
+		g := canvas.NewText(glyph, gc)
+		g.TextSize = 15
+
+		title := wlabel(t.Title)
+		title.TextStyle = fyne.TextStyle{Bold: true}
+		kind := "практика"
+		if t.Kind == taskQuiz {
+			kind = "тест"
+		}
+		d := clamp(t.Difficulty, 1, 5)
+		dots := strings.Repeat("●", d) + strings.Repeat("○", 5-d)
+		sub := canvas.NewText(kind+" · "+dots+" · +"+fmt.Sprint(15*d+15)+" XP", colMuted)
+		sub.TextSize = 11
+
+		rowStroke := nrgba(0x2c2b29)
+		if glyph == "▶" {
+			rowStroke = colAccent
+		}
+		card := cardBox(container.NewHBox(g, container.NewVBox(title, sub)), rowStroke)
+		ii := i
+		a.taskCards.Add(newTappable(card, func() {
+			a.onTaskClicked(ii)
+			a.switchTab("theory")
+		}))
+		a.taskCards.Add(spacerV(8))
+	}
+	a.taskCards.Refresh()
+}
+
+// buildQuizCards — тест на мобильном: варианты — крупные карточки во всю
+// ширину (RadioGroup не переносит длинные варианты и распирает экран).
+func (a *App) buildQuizCards(t *Task) []fyne.CanvasObject {
+	cid := a.cur().ID
+	if a.prog.QuizTries[cid] == nil {
+		a.prog.QuizTries[cid] = map[string]int{}
+	}
+	answers := make([]int, len(t.Quiz))
+	for i := range answers {
+		answers[i] = -1
+	}
+	var objs []fyne.CanvasObject
+	for qi, q := range t.Quiz {
+		head := wlabel(fmt.Sprintf("%d. %s", qi+1, q.Question))
+		head.TextStyle = fyne.TextStyle{Bold: true}
+		objs = append(objs, head, spacerV(6))
+		var paints []func()
+		for oi := range q.Options {
+			oi := oi
+			bg := canvas.NewRectangle(nrgba(0x201f1e))
+			bg.CornerRadius = 10
+			stroke := canvas.NewRectangle(color.NRGBA{A: 0})
+			stroke.StrokeColor = nrgba(0x2c2b29)
+			stroke.StrokeWidth = 1.5
+			stroke.CornerRadius = 10
+			mark := canvas.NewText("○", colMuted)
+			mark.TextSize = 14
+			inner := container.NewStack(bg, stroke,
+				container.NewPadded(container.NewHBox(mark, wlabel(q.Options[oi]))))
+			paints = append(paints, func() {
+				if answers[qi] == oi {
+					stroke.StrokeColor = colAccent
+					mark.Text = "●"
+					mark.Color = colAccent
+				} else {
+					stroke.StrokeColor = nrgba(0x2c2b29)
+					mark.Text = "○"
+					mark.Color = colMuted
+				}
+				stroke.Refresh()
+				mark.Refresh()
+			})
+			objs = append(objs, newTappable(inner, func() {
+				answers[qi] = oi
+				for _, p := range paints {
+					p()
+				}
+			}), spacerV(6))
+		}
+		for _, p := range paints {
+			p()
+		}
+	}
+	check := widget.NewButton("Проверить тест", func() {
+		for i := range answers {
+			if answers[i] == -1 {
+				a.resultDialog("Тест", "Сначала ответь на все вопросы.", false)
+				return
+			}
+		}
+		right := 0
+		for i := range t.Quiz {
+			if answers[i] == t.Quiz[i].Correct {
+				right++
+			}
+		}
+		a.prog.QuizTries[cid][t.ID]++
+		if right == len(t.Quiz) {
+			if a.prog.QuizTries[cid][t.ID] == 1 {
+				a.grant("quiz-perfect")
+			}
+			a.setQuizDone(t.ID)
+			a.saveProgress()
+			a.termLine("  ✓ тест пройден: " + t.Title + " — практика открыта")
+			a.refreshTerminal()
+			a.renderTaskPanel()
+		} else {
+			a.saveProgress()
+			a.resultDialog("Есть ошибки",
+				fmt.Sprintf("Верных ответов: %d из %d.\nПеречитай теорию (обрати внимание на примеры команд) и попробуй снова.", right, len(t.Quiz)), false)
+		}
+	})
+	check.Importance = widget.HighImportance
+	return append(objs, check)
 }
 
 func (a *App) refreshTaskWidgets() {
@@ -2174,7 +2400,7 @@ func (a *App) resultDialog(title, text string, ok bool) {
 	body.Wrapping = fyne.TextWrapWord
 	content := container.NewVBox(head, spacerV(12), body)
 	d := dialog.NewCustom(title, "Понятно", content, a.win)
-	d.Resize(a.fitSize(520, 320))
+	a.resizeDialog(d, 520, 320)
 	d.Show()
 }
 
@@ -2461,7 +2687,7 @@ func (a *App) showFiles() {
 		preview.SetText(files[names[0]])
 	}
 	d := dialog.NewCustom("Файлы песочницы", "Закрыть", content, a.win)
-	d.Resize(a.fitSize(620, 460))
+	a.resizeDialog(d, 620, 460)
 	d.Show()
 }
 
@@ -2512,7 +2738,7 @@ func (a *App) showStats() {
 	}
 	content := container.NewScroll(inner)
 	d := dialog.NewCustom("Статистика", "Закрыть", content, a.win)
-	d.Resize(a.fitSize(540, 580))
+	a.resizeDialog(d, 540, 580)
 	d.Show()
 }
 
@@ -2594,7 +2820,7 @@ func (a *App) showReview() {
 		content.Add(wlabel("Закладок пока нет.\nДобавляй задачи кнопкой ☆ в панели задачи —\nпотом их можно повторять и разбирать со мной."))
 	}
 	d = dialog.NewCustom("Закладки и повторение", "Закрыть", content, a.win)
-	d.Resize(a.fitSize(560, 420))
+	a.resizeDialog(d, 560, 420)
 	d.Show()
 }
 
@@ -2643,7 +2869,7 @@ func (a *App) showBookmarkDetail(k string) {
 		}),
 	)
 	d := dialog.NewCustom("Закладка: "+task.Title, "Закрыть", content, a.win)
-	d.Resize(a.fitSize(640, 560))
+	a.resizeDialog(d, 640, 560)
 	d.Show()
 }
 
@@ -2998,21 +3224,61 @@ func mdToPlain(md string) string {
 // ---------- ментор ----------
 
 func (a *App) mentorSay(role, text string) {
+	var formatted string
 	switch role {
 	case "mentor":
-		a.chatText += "Наставник:\n" + mdToPlain(text) + "\n\n"
+		formatted = "Наставник:\n" + mdToPlain(text)
 	case "system":
-		a.chatText += "· " + text + "\n\n"
+		formatted = "· " + text
 	default:
-		a.chatText += "Ты:\n" + text + "\n\n"
+		formatted = "Ты:\n" + text
 	}
-	if a.chatLabelM != nil {
-		a.chatLabelM.SetText(a.chatText)
+	a.chatText += formatted + "\n\n"
+	a.chatMsgs = append(a.chatMsgs, chatMsg{role: role, text: text})
+	if a.chatBubbleBox != nil {
+		a.syncChatBubbles()
 	} else {
 		a.chatOut.SetText(a.chatText)
 		a.chatOut.Refresh()
 	}
 	a.scrollChatBottom()
+}
+
+// syncChatBubbles — перерисовывает лог чата пузырями: студент справа,
+// наставник слева, системные сообщения по центру приглушённо.
+func (a *App) syncChatBubbles() {
+	if a.chatBubbleBox == nil {
+		return
+	}
+	a.chatBubbleBox.Objects = nil
+	for _, m := range a.chatMsgs {
+		switch m.role {
+		case "system":
+			l := wlabel("· " + m.text)
+			l.Importance = widget.LowImportance
+			l.Alignment = fyne.TextAlignCenter
+			a.chatBubbleBox.Add(l)
+		case "user":
+			a.chatBubbleBox.Add(chatBubble(m.text, nrgba(0x6b3f2c), true))
+		default:
+			a.chatBubbleBox.Add(chatBubble(mdToPlain(m.text), nrgba(0x2e2c2a), false))
+		}
+		a.chatBubbleBox.Add(spacerV(8))
+	}
+	a.chatBubbleBox.Refresh()
+}
+
+// chatBubble — один пузырь сообщения; right=true прижимает его к правому краю.
+func chatBubble(text string, bg color.Color, right bool) fyne.CanvasObject {
+	rect := canvas.NewRectangle(bg)
+	rect.CornerRadius = 12
+	l := wlabel(text)
+	inner := container.NewStack(rect, container.NewPadded(l))
+	edge := container.NewGridWrap(fyne.NewSize(24, 1), canvas.NewRectangle(colClear))
+	if right {
+		return container.NewBorder(nil, nil, edge, nil, inner)
+	}
+	return container.NewBorder(nil, nil, nil, edge, inner)
 }
 
 // scrollChatBottom — докручивает чат до последнего сообщения (с повтором после
@@ -3409,7 +3675,7 @@ func (a *App) openSettings() {
 		}
 		a.refreshTerminal()
 	}, a.win)
-	d.Resize(a.fitSize(620, 740))
+	a.resizeDialog(d, 620, 740)
 	d.Show()
 }
 
@@ -3417,6 +3683,8 @@ func (a *App) resetAllProgress() {
 	a.prog = newProgress()
 	a.saveProgress()
 	a.chatLog = nil
+	a.chatMsgs = nil
+	a.syncChatBubbles()
 	a.cmdHist = nil
 	a.cmdHistIdx = 0
 	a.reloadFromProgress()
@@ -3639,6 +3907,21 @@ func (a *App) fitSize(w, h float32) fyne.Size {
 		return fyne.NewSize(w, h)
 	}
 	return fyne.NewSize(fyne.Min(w, s.Width-16), fyne.Min(h, s.Height-16))
+}
+
+// resizeDialog — на десктопе задаём комфортный размер (обрезанный до экрана).
+// На мобильном фиксированный размер ненадёжен: онбординг показывается до
+// первого кадра, canvas ещё не знает реальную ширину телефона — из-за этого
+// окно ключа вылезало за рамки. Там диалогу даём авторазмер по содержимому
+// (все тексты теперь переносятся), а если canvas уже известен — обрезаем.
+func (a *App) resizeDialog(d dialog.Dialog, w, h float32) {
+	if !a.mobile {
+		d.Resize(a.fitSize(w, h))
+		return
+	}
+	if s := a.win.Canvas().Size(); s.Width > 0 {
+		d.Resize(fyne.NewSize(fyne.Min(w, s.Width-16), fyne.Min(h, s.Height-16)))
+	}
 }
 
 func panel(inner fyne.CanvasObject, bg color.Color) fyne.CanvasObject {
