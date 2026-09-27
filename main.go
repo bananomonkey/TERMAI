@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -524,8 +525,9 @@ type App struct {
 
 	list         *widget.List
 	courseSel    *widget.Select
-	taskTitle    *canvas.Text
-	taskMeta     *canvas.Text
+	taskTitle    *widget.Label
+	taskMeta     *widget.Label
+	chatLabelM   *widget.Label
 	theoryBox    *fyne.Container
 	quizBox      *fyne.Container
 	goalBox      *fyne.Container
@@ -667,8 +669,11 @@ func (a *App) buildUI() {
 	var header fyne.CanvasObject
 	if a.mobile {
 		moreBtn := widget.NewButtonWithIcon("", theme.MoreHorizontalIcon(), a.showMoreMenu)
+		// GridWrap ограничивает селектор курса 150px: длинное название курса
+		// иначе распирает шапку и выталкивает кнопки за экран
+		courseSel := container.NewGridWrap(fyne.NewSize(150, 37), a.courseSel)
 		top := container.NewBorder(nil, nil, a.xpText,
-			container.NewHBox(moreBtn, settingsBtn), a.courseSel)
+			container.NewHBox(moreBtn, settingsBtn), courseSel)
 		header = container.NewVBox(container.NewPadded(top), widget.NewSeparator())
 	} else {
 		headerRow := container.NewBorder(nil, nil, container.NewHBox(a.xpText, a.timerText), container.NewHBox(
@@ -695,12 +700,17 @@ func (a *App) buildUI() {
 	a.list.OnSelected = func(i widget.ListItemID) { a.onTaskClicked(int(i)) }
 	listPane := container.NewPadded(a.list)
 
-	a.taskTitle = canvas.NewText("", colFg)
-	a.taskTitle.TextSize = 18
+	// Label (не canvas.Text): у canvas нет переноса строк, и длинный заголовок
+	// распирает панель задачи шире экрана — из-за этого приходится «двигать экран».
+	a.taskTitle = widget.NewLabel("")
+	a.taskTitle.Wrapping = fyne.TextWrapWord
 	a.taskTitle.TextStyle = fyne.TextStyle{Bold: true}
+	a.taskTitle.SizeName = theme.SizeNameHeadingText
 
-	a.taskMeta = canvas.NewText("", colMuted)
-	a.taskMeta.TextSize = 12
+	a.taskMeta = widget.NewLabel("")
+	a.taskMeta.Wrapping = fyne.TextWrapWord
+	a.taskMeta.Importance = widget.LowImportance
+	a.taskMeta.SizeName = theme.SizeNameCaptionText
 
 	a.theoryBox = container.NewVBox()
 	a.quizBox = container.NewVBox()
@@ -710,7 +720,13 @@ func (a *App) buildUI() {
 	a.finishBtn = widget.NewButton("Завершить задачу", a.onFinishTask)
 	a.finishBtn.Importance = widget.HighImportance
 	a.bookmarkBtn = widget.NewButton("☆ В закладки", a.toggleBookmark)
-	actions := container.NewHBox(a.finishBtn, a.bookmarkBtn)
+	var actions *fyne.Container
+	if a.mobile {
+		// в столбик: две широкие кнопки в ряд шире экрана телефона
+		actions = container.NewVBox(a.finishBtn, a.bookmarkBtn)
+	} else {
+		actions = container.NewHBox(a.finishBtn, a.bookmarkBtn)
+	}
 
 	goalCaption := caption("ЗАДАЧА", colAccent)
 	_ = goalCaption
@@ -738,14 +754,15 @@ func (a *App) buildUI() {
 		// дополнительный воздух вокруг панели задачи на узком экране
 		theoryInner = container.NewPadded(taskContent)
 	}
-	theoryPane := panel(container.NewScroll(theoryInner), colPanel)
+	// VScroll: только вертикальная прокрутка — никакого «двигай экран вбок»
+	theoryPane := panel(container.NewVScroll(theoryInner), colPanel)
 
 	termBg := canvas.NewRectangle(colTerm)
 	var termInner *fyne.Container
 	if a.mobile {
 		a.termGrid = widget.NewTextGrid()
 		a.termGrid.SetText(a.termText)
-		a.termScroll = container.NewScroll(a.termGrid)
+		a.termScroll = container.NewVScroll(a.termGrid)
 		termInner = container.NewStack(termBg, a.termScroll)
 	} else {
 		a.termOut = widget.NewMultiLineEntry()
@@ -812,6 +829,13 @@ func (a *App) buildUI() {
 	chatCaption := canvas.NewText("ментор", colMuted)
 	chatCaption.TextSize = 12
 
+	// на мобильном лог чата — Label: не открывает клавиатуру при тапе и переносит строки
+	if a.mobile {
+		a.chatLabelM = widget.NewLabel("")
+		a.chatLabelM.Wrapping = fyne.TextWrapWord
+		a.chatScroll = container.NewVScroll(a.chatLabelM)
+	}
+
 	a.chatSpin = widget.NewActivity()
 	a.chatSpin.Hide()
 	a.chatIn = widget.NewEntry()
@@ -820,7 +844,11 @@ func (a *App) buildUI() {
 		a.chatIn.PlaceHolder = "Спроси ментора…"
 	}
 	a.chatIn.OnSubmitted = func(string) { a.sendChat() }
-	a.chatSendBtn = widget.NewButton("Отправить", a.sendChat)
+	if a.mobile {
+		a.chatSendBtn = widget.NewButtonWithIcon("", theme.MailSendIcon(), a.sendChat)
+	} else {
+		a.chatSendBtn = widget.NewButton("Отправить", a.sendChat)
+	}
 	a.chatSendBtn.Importance = widget.HighImportance
 
 	a.attachBtn = widget.NewButtonWithIcon("", theme.FileIcon(), a.attachFile)
@@ -890,9 +918,9 @@ func (a *App) showOnboarding() {
 	key := widget.NewPasswordEntry()
 	key.PlaceHolder = "sk-…"
 	key.TextStyle = fyne.TextStyle{Monospace: true}
-	hint := widget.NewLabel("Ключ хранится только на этом устройстве.")
-	hint.Wrapping = fyne.TextWrapWord
-	link := widget.NewHyperlink("Получить ключ: platform.deepseek.com", nil)
+	hint := wlabel("Ключ хранится только на этом устройстве.")
+	linkURL, _ := url.Parse("https://platform.deepseek.com/api_keys")
+	link := widget.NewHyperlink("Получить ключ: platform.deepseek.com", linkURL)
 	save := widget.NewButton("Сохранить и начать", func() {
 		k := strings.TrimSpace(key.Text)
 		if k == "" {
@@ -909,14 +937,22 @@ func (a *App) showOnboarding() {
 	content := container.NewVBox(
 		caption("ДОБРО ПОЖАЛОВАТЬ В TERMAI", colAccent),
 		spacerV(10),
-		widget.NewLabel("Вставь свой DeepSeek API-ключ — он нужен ИИ-симулятору и ментору."),
+		wlabel("Вставь свой DeepSeek API-ключ — он нужен ИИ-симулятору и ментору."),
 		key, hint, link,
 		spacerV(10),
 		save,
 	)
 	d := dialog.NewCustom("Настройка", "Позже", content, a.win)
-	d.Resize(a.fitSize(480, 360))
+	d.Resize(a.fitSize(480, 380))
 	d.Show()
+}
+
+// wlabel — метка с переносом строк: без него длинные тексты вылезают
+// за рамки диалогов на узком экране.
+func wlabel(text string) *widget.Label {
+	l := widget.NewLabel(text)
+	l.Wrapping = fyne.TextWrapWord
+	return l
 }
 
 // termEntry — терминальный ввод с перехватом Tab (автодополнение) и ↑/↓ (история)
@@ -1737,11 +1773,77 @@ func (a *App) termLine(text string) {
 
 func (a *App) refreshTerminal() {
 	if a.mobile && a.termGrid != nil {
-		a.termGrid.SetText(a.termText)
+		// TextGrid не переносит строки: длинный вывод уезжал за край экрана.
+		// Переносим сами — по количеству колонок, которое влезает в ширину.
+		a.termGrid.SetText(wrapTerm(a.termText, a.termCols()))
 	} else if a.termOut != nil {
 		a.termOut.SetText(a.termText)
 	}
 	a.termScroll.ScrollToBottom()
+}
+
+// termCols — сколько моноширинных символов влезает в ширину терминала.
+func (a *App) termCols() int {
+	w := a.termScroll.Size().Width
+	if w <= 0 {
+		return 40
+	}
+	sz := fyne.CurrentApp().Settings().Theme().Size(theme.SizeNameText)
+	charW := fyne.MeasureText("MMMMMMMMMM", sz, fyne.TextStyle{Monospace: true}).Width / 10
+	if charW <= 0 {
+		return 40
+	}
+	cols := int((w - 10) / charW)
+	if cols < 16 {
+		cols = 16
+	}
+	return cols
+}
+
+// wrapTerm — перенос строк терминала по словам; слишком длинное слово рвётся,
+// как это делает реальный терминал.
+func wrapTerm(s string, cols int) string {
+	if cols < 4 {
+		return s
+	}
+	var b strings.Builder
+	for i, line := range strings.Split(s, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if len([]rune(line)) <= cols {
+			b.WriteString(line)
+			continue
+		}
+		cur := 0
+		for _, word := range strings.Split(line, " ") {
+			for len([]rune(word)) > cols { // рвём сверхдлинное слово (например, ID хэш)
+				if cur > 0 {
+					b.WriteByte('\n')
+					cur = 0
+				}
+				r := []rune(word)
+				b.WriteString(string(r[:cols]))
+				b.WriteByte('\n')
+				word = string(r[cols:])
+			}
+			if word == "" {
+				continue
+			}
+			w := len([]rune(word))
+			if cur > 0 && cur+1+w > cols {
+				b.WriteByte('\n')
+				cur = 0
+			}
+			if cur > 0 {
+				b.WriteByte(' ')
+				cur++
+			}
+			b.WriteString(word)
+			cur += w
+		}
+	}
+	return b.String()
 }
 
 // termPrompt — приглашение в стиле реального Linux: user@termai:~$.
@@ -2088,7 +2190,7 @@ func (a *App) startExam() {
 		return
 	}
 	dialog.NewCustomConfirm("Экзамен", "Начать", "Отмена",
-		widget.NewLabel("ИИ соберёт 5 задач по пройденному материалу текущего курса.\nПосле каждой — проверка. Подсказок не будет.\nВ конце — оценка и бонус: +10 XP за каждую верную задачу."),
+		wlabel("ИИ соберёт 5 задач по пройденному материалу текущего курса.\nПосле каждой — проверка. Подсказок не будет.\nВ конце — оценка и бонус: +10 XP за каждую верную задачу."),
 		func(ok bool) {
 			if !ok {
 				return
@@ -2215,9 +2317,9 @@ func (a *App) openRebuildDialog() {
 	instr := widget.NewMultiLineEntry()
 	instr.SetPlaceHolder("например: «теория с примерами команд в блоках кода, задачи ближе к реальной работе, тесты посложнее»")
 	content := container.NewVBox(
-		widget.NewLabel("ИИ заново создаст все НЕпройденные задачи текущего курса\nпо твоему указанию. Решённые задачи останутся как есть."),
+		wlabel("ИИ заново создаст все НЕпройденные задачи текущего курса\nпо твоему указанию. Решённые задачи останутся как есть."),
 		spacerV(8),
-		widget.NewLabel("Как переделать задачи:"),
+		wlabel("Как переделать задачи:"),
 		instr,
 	)
 	dialog.NewCustomConfirm("Пересобрать курс", "Пересобрать", "Отмена", content, func(ok bool) {
@@ -2328,7 +2430,7 @@ func (a *App) showFiles() {
 	files := a.state().Files
 	content := container.NewVBox()
 	if len(files) == 0 {
-		content.Add(widget.NewLabel("Файлов в песочнице нет."))
+		content.Add(wlabel("Файлов в песочнице нет."))
 	} else {
 		names := make([]string, 0, len(files))
 		for n := range files {
@@ -2489,7 +2591,7 @@ func (a *App) showReview() {
 		}))
 	}
 	if len(content.Objects) == 0 {
-		content.Add(widget.NewLabel("Закладок пока нет.\nДобавляй задачи кнопкой ☆ в панели задачи —\nпотом их можно повторять и разбирать со мной."))
+		content.Add(wlabel("Закладок пока нет.\nДобавляй задачи кнопкой ☆ в панели задачи —\nпотом их можно повторять и разбирать со мной."))
 	}
 	d = dialog.NewCustom("Закладки и повторение", "Закрыть", content, a.win)
 	d.Resize(a.fitSize(560, 420))
@@ -2523,7 +2625,7 @@ func (a *App) showBookmarkDetail(k string) {
 	}
 
 	content := container.NewVBox(
-		widget.NewLabel("Курс: "+courseTitle),
+		wlabel("Курс: "+courseTitle),
 		accentGoal(task.Goal),
 		spacerV(10),
 		widget.NewLabel("Как ты решал:"),
@@ -2603,7 +2705,7 @@ func (a *App) openTaskDialog() {
 	topic := widget.NewEntry()
 	topic.PlaceHolder = "тема или описание: напр. «проброс портов» или «задача как на работе: задеплоить контейнер»"
 	content := container.NewVBox(
-		widget.NewLabel("Опиши задачу — ИИ сгенерирует её (теория + тест + практика)\nи добавит в текущий курс. Можно любую тему:"),
+		wlabel("Опиши задачу — ИИ сгенерирует её (теория + тест + практика)\nи добавит в текущий курс. Можно любую тему:"),
 		topic,
 	)
 	dialog.NewCustomConfirm("Новая задача от ИИ", "Создать", "Отмена", content, func(ok bool) {
@@ -2728,7 +2830,7 @@ func (a *App) openNewCourseDialog() {
 	goal := widget.NewEntry()
 	goal.PlaceHolder = "например: хочу стать девопс-инженером"
 	content := container.NewVBox(
-		widget.NewLabel("Опиши цель — ИИ соберёт программу из нескольких курсов\n(практика с командами + тесты, включая смежные темы: сети и т.д.):"),
+		wlabel("Опиши цель — ИИ соберёт программу из нескольких курсов\n(практика с командами + тесты, включая смежные темы: сети и т.д.):"),
 		goal,
 	)
 	dialog.NewCustomConfirm("Новый курс от ИИ", "Создать", "Отмена", content, func(ok bool) {
@@ -2803,7 +2905,11 @@ func (a *App) onTaskClicked(i int) {
 }
 
 func (a *App) refreshHeader() {
-	a.xpText.Text = fmt.Sprintf("уровень %d · %d XP · серия %d дн.", a.prog.XP/100+1, a.prog.XP, a.prog.Streak)
+	if a.mobile {
+		a.xpText.Text = fmt.Sprintf("ур.%d · %d XP", a.prog.XP/100+1, a.prog.XP)
+	} else {
+		a.xpText.Text = fmt.Sprintf("уровень %d · %d XP · серия %d дн.", a.prog.XP/100+1, a.prog.XP, a.prog.Streak)
+	}
 	a.xpText.Refresh()
 }
 
@@ -2900,8 +3006,12 @@ func (a *App) mentorSay(role, text string) {
 	default:
 		a.chatText += "Ты:\n" + text + "\n\n"
 	}
-	a.chatOut.SetText(a.chatText)
-	a.chatOut.Refresh()
+	if a.chatLabelM != nil {
+		a.chatLabelM.SetText(a.chatText)
+	} else {
+		a.chatOut.SetText(a.chatText)
+		a.chatOut.Refresh()
+	}
 	a.scrollChatBottom()
 }
 
@@ -3237,8 +3347,8 @@ func (a *App) openSettings() {
 		widget.NewLabel("Провайдер:"), provSel,
 		widget.NewLabel("API-ключ:"), key,
 		widget.NewLabel("Модель:"), modelSel, customModel,
-		widget.NewLabel("Base URL (endpoint):"), baseURL,
-		widget.NewLabel("DeepSeek, OpenAI, Gemini, Qwen, OpenRouter, Groq, Mistral, локальный Ollama\nили свой OpenAI-совместимый endpoint. Для Ollama ключ не нужен."),
+			widget.NewLabel("Base URL (endpoint):"), baseURL,
+			wlabel("DeepSeek, OpenAI, Gemini, Qwen, OpenRouter, Groq, Mistral, локальный Ollama\nили свой OpenAI-совместимый endpoint. Для Ollama ключ не нужен."),
 		spacerV(16),
 		widget.NewLabel("Свой шрифт (TTF/OTF), опционально"), fontPath,
 		spacerV(20),

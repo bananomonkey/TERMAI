@@ -686,7 +686,7 @@ func (a *App) captureHotkey(action string, btn *widget.Button) {
 	}
 
 	content := container.NewVBox(
-		widget.NewLabel("Нажми желаемую комбинацию: Ctrl/Alt/Shift + клавиша\nили F-клавиша. Esc — отмена."),
+		wlabel("Нажми желаемую комбинацию: Ctrl/Alt/Shift + клавишу\nили F-клавиша. Esc — отмена."),
 		spacerVM(8),
 		ce,
 	)
@@ -827,13 +827,13 @@ func (a *App) resolveWhisperModel() string {
 
 func (a *App) whisperSetupDialog() {
 	content := container.NewVBox(
-		widget.NewLabel("Для диктовки нужен whisper.cpp (локально, без интернета).\nЗапись звука пока поддерживается на Linux (parecord/arecord)."),
+		wlabel("Для диктовки нужен whisper.cpp (локально, без интернета).\nЗапись звука пока поддерживается на Linux (parecord/arecord)."),
 		spacerVM(8),
-		widget.NewLabel("1) Собери whisper-cli:\n"+
+		wlabel("1) Собери whisper-cli:\n"+
 			"   git clone https://github.com/ggml-org/whisper.cpp\n"+
 			"   cd whisper.cpp && cmake -B build && cmake --build build -j\n"+
 			"   бинарник: build/bin/whisper-cli"),
-		widget.NewLabel("2) В настройках TERMAI нажми «Скачать модель ggml-base» (~148 МБ)\n    или укажи пути к whisper-cli и модели вручную.\n    Для большей точности возьми ggml-small.bin."),
+		wlabel("2) В настройках TERMAI нажми «Скачать модель ggml-base» (~148 МБ)\n    или укажи пути к whisper-cli и модели вручную.\n    Для большей точности возьми ggml-small.bin."),
 	)
 	d := dialog.NewCustom("Диктовка: настройка", "Понятно", content, a.win)
 	d.Resize(a.fitSize(580, 340))
