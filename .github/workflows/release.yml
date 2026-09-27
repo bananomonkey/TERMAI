@@ -17,7 +17,7 @@ jobs:
         with:
           go-version: "stable"
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Build
         run: go build -ldflags "-s -w" -o termai-linux-amd64 .
       - uses: actions/upload-artifact@v4
@@ -73,10 +73,10 @@ jobs:
           go-version: "stable"
       - name: Install fyne-cross
         run: go install github.com/fyne-io/fyne-cross@latest
+      - name: Add GOPATH/bin to PATH
+        run: echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Build APK
-        run: |
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          fyne-cross android -app-id com.vlad.termai -name TERMAI -icon icon.png
+        run: fyne-cross android -app-id com.vlad.termai -name TERMAI -icon icon.png
       - uses: actions/upload-artifact@v4
         with:
           name: termai-android.apk
