@@ -58,7 +58,12 @@ jobs:
         with:
           go-version: "stable"
       - name: Build
-        run: GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w" -o termai-${{ matrix.suffix }} .
+        run: |
+          if [ "${{ matrix.goarch }}" = "amd64" ]; then
+            # раннер macos-latest — ARM: для кросс-сборки x86_64 с cgo указываем архитектуру clang'у
+            export CC="clang -arch x86_64"
+          fi
+          GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w" -o termai-${{ matrix.suffix }} .
       - uses: actions/upload-artifact@v4
         with:
           name: termai-${{ matrix.suffix }}
