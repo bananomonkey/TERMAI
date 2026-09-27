@@ -45,30 +45,6 @@ jobs:
           name: termai-windows-amd64.exe
           path: termai-windows-amd64.exe
 
-  macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - { goarch: arm64, suffix: macos-arm64 }
-          - { goarch: amd64, suffix: macos-amd64 }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "stable"
-      - name: Build
-        run: |
-          if [ "${{ matrix.goarch }}" = "amd64" ]; then
-            # раннер macos-latest — ARM: для кросс-сборки x86_64 с cgo указываем архитектуру clang'у
-            export CC="clang -arch x86_64"
-          fi
-          GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w" -o termai-${{ matrix.suffix }} .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: termai-${{ matrix.suffix }}
-          path: termai-${{ matrix.suffix }}
-
   android:
     runs-on: ubuntu-latest
     steps:
@@ -88,7 +64,7 @@ jobs:
           path: fyne-cross/dist/android/TERMAI.apk
 
   release:
-    needs: [linux, windows, macos, android]
+    needs: [linux, windows, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
