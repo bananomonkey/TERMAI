@@ -616,6 +616,11 @@ func main() {
 
 	a.startTimer()
 
+	// онбординг: если ключ ещё не введён — при входе сразу плашка с полем ввода
+	if a.cfg.APIKey == "" {
+		fyne.Do(a.showOnboarding)
+	}
+
 	a.win.ShowAndRun()
 }
 
@@ -728,7 +733,12 @@ func (a *App) buildUI() {
 		spacerV(10),
 		a.hintsCard,
 	)
-	theoryPane := panel(container.NewScroll(taskContent), colPanel)
+	theoryInner := fyne.CanvasObject(taskContent)
+	if a.mobile {
+		// дополнительный воздух вокруг панели задачи на узком экране
+		theoryInner = container.NewPadded(taskContent)
+	}
+	theoryPane := panel(container.NewScroll(theoryInner), colPanel)
 
 	termBg := canvas.NewRectangle(colTerm)
 	var termInner *fyne.Container
@@ -770,6 +780,9 @@ func (a *App) buildUI() {
 	a.termIn.PlaceHolder = "команда или ответ… (Tab — автодополнение, ↑/↓ — история)"
 	a.termIn.TextStyle = fyne.TextStyle{Monospace: true}
 	a.termIn.OnSubmitted = a.runCommand
+	if a.mobile {
+		a.termIn.PlaceHolder = "команда или ответ…"
+	}
 
 	var termField fyne.CanvasObject = a.termIn
 	if a.mobile {
@@ -803,6 +816,9 @@ func (a *App) buildUI() {
 	a.chatSpin.Hide()
 	a.chatIn = widget.NewEntry()
 	a.chatIn.PlaceHolder = "Спроси ментора о задаче, синтаксисе, ошибке…"
+	if a.mobile {
+		a.chatIn.PlaceHolder = "Спроси ментора…"
+	}
 	a.chatIn.OnSubmitted = func(string) { a.sendChat() }
 	a.chatSendBtn = widget.NewButton("Отправить", a.sendChat)
 	a.chatSendBtn.Importance = widget.HighImportance
@@ -866,6 +882,41 @@ func (a *App) buildUI() {
 	a.tabTermBtn.OnTapped = func() { a.switchTab("terminal") }
 
 	a.win.SetOnClosed(func() { a.saveProgress() })
+}
+
+// showOnboarding — приветственный диалог: просим API-ключ, если его нет.
+// Ключ хранится только локально (docker-trainer.json), на сервер не отправляется.
+func (a *App) showOnboarding() {
+	key := widget.NewPasswordEntry()
+	key.PlaceHolder = "sk-…"
+	key.TextStyle = fyne.TextStyle{Monospace: true}
+	hint := widget.NewLabel("Ключ хранится только на этом устройстве.")
+	hint.Wrapping = fyne.TextWrapWord
+	link := widget.NewHyperlink("Получить ключ: platform.deepseek.com", nil)
+	save := widget.NewButton("Сохранить и начать", func() {
+		k := strings.TrimSpace(key.Text)
+		if k == "" {
+			return
+		}
+		a.cfg.APIKey = k
+		_ = saveConfig(a.cfg)
+		a.ai = NewAIClient(a.cfg)
+		a.termLine("  ✓ ключ сохранён — песочница готова")
+		a.refreshTerminal()
+		a.mentorSay("mentor", "Ключ на месте. Выбери курс и жми — я помогу дойти до оффера.")
+	})
+	save.Importance = widget.HighImportance
+	content := container.NewVBox(
+		caption("ДОБРО ПОЖАЛОВАТЬ В TERMAI", colAccent),
+		spacerV(10),
+		widget.NewLabel("Вставь свой DeepSeek API-ключ — он нужен ИИ-симулятору и ментору."),
+		key, hint, link,
+		spacerV(10),
+		save,
+	)
+	d := dialog.NewCustom("Настройка", "Позже", content, a.win)
+	d.Resize(a.fitSize(480, 360))
+	d.Show()
 }
 
 // termEntry — терминальный ввод с перехватом Tab (автодополнение) и ↑/↓ (история)
@@ -1139,7 +1190,7 @@ func (a *App) showMoreMenu() {
 		widget.NewButton("Статистика и достижения", a.showStats),
 	)
 	d := dialog.NewCustom("Ещё", "Закрыть", content, a.win)
-	d.Resize(fyne.NewSize(360, 460))
+	d.Resize(a.fitSize(360, 460))
 	d.Show()
 }
 
@@ -1693,6 +1744,23 @@ func (a *App) refreshTerminal() {
 	a.termScroll.ScrollToBottom()
 }
 
+// termPrompt — приглашение в стиле реального Linux: user@termai:~$.
+// Папка берётся из состояния песочницы — её же печатает pwd и меняет cd,
+// поэтому приглашение всегда согласовано с выводом команд.
+func (a *App) termPrompt() string {
+	cwd := a.state().Workdir
+	if cwd == "" {
+		cwd = "/"
+	}
+	home := "/workspace" // «домашняя» папка песочницы (baseState/normalizeState)
+	if cwd == home {
+		cwd = "~"
+	} else if strings.HasPrefix(cwd, home+"/") {
+		cwd = "~" + cwd[len(home):]
+	}
+	return "user@termai:" + cwd + "$ "
+}
+
 func (a *App) state() SandboxState { return a.states[a.stateKey()] }
 
 func (a *App) statePtr() *SandboxState {
@@ -1706,7 +1774,7 @@ func (a *App) runCommand(cmd string) {
 		return
 	}
 	a.termIn.SetText("")
-	a.termLine("$ " + cmd)
+	a.termLine(a.termPrompt() + cmd)
 
 	if len(a.cmdHist) == 0 || a.cmdHist[len(a.cmdHist)-1] != cmd {
 		a.cmdHist = append(a.cmdHist, cmd)
@@ -2004,7 +2072,7 @@ func (a *App) resultDialog(title, text string, ok bool) {
 	body.Wrapping = fyne.TextWrapWord
 	content := container.NewVBox(head, spacerV(12), body)
 	d := dialog.NewCustom(title, "Понятно", content, a.win)
-	d.Resize(fyne.NewSize(520, 320))
+	d.Resize(a.fitSize(520, 320))
 	d.Show()
 }
 
@@ -2291,7 +2359,7 @@ func (a *App) showFiles() {
 		preview.SetText(files[names[0]])
 	}
 	d := dialog.NewCustom("Файлы песочницы", "Закрыть", content, a.win)
-	d.Resize(fyne.NewSize(620, 460))
+	d.Resize(a.fitSize(620, 460))
 	d.Show()
 }
 
@@ -2342,7 +2410,7 @@ func (a *App) showStats() {
 	}
 	content := container.NewScroll(inner)
 	d := dialog.NewCustom("Статистика", "Закрыть", content, a.win)
-	d.Resize(fyne.NewSize(540, 580))
+	d.Resize(a.fitSize(540, 580))
 	d.Show()
 }
 
@@ -2424,7 +2492,7 @@ func (a *App) showReview() {
 		content.Add(widget.NewLabel("Закладок пока нет.\nДобавляй задачи кнопкой ☆ в панели задачи —\nпотом их можно повторять и разбирать со мной."))
 	}
 	d = dialog.NewCustom("Закладки и повторение", "Закрыть", content, a.win)
-	d.Resize(fyne.NewSize(560, 420))
+	d.Resize(a.fitSize(560, 420))
 	d.Show()
 }
 
@@ -2473,7 +2541,7 @@ func (a *App) showBookmarkDetail(k string) {
 		}),
 	)
 	d := dialog.NewCustom("Закладка: "+task.Title, "Закрыть", content, a.win)
-	d.Resize(fyne.NewSize(640, 560))
+	d.Resize(a.fitSize(640, 560))
 	d.Show()
 }
 
@@ -3231,7 +3299,7 @@ func (a *App) openSettings() {
 		}
 		a.refreshTerminal()
 	}, a.win)
-	d.Resize(fyne.NewSize(620, 740))
+	d.Resize(a.fitSize(620, 740))
 	d.Show()
 }
 
@@ -3452,6 +3520,16 @@ func clamp(v, lo, hi int) int {
 }
 
 // ---------- UI-хелперы ----------
+
+// fitSize — размер диалога, обрезанный до экрана: на телефоне 620-пиксельные
+// настройки иначе вылезают за край и экран приходится двигать влево-вправо.
+func (a *App) fitSize(w, h float32) fyne.Size {
+	s := a.win.Canvas().Size()
+	if s.Width <= 0 || s.Height <= 0 {
+		return fyne.NewSize(w, h)
+	}
+	return fyne.NewSize(fyne.Min(w, s.Width-16), fyne.Min(h, s.Height-16))
+}
 
 func panel(inner fyne.CanvasObject, bg color.Color) fyne.CanvasObject {
 	rect := canvas.NewRectangle(bg)
