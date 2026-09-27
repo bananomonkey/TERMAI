@@ -538,6 +538,7 @@ type App struct {
 	tabTermBtn   *widget.Button
 	contentStack *fyne.Container
 	termOut      *widget.Entry
+	termGrid     *widget.TextGrid
 	termScroll   *container.Scroll
 	termIn       *termEntry
 	termSpin     *widget.Activity
@@ -729,17 +730,25 @@ func (a *App) buildUI() {
 	)
 	theoryPane := panel(container.NewScroll(taskContent), colPanel)
 
-	a.termOut = widget.NewMultiLineEntry()
-	a.termOut.TextStyle = fyne.TextStyle{Monospace: true}
-	a.termOut.Wrapping = fyne.TextWrapWord
-	a.termOut.OnChanged = func(s string) {
-		if s != a.termText {
-			a.termOut.SetText(a.termText)
-		}
-	}
-	a.termScroll = container.NewScroll(a.termOut)
 	termBg := canvas.NewRectangle(colTerm)
-	termInner := container.NewStack(termBg, a.termScroll)
+	var termInner *fyne.Container
+	if a.mobile {
+		a.termGrid = widget.NewTextGrid()
+		a.termGrid.SetText(a.termText)
+		a.termScroll = container.NewScroll(a.termGrid)
+		termInner = container.NewStack(termBg, a.termScroll)
+	} else {
+		a.termOut = widget.NewMultiLineEntry()
+		a.termOut.TextStyle = fyne.TextStyle{Monospace: true}
+		a.termOut.Wrapping = fyne.TextWrapWord
+		a.termOut.OnChanged = func(s string) {
+			if s != a.termText {
+				a.termOut.SetText(a.termText)
+			}
+		}
+		a.termScroll = container.NewScroll(a.termOut)
+		termInner = container.NewStack(termBg, a.termScroll)
+	}
 
 	termCaption := canvas.NewText("терминал", colMuted)
 	termCaption.TextSize = 12
@@ -762,7 +771,11 @@ func (a *App) buildUI() {
 	a.termIn.TextStyle = fyne.TextStyle{Monospace: true}
 	a.termIn.OnSubmitted = a.runCommand
 
-	termInput := container.NewBorder(nil, nil, container.NewHBox(a.termSpin, prompt), nil, a.termIn)
+	var termField fyne.CanvasObject = a.termIn
+	if a.mobile {
+		termField = fixedHeight(52, a.termIn)
+	}
+	termInput := container.NewBorder(nil, nil, container.NewHBox(a.termSpin, prompt), nil, termField)
 	termPane := container.NewStack(termBg,
 		container.NewPadded(container.NewBorder(
 			container.NewVBox(termTop, spacerV(6)), container.NewPadded(termInput), nil, nil, termInner),
@@ -800,7 +813,7 @@ func (a *App) buildUI() {
 		a.micBtn = widget.NewButtonWithIcon("Диктовать", theme.FileAudioIcon(), a.onMicTap)
 		chatInput = container.NewBorder(nil, nil, container.NewHBox(a.attachBtn, a.micBtn), a.chatSendBtn, a.chatIn)
 	} else {
-		chatInput = container.NewBorder(nil, nil, a.attachBtn, a.chatSendBtn, a.chatIn)
+		chatInput = container.NewBorder(nil, nil, a.attachBtn, a.chatSendBtn, fixedHeight(52, a.chatIn))
 	}
 
 	a.attachLabel = widget.NewLabel("")
@@ -839,7 +852,7 @@ func (a *App) buildUI() {
 		nav := container.NewGridWithColumns(4,
 			a.mobileTabs["tasks"], a.mobileTabs["theory"], a.mobileTabs["term"], a.mobileTabs["chat"])
 		a.showMobileTab("tasks")
-		root = container.NewBorder(header, container.NewPadded(nav), nil, nil, stack)
+		root = container.NewBorder(header, container.NewPadded(fixedHeight(58, nav)), nil, nil, stack)
 	} else {
 		a.contentStack = container.NewStack(theoryPane, termPane)
 		right := container.NewBorder(container.NewPadded(tabs), nil, nil, nil, a.contentStack)
@@ -1672,7 +1685,11 @@ func (a *App) termLine(text string) {
 }
 
 func (a *App) refreshTerminal() {
-	a.termOut.SetText(a.termText)
+	if a.mobile && a.termGrid != nil {
+		a.termGrid.SetText(a.termText)
+	} else if a.termOut != nil {
+		a.termOut.SetText(a.termText)
+	}
 	a.termScroll.ScrollToBottom()
 }
 
