@@ -1,0 +1,974 @@
+[
+ {
+  "id": "docker",
+  "title": "Docker",
+  "desc": "От hello-world до compose, оптимизации и отладки. После встроенных задач ИИ продолжает по программе.",
+  "tasks": [
+   {
+    "id": "hello-world",
+    "title": "Hello, Docker!",
+    "kind": "cmd",
+    "difficulty": 1,
+    "theory": [
+     "Docker упаковывает приложение вместе с окружением в **контейнер** — изолированную коробочку со своей файловой системой, библиотеками и процессами. Контейнер ведёт себя одинаково на любой машине с Linux-ядром, поэтому фраза «а у меня работало» наконец уходит в прошлое.",
+     "Главная сущность — **образ** (image): неизменяемый шаблон, что-то вроде снимка файловой системы плюс инструкция, как запуститься. Образы лежат в реестрах; самый известный — Docker Hub.",
+     "Команда `docker run` делает сразу три шага: скачает образ, если его нет локально (pull), создаст контейнер (create) и запустит его (start):",
+     "```\ndocker run hello-world\n```",
+     "Классика первой проверки — образ `hello-world`: он печатает приветствие и объясняет, что только что произошло. Полезные команды рядом: `docker ps` — запущенные контейнеры, `docker ps -a` — все, `docker images` — локальные образы."
+    ],
+    "quiz": [
+     {
+      "question": "Что делает docker run, если образа нет локально?",
+      "options": [
+       "Скачает образ (pull), затем создаст и запустит контейнер",
+       "Выведет ошибку и завершится",
+       "Запустит контейнер без образа"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Какая команда покажет ВСЕ контейнеры, включая остановленные?",
+      "options": [
+       "docker ps",
+       "docker ps -a",
+       "docker images"
+      ],
+      "correct": 1
+     }
+    ],
+    "goal": "Выполни docker run hello-world и получи приветствие от контейнера.",
+    "hints": [
+     "Образ скачается сам — просто набери команду целиком: docker run hello-world",
+     "Если видишь «Unable to find image…» и загрузку — это нормальный pull, дождись окончания."
+    ],
+    "check": "в state.images есть hello-world:latest и существует контейнер с образом hello-world (статус exited — норм)",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "run-nginx",
+    "title": "Веб-сервер в фоне",
+    "kind": "cmd",
+    "difficulty": 2,
+    "theory": [
+     "nginx — самый популярный веб-сервер, и его официальный образ готов к работе из коробки: скачал, запустил — слушает порт 80. Флаг `-d` (`--detach`) отправляет контейнер в фон и возвращает тебе терминал:",
+     "```\ndocker run -d nginx\n```",
+     "Флаг `-p ХОСТ:КОНТЕЙНЕР` публикует порт: запросы на порт 8080 твоей машины улетают на порт 80 внутри контейнера. Без `-p` контейнер недостижим снаружи — сетевая изоляция по умолчанию железная.",
+     "`--name` задаёт понятное имя (иначе Docker придумает случайное вроде `nostalgic_turing`):",
+     "```\ndocker run -d --name web -p 8080:80 nginx\n```",
+     "Контролируй результат через `docker ps` — там имена, образы, статусы и проброс портов."
+    ],
+    "quiz": [
+     {
+      "question": "Что делает флаг -p 8080:80?",
+      "options": [
+       "Публикует порт 8080 хоста на порт 80 контейнера",
+       "Меняет порт внутри контейнера на 8080",
+       "Открывает порт 80 на хосте"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как задать контейнеру имя web?",
+      "options": [
+       "--name web",
+       "--hostname web",
+       "docker rename web"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Запусти nginx в фоновом режиме: имя контейнера — web, порт 8080 хоста проброшен на 80 контейнера.",
+    "hints": [
+     "Флаги собираются в одну команду: docker run -d --name web -p 8080:80 nginx",
+     "Проверь себя: docker ps — в строке web должно быть 0.0.0.0:8080-\u003e80/tcp."
+    ],
+    "check": "существует контейнер web с образом nginx (любой тег), status=running, в ports есть '8080-\u003e80'",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "exec",
+    "title": "Заглянуть внутрь",
+    "kind": "cmd",
+    "difficulty": 2,
+    "theory": [
+     "Контейнер — не чёрный ящик. `docker exec` выполняет команду внутри уже работающего контейнера: от быстрого `ls` до полноценного shell:",
+     "```\ndocker exec web ls /tmp\ndocker exec -it web sh\n```",
+     "Связка `-it` — это interactive + tty: выделяется псевдотерминал, работают стрелки и автодополнение. В лёгких образах на базе alpine нет bash — там живёт `sh`, и этого достаточно.",
+     "Всё, что ты создаёшь внутри контейнера, попадает в его временный слой записи и исчезает вместе с контейнером (`docker rm`). Поэтому для данных есть тома, а exec — для осмотра и точечных действий."
+    ],
+    "quiz": [
+     {
+      "question": "Зачем флаги -it в docker exec?",
+      "options": [
+       "Выделяют интерактивный псевдотерминал",
+       "Запускают контейнер в фоне",
+       "Задают имя контейнера"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Какой shell есть в alpine-образах?",
+      "options": [
+       "bash",
+       "sh",
+       "zsh"
+      ],
+      "correct": 1
+     }
+    ],
+    "goal": "Контейнер web уже запущен. Выполни команду внутри него, которая создаст файл /tmp/alive (например, docker exec web touch /tmp/alive).",
+    "hints": [
+     "Сначала загляни: docker exec web ls /tmp",
+     "Создание файла: docker exec web touch /tmp/alive"
+    ],
+    "check": "контейнер web в статусе running; в его execs есть команда, создающая /tmp/alive",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "nginx:alpine": {
+       "id": "sha256:5ba9d9e0c7f8",
+       "repo": "nginx",
+       "tag": "alpine",
+       "size_mb": 23
+      }
+     },
+     "containers": {
+      "web": {
+       "id": "d98f9f1b0b2e",
+       "name": "web",
+       "image": "nginx:alpine",
+       "status": "running",
+       "ports": "8080-\u003e80/tcp"
+      }
+     },
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "logs",
+    "title": "Кто шумит в логах",
+    "kind": "cmd",
+    "difficulty": 2,
+    "theory": [
+     "Контейнер пишет в stdout/stderr — Docker перехватывает поток и хранит как логи. `docker logs` показывает их целиком, `--tail N` — последние N строк, `-f` — следить в реальном времени (выход — Ctrl+C):",
+     "```\ndocker logs logger\ndocker logs --tail 20 logger\n```",
+     "Логи — первое место диагностики: упало приложение, контейнер циклится, nginx отдаёт 404 — всё начинается здесь. Статус из `docker ps` подскажет направление: `restarting` или `exited` — тревожные знаки.",
+     "Привычка профессионала: перед тем как что-то чинить, посмотреть хвост логов. Половина «мистических» проблем рассыпается на первой же строке ошибки."
+    ],
+    "quiz": [
+     {
+      "question": "Что покажет docker logs --tail 20 logger?",
+      "options": [
+       "Последние 20 строк логов",
+       "Первые 20 строк логов",
+       "Логи за последние 20 минут"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Куда приложение должно писать, чтобы логи попали в docker logs?",
+      "options": [
+       "В файл внутри контейнера",
+       "В stdout/stderr",
+       "В syslog хоста"
+      ],
+      "correct": 1
+     }
+    ],
+    "goal": "Контейнер logger что-то печатает в stdout. Посмотри его логи, а затем останови контейнер: docker stop logger.",
+    "hints": [
+     "docker logs logger — увидеть, что он пишет.",
+     "Убедился, что жив? docker stop logger — и проверь статус через docker ps -a."
+    ],
+    "check": "у контейнера logger logs_viewed=true (логи просматривались) и итоговый статус exited",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "logger:latest": {
+       "id": "sha256:2bbe40f7c565",
+       "repo": "logger",
+       "tag": "latest",
+       "size_mb": 8
+      }
+     },
+     "containers": {
+      "logger": {
+       "id": "bff80d286eb6",
+       "name": "logger",
+       "image": "logger:latest",
+       "status": "running"
+      }
+     },
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "build-basics",
+    "title": "Свой первый образ",
+    "kind": "cmd",
+    "difficulty": 2,
+    "theory": [
+     "Dockerfile — рецепт образа. Каждая инструкция создаёт слой: `FROM` выбирает базу, `COPY` кладёт файлы из контекста сборки, `RUN` выполняет команды во время сборки, `CMD` говорит, что запускать по умолчанию:",
+     "```\nFROM python:3.12-slim\nCOPY app.py .\nCMD [\"python\", \"app.py\"]\n```",
+     "Собирается так — точка в конце это путь к контексту сборки, а не случайный символ:",
+     "```\ndocker build -t myapp:1.0 .\n```",
+     "Слои кэшируются: если инструкция и её входы не менялись, Docker переиспользует результат. Тег `slim` — компактная вариация базового образа без лишних пакетов."
+    ],
+    "quiz": [
+     {
+      "question": "Что означает точка в docker build -t app . ?",
+      "options": [
+       "Путь к контексту сборки",
+       "Имя Dockerfile",
+       "Тег по умолчанию"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Какая инструкция задаёт команду по умолчанию?",
+      "options": [
+       "RUN",
+       "CMD",
+       "FROM"
+      ],
+      "correct": 1
+     }
+    ],
+    "goal": "В песочнице лежит app.py. Создай Dockerfile (база python:3.12-slim, скопируй app.py, CMD запускает его) и собери образ myapp:1.0.",
+    "hints": [
+     "Записать Dockerfile можно heredoc'ом: cat \u003e Dockerfile \u003c\u003cEOF … EOF (в симуляторе это работает).",
+     "Сборка: docker build -t myapp:1.0 . — не забудь точку в конце."
+    ],
+    "check": "в files есть Dockerfile с FROM python и COPY app.py; в state.images есть myapp:1.0",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "app.py": "import http.server\n\nprint('serving on 8000')\nhttp.server.HTTPServer(('', 8000), http.server.SimpleHTTPRequestHandler).serve_forever()\n"
+     },
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "copy-order",
+    "title": "COPY и порядок слоёв",
+    "kind": "cmd",
+    "difficulty": 3,
+    "theory": [
+     "`COPY` переносит файлы из контекста сборки в слой образа: `COPY что_на_хосте куда_в_образе`. В отличие от `ADD` он делает ровно одну вещь и не распаковывает архивы — за явность платим удобством, и это честная сделка.",
+     "Каждая `COPY` фиксирует состояние файлов в отдельном слое. Изменился файл — кэш инвалидируется от этого слоя и вниз. Этим пользуются: сначала копируют редко меняющиеся зависимости, ставят их, и только потом — часто правимый код:",
+     "```\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY app.py .\n```",
+     "Явные пути лучше `COPY . .`: не тащишь в образ мусор из папки (логи, .git, секреты). Для фильтрации существует `.dockerignore`, но аккуратный COPY — уже половина дела."
+    ],
+    "quiz": [
+     {
+      "question": "Почему COPY requirements.txt делают до COPY app.py?",
+      "options": [
+       "Чтобы кэш зависимостей не инвалидовался при правках кода",
+       "Так требует синтаксис Dockerfile",
+       "Чтобы уменьшить число слоёв"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Чем COPY отличается от ADD?",
+      "options": [
+       "ADD распаковывает архивы и умеет URL, COPY просто копирует",
+       "Ничем, это синонимы",
+       "COPY работает только с папками"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "В песочнице app.py и requirements.txt. Напиши Dockerfile: база python:3.12-slim; отдельные COPY для requirements.txt и app.py в /app; установка зависимостей pip'ом; CMD python /app/app.py. Собери образ site:2.0.",
+    "hints": [
+     "Порядок: COPY requirements.txt → RUN pip install → COPY app.py. Тогда правки кода не будут переустанавливать зависимости.",
+     "Собери: docker build -t site:2.0 ."
+    ],
+    "check": "в files Dockerfile содержит два COPY (requirements.txt и app.py) и pip install; в state.images есть site:2.0",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "app.py": "from flask import Flask\napp = Flask(__name__)\n\n@app.route('/')\ndef home():\n    return 'site works'\n\napp.run(host='0.0.0.0', port=8000)\n",
+      "requirements.txt": "flask==3.0.0\n"
+     },
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "env",
+    "title": "Переменные окружения",
+    "kind": "cmd",
+    "difficulty": 2,
+    "theory": [
+     "`ENV` задаёт переменную окружения прямо в образе: она доступна и во время сборки (следующим RUN), и внутри работающего контейнера. Так конфигурируют приложения, не трогая код: `APP_ENV`, `PORT`, `DATABASE_URL`.",
+     "```\nENV APP_ENV=production\nENV PORT=8000\n```",
+     "Значение легко переопределить при запуске — образ остаётся тем же, поведение меняется:",
+     "```\ndocker run -e PORT=9000 myapp:1.0\n```",
+     "Это философия twelve-factor: конфигурация живёт в окружении, а не в файлах. Посмотреть переменные внутри контейнера можно командой `env` или `printenv`."
+    ],
+    "quiz": [
+     {
+      "question": "Как переопределить переменную ENV при запуске?",
+      "options": [
+       "docker run -e PORT=9000 …",
+       "Через правку Dockerfile",
+       "Никак, ENV неизменяема"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Где доступна переменная, заданная ENV?",
+      "options": [
+       "Только при сборке",
+       "Только в рантайме",
+       "И при сборке, и в контейнере"
+      ],
+      "correct": 2
+     }
+    ],
+    "goal": "Напиши Dockerfile для образа envapp:1.0: база python:3.12-slim, ENV APP_ENV=production, ENV PORT=8000, скопируй app.py, CMD запускает python app.py. Собери образ.",
+    "hints": [
+     "ENV-строки ставятся в Dockerfile до CMD: ENV APP_ENV=production",
+     "Проверка: docker run --rm envapp:1.0 env — в выводе должны быть обе переменные."
+    ],
+    "check": "в state.images есть envapp:1.0; в его env есть APP_ENV=production и PORT=8000; в files Dockerfile содержит ENV",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "app.py": "import os\n\nprint('APP_ENV =', os.environ.get('APP_ENV'))\nprint('PORT =', os.environ.get('PORT'))\n"
+     },
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "volumes",
+    "title": "Данные переживают контейнер",
+    "kind": "cmd",
+    "difficulty": 3,
+    "theory": [
+     "Слой записи контейнера одноразовый: удалил контейнер — удалились и данные. **Том** (volume) — управляемая Docker область на хосте, которую подключают в контейнер флагом `-v`:",
+     "```\ndocker volume create appdata\ndocker run -d --name data-writer -v appdata:/data alpine …\n```",
+     "Живёт том независимо от контейнеров: пересоздавай контейнер сколько хочешь — данные на месте. Инвентарь: `docker volume ls`, `docker volume inspect`, `docker volume rm`.",
+     "Анонимные тома (без имени) — источник мусора, поэтому всегда называй явно."
+    ],
+    "quiz": [
+     {
+      "question": "Что происходит с данными именованного тома при удалении контейнера?",
+      "options": [
+       "Том остаётся на месте",
+       "Удаляются вместе с контейнером",
+       "Том пересоздаётся пустым"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как смонтировать именованный том appdata в /data?",
+      "options": [
+       "-v appdata:/data",
+       "--volume-name appdata",
+       "-m appdata"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Создай том appdata и запусти контейнер data-writer (образ alpine), который каждые 5 секунд дописывает дату в /data/log.txt, с монтированием appdata в /data.",
+    "hints": [
+     "Сначала том: docker volume create appdata",
+     "Затем: docker run -d --name data-writer -v appdata:/data alpine sh -c 'while true; do date \u003e\u003e /data/log.txt; sleep 5; done'"
+    ],
+    "check": "в state.volumes есть appdata; контейнер data-writer running и в его mounts есть 'appdata:/data'",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "alpine:latest": {
+       "id": "sha256:9a5246c8ab9a",
+       "repo": "alpine",
+       "tag": "latest",
+       "size_mb": 7
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "networks",
+    "title": "Сети: разговариваем по имени",
+    "kind": "cmd",
+    "difficulty": 3,
+    "theory": [
+     "По умолчанию контейнеры сидят в bridge-сети и видят друг друга по IP-адресам, но не по именам. Пользовательская сеть добавляет встроенный DNS: контейнер `cache` доступен соседям просто по имени `cache`.",
+     "```\ndocker network create appnet\ndocker run -d --name cache --network appnet redis:alpine\n```",
+     "Один контейнер может состоять в нескольких сетях сразу. Это фундамент микросервисов: web ходит к db по имени `db` — никаких IP и никаких правок конфигов при пересоздании контейнеров."
+    ],
+    "quiz": [
+     {
+      "question": "Что даёт пользовательская сеть по сравнению с bridge по умолчанию?",
+      "options": [
+       "Встроенный DNS: контейнеры видны по имени",
+       "Ускоряет сеть вдвое",
+       "Полностью изолирует от интернета"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как подключить контейнер к сети appnet при запуске?",
+      "options": [
+       "--network appnet",
+       "--dns appnet",
+       "--link appnet"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Создай сеть appnet и запусти в ней два контейнера: cache (образ redis:alpine) и front (образ nginx:alpine).",
+    "hints": [
+     "docker network create appnet",
+     "docker run -d --name cache --network appnet redis:alpine — и то же самое для front с nginx:alpine."
+    ],
+    "check": "в state.networks есть appnet; контейнеры cache и front оба running и у обоих в networks есть appnet",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "nginx:alpine": {
+       "id": "sha256:5ba9d9e0c7f8",
+       "repo": "nginx",
+       "tag": "alpine",
+       "size_mb": 23
+      },
+      "redis:alpine": {
+       "id": "sha256:050441f54510",
+       "repo": "redis",
+       "tag": "alpine",
+       "size_mb": 15
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "multi-stage",
+    "title": "Многоступенчатая сборка",
+    "kind": "cmd",
+    "difficulty": 4,
+    "theory": [
+     "В образе для сборки живёт много лишнего: компиляторы, кэши, dev-зависимости. **Multi-stage** сборка решает это элегантно: собираем артефакт в одном образе и переносим в чистый финальный. У каждой ступени своё имя:",
+     "```\nFROM golang:1.22 AS build\nRUN go build -o /server .\n\nFROM alpine:3.19\nCOPY --from=build /server /server\nCMD [\"/server\"]\n```",
+     "Финальным считается последний `FROM`. Копировать из ступени в ступень умеет `COPY --from=имя`.",
+     "Результат драматичный: Go-приложение может весить 700+ МБ в сборщике и ~10 МБ в рантайме на alpine. Быстрее деплой, меньше поверхность атаки, проще распространение."
+    ],
+    "quiz": [
+     {
+      "question": "Зачем в Dockerfile несколько FROM?",
+      "options": [
+       "Собрать артефакт в одном образе и перенести в чистый финальный",
+       "Чтобы слоёв было больше",
+       "Так ускоряется сборка"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как скопировать файл из ступени build?",
+      "options": [
+       "COPY --from=build /server /server",
+       "COPY build:/server /server",
+       "GET --stage build /server"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "В песочнице main.go — маленький HTTP-сервер на Go. Напиши Dockerfile с двумя ступенями: golang:1.22 (сборка) и alpine:3.19 (рантайм); скопируй собранный бинарник. Собери образ myapi:1.0.",
+    "hints": [
+     "Первая ступень: FROM golang:1.22 AS build … RUN go build -o /server .",
+     "Вторая ступень: FROM alpine:3.19 … COPY --from=build /server /server … CMD [\"/server\"]"
+    ],
+    "check": "в state.images есть myapi:1.0; в его layers минимум два FROM, последний — alpine, и присутствует COPY --from",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "go.mod": "module myapi\n\ngo 1.22\n",
+      "main.go": "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\nfunc main() {\n\thttp.HandleFunc(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\t\tfmt.Fprintln(w, \"api ok\")\n\t})\n\thttp.ListenAndServe(\":8080\", nil)\n}\n"
+     },
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "compose",
+    "title": "Compose: оркестр в одном файле",
+    "kind": "cmd",
+    "difficulty": 3,
+    "theory": [
+     "Когда контейнеров становится несколько, флаги в CLI превращаются в заклинание. `docker-compose.yml` описывает все сервисы декларативно — и вся инфраструктура поднимается одной командой:",
+     "```yaml\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"8081:80\"\n  db:\n    image: redis:alpine\n```",
+     "`docker compose up -d` создаёт недостающие контейнеры и общую сеть проекта; `docker compose down` гасит и убирает. Это YAML — отступы значат то же, что скобки в коде.",
+     "Современный compose — плагин к docker CLI: `docker compose` (пробел, без дефиса). Старый `docker-compose` ещё встречается в туториалах, но пиши по-новому."
+    ],
+    "quiz": [
+     {
+      "question": "Какой синтаксис считается современным?",
+      "options": [
+       "docker compose up -d",
+       "docker-compose up -d",
+       "docker up compose"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Что делает docker compose down?",
+      "options": [
+       "Останавливает и удаляет контейнеры проекта",
+       "Только останавливает, не удаляет",
+       "Удаляет образы с диска"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Напиши docker-compose.yml с двумя сервисами: web (образ nginx:alpine, порт 8081:80) и db (образ redis:alpine). Подними их: docker compose up -d.",
+    "hints": [
+     "Каркас: services: → web: → image: nginx:alpine → ports: → - \"8081:80\" (отступы — 2 пробела).",
+     "Второй сервис db описывается так же, только порт не нужен. Потом docker compose up -d."
+    ],
+    "check": "в files есть docker-compose.yml с сервисами web и db; запущены контейнеры обоих сервисов",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "nginx:alpine": {
+       "id": "sha256:5ba9d9e0c7f8",
+       "repo": "nginx",
+       "tag": "alpine",
+       "size_mb": 23
+      },
+      "redis:alpine": {
+       "id": "sha256:050441f54510",
+       "repo": "redis",
+       "tag": "alpine",
+       "size_mb": 15
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "depends-on",
+    "title": "Кто первый встал — того и ботинки",
+    "kind": "cmd",
+    "difficulty": 4,
+    "theory": [
+     "Классическая боль: приложение стартует раньше базы и падает, потому что подключиться некуда. `depends_on` в compose объявляет порядок: сначала зависимости, потом зависящие.",
+     "Но простой `depends_on` ждёт лишь запуска контейнера, а не готовности сервиса. Решение — `healthcheck` у базы (команда-проверка живости) и `depends_on` с условием:",
+     "```yaml\n  db:\n    image: redis:alpine\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 5s\n  app:\n    image: nginx:alpine\n    depends_on:\n      db:\n        condition: service_healthy\n```",
+     "Redis умеет отвечать на `redis-cli ping` — идеальный healthcheck. Для Postgres обычно `pg_isready`, для web — `curl` на /health."
+    ],
+    "quiz": [
+     {
+      "question": "Простой depends_on гарантирует…",
+      "options": [
+       "Только запуск контейнера, не готовность сервиса",
+       "Полную готовность сервиса",
+       "Здоровье зависимости"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Какое condition ждёт готовности healthcheck?",
+      "options": [
+       "service_healthy",
+       "service_started",
+       "service_complete"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "В песочнице есть docker-compose.yml с сервисом db (redis). Добавь healthcheck к db (redis-cli ping) и сервис app (образ nginx:alpine, порт 8082:80) с depends_on на db и условием service_healthy. Подними: docker compose up -d.",
+    "hints": [
+     "healthcheck: test: [\"CMD\", \"redis-cli\", \"ping\"], interval: 5s",
+     "depends_on: db: condition: service_healthy — с правильными отступами внутри сервиса app."
+    ],
+    "check": "в docker-compose.yml у db есть healthcheck, у app есть depends_on с condition: service_healthy; контейнеры app и db запущены",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "docker-compose.yml": "services:\n  db:\n    image: redis:alpine\n"
+     },
+     "images": {
+      "nginx:alpine": {
+       "id": "sha256:5ba9d9e0c7f8",
+       "repo": "nginx",
+       "tag": "alpine",
+       "size_mb": 23
+      },
+      "redis:alpine": {
+       "id": "sha256:050441f54510",
+       "repo": "redis",
+       "tag": "alpine",
+       "size_mb": 15
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "optimize",
+    "title": "Похудение образа",
+    "kind": "cmd",
+    "difficulty": 4,
+    "theory": [
+     "Каждый `RUN` — отдельный слой, а удалённые в следующем слое файлы продолжают занимать место в предыдущем. Поэтому установку пакетов и очистку объединяют в ОДИН RUN:",
+     "```\nRUN apt-get update \u0026\u0026 apt-get install -y --no-install-recommends curl \\\n    \u0026\u0026 rm -rf /var/lib/apt/lists/*\n```",
+     "Самый большой выигрыш даёт базовый образ: `ubuntu` ~78 МБ, `alpine` ~7 МБ, `python:3.12-slim` ~55 МБ против `python:3.12` ~1 ГБ. Сменил одну строку FROM — минус сотни мегабайт.",
+     "Связка «компактная база + объединённые RUN + multi-stage» превращает гигантский образ в аккуратный артефакт, который качается за секунды."
+    ],
+    "quiz": [
+     {
+      "question": "Почему rm -rf /var/lib/apt/lists в следующем RUN не уменьшает образ?",
+      "options": [
+       "Удалённые файлы остаются в предыдущем слое",
+       "rm не работает в Dockerfile",
+       "Слой сжимается при сборке"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Самый компактный базовый образ из перечисленных?",
+      "options": [
+       "ubuntu:22.04",
+       "alpine",
+       "debian:bookworm"
+      ],
+      "correct": 1
+     }
+    ],
+    "goal": "В песочнице тяжёлый Dockerfile — из него собран big:1.0 на 780 МБ. Перепиши его: база python:3.12-slim, компактные слои (apt — одним RUN с очисткой кэша, или вовсе без apt), и собери small:1.0 размером меньше 150 МБ.",
+    "hints": [
+     "python:3.12-slim уже умеет запускать .py — возможно, apt тебе вообще не нужен.",
+     "Если apt нужен: RUN apt-get update \u0026\u0026 apt-get install -y --no-install-recommends curl \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+    ],
+    "check": "в state.images есть small:1.0 с size_mb меньше 150; база (первый FROM) — python:3.12-slim",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "Dockerfile": "FROM ubuntu:22.04\nRUN apt-get update \u0026\u0026 apt-get install -y python3 python3-pip curl vim build-essential\nCOPY app.py /app/\nCMD [\"python3\", \"/app/app.py\"]\n",
+      "app.py": "print('hello from heavy image')\n"
+     },
+     "images": {
+      "big:1.0": {
+       "id": "sha256:8d0303625000",
+       "repo": "big",
+       "tag": "1.0",
+       "size_mb": 780,
+       "layers": [
+        "FROM ubuntu:22.04",
+        "RUN apt-get update \u0026\u0026 apt-get install -y python3 python3-pip curl vim build-essential",
+        "COPY app.py /app/",
+        "CMD [\"python3\", \"/app/app.py\"]"
+       ]
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "entrypoint-cmd",
+    "title": "ENTRYPOINT против CMD",
+    "kind": "cmd",
+    "difficulty": 3,
+    "theory": [
+     "`CMD` задаёт команду по умолчанию: `docker run образ арг` полностью заменяет её. `ENTRYPOINT` — фиксированная программа: аргументы приписываются к ней, а не заменяют её.",
+     "Паттерн «инструмент» — фиксируем программу, отдаём аргументы пользователю:",
+     "```\nENTRYPOINT [\"curl\"]\nCMD [\"--help\"]\n```",
+     "Тогда `docker run img https://example.org` вызовет curl с этим адресом, а `docker run img --version` — curl --version. Гибко и предсказуемо.",
+     "Пиши обе инструкции в exec-форме — JSON-массивом. Shell-форма (строкой) оборачивает всё в `/bin/sh -c` и ломает обработку сигналов — контейнер перестаёт корректно реагировать на `docker stop`."
+    ],
+    "quiz": [
+     {
+      "question": "Что произойдёт с CMD при docker run img аргументы?",
+      "options": [
+       "Заменится аргументами",
+       "Допишется к ENTRYPOINT",
+       "Будет проигнорирован ошибкой"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Зачем exec-форма (JSON-массив) для CMD/ENTRYPOINT?",
+      "options": [
+       "Корректная обработка сигналов — docker stop работает",
+       "Так красивее в логах",
+       "Контейнер стартует быстрее"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Собери образ greeter:1.0 (база alpine; ENTRYPOINT [\"/bin/sh\", \"-c\"]; CMD [\"echo hello from greeter\"]). Запусти его без аргументов, а затем — с переопределением: docker run --rm greeter:1.0 echo overridden.",
+    "hints": [
+     "Dockerfile: FROM alpine:3.19, затем ENTRYPOINT [\"/bin/sh\", \"-c\"] и CMD [\"echo hello from greeter\"].",
+     "Собери: docker build -t greeter:1.0 . Запусти без аргументов, потом — docker run --rm greeter:1.0 echo overridden."
+    ],
+    "check": "в state.images есть greeter:1.0; в его entrypoint есть '/bin/sh', в cmd есть 'echo hello'; в state.events есть запуск с переопределённым cmd",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {
+      "alpine:3.19": {
+       "id": "sha256:fb89a5f12b58",
+       "repo": "alpine",
+       "tag": "3.19",
+       "size_mb": 7
+      }
+     },
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   },
+   {
+    "id": "debug-broken",
+    "title": "Разбор полётов",
+    "kind": "cmd",
+    "difficulty": 4,
+    "theory": [
+     "Типичные причины «контейнер не стартует»: опечатка в имени файла (`COPY app.pyy` вместо `app.py`), неверный путь в `CMD`, отсутствие нужного пакета. Симптомы: статус `exited` с кодом 1 или бесконечный `restarting`.",
+     "Диагностика по шагам:",
+     "```\ndocker ps -a          # статус и код выхода\ndocker logs job       # что сказал процесс перед смертью\ndocker run -it образ sh   # залезть внутрь и осмотреться\n```",
+     "Читайте ошибки буквально: «COPY failed: file not found» означает ровно отсутствие файла в контексте сборки. Обычно исправление — одна строка в Dockerfile.",
+     "Правило: меняешь Dockerfile — пересобирай образ. Запущенный контейнер не обновится сам: образ иммутабелен, контейнер — лишь его экземпляр."
+    ],
+    "quiz": [
+     {
+      "question": "Первое место диагностики упавшего контейнера?",
+      "options": [
+       "docker logs",
+       "docker rm",
+       "docker pull"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Ты исправил Dockerfile — что дальше?",
+      "options": [
+       "Пересобрать образ (docker build)",
+       "Просто перезапустить старый контейнер",
+       "Ничего, контейнер обновится сам"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Контейнер job из образа broken:1.0 падает при старте. Найди ошибки в Dockerfile (опечатка в COPY и неверный путь в CMD), исправь файл, пересобери образ как fixed:1.0 и запусти контейнер job из него.",
+    "hints": [
+     "docker logs job покажет что-то вроде «can't open file '/app/main.py'» — а файл-то называется app.py.",
+     "Исправь Dockerfile: COPY app.py /app/ и CMD [\"python\", \"/app/app.py\"]. Пересобери: docker build -t fixed:1.0 ."
+    ],
+    "check": "в files Dockerfile исправлен (COPY app.py без опечатки, CMD указывает на app.py); в state.images есть fixed:1.0; контейнер job работает из fixed:1.0 со статусом running",
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {
+      "Dockerfile": "FROM python:3.12-slim\nWORKDIR /app\nCOPY app.pyy /app/\nCMD [\"python\", \"/app/main.py\"]\n",
+      "app.py": "print('now it works')\n"
+     },
+     "images": {
+      "broken:1.0": {
+       "id": "sha256:769aeb4643f0",
+       "repo": "broken",
+       "tag": "1.0",
+       "size_mb": 55,
+       "layers": [
+        "FROM python:3.12-slim",
+        "WORKDIR /app",
+        "COPY app.pyy /app/",
+        "CMD [\"python\", \"/app/main.py\"]"
+       ]
+      },
+      "python:3.12-slim": {
+       "id": "sha256:776597b4ba7e",
+       "repo": "python",
+       "tag": "3.12-slim",
+       "size_mb": 55
+      }
+     },
+     "containers": {
+      "job": {
+       "id": "7fb3232b4a47",
+       "name": "job",
+       "image": "broken:1.0",
+       "status": "exited"
+      }
+     },
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ]
+    }
+   }
+  ],
+  "syllabus": [
+   "cmd: .dockerignore и чистый контекст сборки",
+   "cmd: ARG — аргументы сборки",
+   "cmd: HEALTHCHECK в Dockerfile",
+   "cmd: restart policy: no, on-failure, always",
+   "cmd: лимиты ресурсов --memory --cpus",
+   "cmd: docker cp — файлы между хостом и контейнером",
+   "cmd: теги, дайджесты и push в registry",
+   "cmd: docker save/load — перенос образа файлом",
+   "cmd: docker system prune — чистка диска",
+   "cmd: compose: volumes, env_file и переменные",
+   "quiz: контейнер против виртуалки — изоляция и накладные расходы",
+   "quiz: слои образа и кэш сборки — почему это работает быстро"
+  ]
+ },
+ {
+  "id": "linux",
+  "title": "Linux",
+  "desc": "Командная строка, файлы, права, процессы, сеть, скрипты — база для всего остального.",
+  "syllabus": [
+   "cmd: файловая система: ls, cd, pwd, типы файлов",
+   "cmd: работа с файлами: cat, less, head, tail, touch, cp, mv, rm",
+   "quiz: права доступа rwx и числа 755/644",
+   "cmd: chmod, chown на практике",
+   "cmd: пользователи: whoami, id, sudo, /etc/passwd",
+   "cmd: процессы: ps aux, top, kill и сигналы",
+   "quiz: SIGTERM против SIGKILL — в чём разница",
+   "cmd: systemd: systemctl status/start/enable",
+   "cmd: пакеты: apt update/install/remove",
+   "cmd: поиск: grep -r, find по имени и содержимому",
+   "cmd: пайпы и перенаправления | \u003e \u003e\u003e 2\u003e",
+   "quiz: stdin, stdout, stderr и файловые дескрипторы",
+   "cmd: текст: sed-замены, sort | uniq -c, awk-основы",
+   "cmd: сеть: ip a, ping, curl, ss -tulpn",
+   "quiz: порты и модель клиент-сервер в TCP/IP",
+   "cmd: ssh: ключи, ssh-copy-id, ~/.ssh/config",
+   "cmd: архивы tar/gzip, скачивание wget/curl",
+   "cmd: cron: crontab -e и расписание",
+   "cmd: переменные окружения: env, export, .bashrc",
+   "quiz: PATH — как оболочка находит программы",
+   "cmd: bash-скрипты: shebang, переменные, if, for",
+   "cmd: диски: df -h, du -sh, точки монтирования",
+   "quiz: что такое swap и когда он нужен",
+   "cmd: journalctl — логи сервисов"
+  ]
+ },
+ {
+  "id": "git",
+  "title": "Git",
+  "desc": "От init и первого коммита до rebase, конфликтов и bisect.",
+  "syllabus": [
+   "cmd: git init, config, первый коммит",
+   "cmd: status, log, diff — читаем состояние репозитория",
+   "cmd: .gitignore и незакоммиченный мусор",
+   "cmd: ветки: branch, switch",
+   "cmd: merge и разрешение конфликтов руками",
+   "quiz: merge против rebase",
+   "cmd: rebase и squash коммитов",
+   "cmd: remote: clone, push, pull, fetch",
+   "cmd: флоу фича-веток и pull request",
+   "quiz: fast-forward против настоящего merge",
+   "cmd: stash, restore, reset --soft/mixed/hard",
+   "quiz: reset против revert — что безопаснее в общей ветке",
+   "cmd: revert и cherry-pick",
+   "cmd: теги и релизы",
+   "quiz: HEAD и detached HEAD",
+   "cmd: git bisect — ищем сломавший коммит",
+   "cmd: git hooks: pre-commit",
+   "cmd: gitignore-стратегии для разных стеков"
+  ]
+ }
+]
