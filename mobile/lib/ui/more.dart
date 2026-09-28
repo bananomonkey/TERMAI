@@ -11,7 +11,7 @@ import 'widgets.dart';
 void showMoreSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
-    backgroundColor: kSurface,
+    backgroundColor: C.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) => SafeArea(
       child: Padding(
@@ -91,14 +91,14 @@ void showMoreSheet(BuildContext context) {
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    backgroundColor: kSurface,
+                    backgroundColor: C.surface,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     title: const Text('Сбросить весь прогресс?'),
                     content: const Text('Весь прогресс, курсы от ИИ и достижения будут удалены безвозвратно.'),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена', style: TextStyle(color: kMuted))),
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отмена', style: TextStyle(color: C.muted))),
                       FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: kDanger),
+                        style: FilledButton.styleFrom(backgroundColor: C.danger),
                         onPressed: () {
                           Navigator.pop(ctx);
                           controller.prog = Progress();
@@ -132,7 +132,7 @@ class _SheetButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: kCard,
+      color: C.card,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -140,13 +140,13 @@ class _SheetButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(13),
           child: Row(children: [
-            Icon(icon, size: 22, color: danger ? kDanger : kAccent),
+            Icon(icon, size: 22, color: danger ? C.danger : C.accent),
             const SizedBox(width: 13),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: danger ? kDanger : kText)),
+                Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: danger ? C.danger : C.text)),
                 if (subtitle != null)
-                  Text(subtitle!, style: const TextStyle(fontSize: 12, color: kMuted)),
+                  Text(subtitle!, style: TextStyle(fontSize: 12, color: C.muted)),
               ]),
             ),
           ]),
@@ -164,7 +164,7 @@ void _showStats(BuildContext context) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: kSurface,
+      backgroundColor: C.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text('Статистика'),
       content: SingleChildScrollView(
@@ -173,12 +173,12 @@ void _showStats(BuildContext context) {
           Text('Решено задач: ${p.solvedTotal}'),
           Text('Серия: ${p.streak} дн. подряд'),
           const SizedBox(height: 12),
-          caption('Достижения', color: kAccent),
+          caption('Достижения', color: C.accent),
           const SizedBox(height: 6),
-          Text(ach, style: const TextStyle(fontSize: 12.5, height: 1.6, color: kMuted)),
+          Text(ach, style: TextStyle(fontSize: 12.5, height: 1.6, color: C.muted)),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть', style: TextStyle(color: kAccent)))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Закрыть', style: TextStyle(color: C.accent)))],
     ),
   );
 }
@@ -191,7 +191,7 @@ void _showSettings(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: kSurface,
+    backgroundColor: C.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheet) => Padding(
@@ -200,7 +200,20 @@ void _showSettings(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            caption('Настройки ИИ-провайдера', color: kAccent),
+            caption('Тема оформления', color: C.accent),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: presetById(controller.config.theme).title,
+              decoration: const InputDecoration(labelText: 'Палитра (применяется сразу)'),
+              items: themePresets.map((p) => DropdownMenuItem(value: p.title, child: Text(p.title))).toList(),
+              onChanged: (title) {
+                final p = themePresets.firstWhere((x) => x.title == title);
+                controller.config.theme = p.id;
+                controller.saveConfig();
+              },
+            ),
+            const SizedBox(height: 14),
+            caption('Настройки ИИ-провайдера', color: C.accent),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: findProvider(providerCtrl.text).title,

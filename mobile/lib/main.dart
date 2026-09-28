@@ -27,11 +27,16 @@ class TermaiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TERMAI',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      home: const BootScreen(),
+    // слушаем контроллер: смена темы в настройках перекрашивает всё приложение
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => MaterialApp(
+        key: ValueKey('theme-${C.p.id}'),
+        title: 'TERMAI',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        home: const BootScreen(),
+      ),
     );
   }
 }
@@ -57,6 +62,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
   Future<void> _boot() async {
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
+    C.p = presetById(controller.config.theme);
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
@@ -76,7 +82,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: C.bg,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -89,20 +95,20 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: kCard,
+                  color: C.card,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: kAccent, width: 2),
+                  border: Border.all(color: C.accent, width: 2),
                 ),
-                child: const Center(
-                  child: Text('>_', style: TextStyle(color: kAccent, fontSize: 34, fontWeight: FontWeight.w900)),
+                child: Center(
+                  child: Text('>_', style: TextStyle(color: C.accent, fontSize: 34, fontWeight: FontWeight.w900)),
                 ),
               ),
             ),
             const SizedBox(height: 22),
-            const Text('TERMAI',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4, color: kText)),
+            Text('TERMAI',
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4, color: C.text)),
             const SizedBox(height: 8),
-            const Text('тренажёр с ИИ-наставником', style: TextStyle(color: kMuted, fontSize: 13)),
+            Text('тренажёр с ИИ-наставником', style: TextStyle(color: C.muted, fontSize: 13)),
           ],
         ),
       ),
@@ -117,7 +123,7 @@ void showOnboardingSheet(BuildContext context) {
     context: context,
     isDismissible: false,
     enableDrag: false,
-    backgroundColor: kSurface,
+    backgroundColor: C.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -132,10 +138,10 @@ void showOnboardingSheet(BuildContext context) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Container(width: 4, height: 18, decoration: BoxDecoration(color: kAccent, borderRadius: BorderRadius.circular(2))),
+            Container(width: 4, height: 18, decoration: BoxDecoration(color: C.accent, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 10),
-            const Text('ДОБРО ПОЖАЛОВАТЬ В TERMAI',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1, color: kAccent)),
+            Text('ДОБРО ПОЖАЛОВАТЬ В TERMAI',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1, color: C.accent)),
           ]),
           const SizedBox(height: 14),
           const Text('Вставь свой DeepSeek API-ключ — он нужен ИИ-симулятору и ментору.',
@@ -147,8 +153,8 @@ void showOnboardingSheet(BuildContext context) {
             decoration: const InputDecoration(hintText: 'sk-…'),
           ),
           const SizedBox(height: 8),
-          const Text('Ключ хранится только на этом устройстве.',
-              style: TextStyle(color: kMuted, fontSize: 12)),
+          Text('Ключ хранится только на этом устройстве.',
+              style: TextStyle(color: C.muted, fontSize: 12)),
           const SizedBox(height: 18),
           FilledButton(
             onPressed: () async {
@@ -164,7 +170,7 @@ void showOnboardingSheet(BuildContext context) {
           Center(
             child: TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Позже', style: TextStyle(color: kMuted)),
+              child: Text('Позже', style: TextStyle(color: C.muted)),
             ),
           ),
         ],
@@ -182,8 +188,8 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const Text('TERMAI',
-            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3, color: kAccent, fontSize: 19)),
+        title: Text('TERMAI',
+            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3, color: C.accent, fontSize: 19)),
         actions: [
           ListenableBuilder(
             listenable: controller,
@@ -193,12 +199,12 @@ class HomeScreen extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: kCard,
+                    color: C.card,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: kBorder),
+                    border: Border.all(color: C.border),
                   ),
                   child: Text('ур.${controller.prog.level} · ${controller.prog.xp} XP',
-                      style: const TextStyle(fontSize: 11, color: kMuted)),
+                      style: TextStyle(fontSize: 11, color: C.muted)),
                 ),
               ),
             ),
@@ -213,17 +219,17 @@ class HomeScreen extends StatelessWidget {
 }
 
 /// вспомогательное: диалог однострочного ввода («Задача от ИИ», «Курс от ИИ»)
-Future<String?> askText(BuildContext context, String title, String hint) {
-  final c = TextEditingController();
+Future<String?> askText(BuildContext context, String title, String hint, {String? initial}) {
+  final c = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: kSurface,
+      backgroundColor: C.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(title, style: const TextStyle(fontSize: 17)),
       content: TextField(controller: c, autofocus: true, decoration: InputDecoration(hintText: hint)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена', style: TextStyle(color: kMuted))),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отмена', style: TextStyle(color: C.muted))),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, c.text.trim()),
           style: FilledButton.styleFrom(minimumSize: const Size(40, 42)),

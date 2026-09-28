@@ -236,17 +236,18 @@ class HistEntry {
 // ---------- настройки и прогресс ----------
 
 class Config {
-  String apiKey, provider, model, baseUrl;
-  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = ''});
+  String apiKey, provider, model, baseUrl, theme;
+  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'sage'});
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
         provider: j['provider'] as String? ?? 'deepseek',
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
+        theme: j['theme'] as String? ?? 'sage',
       );
 
-  Map<String, dynamic> toJson() => {'api_key': apiKey, 'provider': provider, 'model': model, 'base_url': baseUrl};
+  Map<String, dynamic> toJson() => {'api_key': apiKey, 'provider': provider, 'model': model, 'base_url': baseUrl, 'theme': theme};
 }
 
 class Progress {
@@ -259,6 +260,9 @@ class Progress {
   Map<String, List<Task>> generated = {};
   List<Course> extraCourses = [];
   Map<String, String> achieved = {};
+  Map<String, String> courseTitles = {};
+  List<String> courseOrder = [];
+  List<String> hiddenCourses = [];
 
   Progress();
 
@@ -282,6 +286,9 @@ class Progress {
     p.extraCourses = ((j['extra_courses'] as List?) ?? [])
         .map((c) => Course.fromJson(c as Map<String, dynamic>)).toList();
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
+    p.courseTitles = (j['course_titles'] as Map?)?.cast<String, String>() ?? {};
+    p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
+    p.hiddenCourses = (j['hidden_courses'] as List?)?.cast<String>() ?? [];
     return p;
   }
 
@@ -292,6 +299,7 @@ class Progress {
         'hints': hints, 'generated': generated.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'extra_courses': extraCourses.map((c) => c.toJson()).toList(),
         'achievements': achieved,
+        'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
       };
 
   int get level => xp ~/ 100 + 1;

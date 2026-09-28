@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- без этого в release-сборке сеть не работает: Failed host lookup -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="TERMAI"
         android:name="${applicationName}"

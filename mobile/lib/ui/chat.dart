@@ -64,11 +64,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 _scrollDown();
                 final msgs = controller.chatMsgs;
                 if (msgs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
                       padding: EdgeInsets.all(32),
                       child: Text('Спроси ментора о задаче, синтаксисе, ошибке…',
-                          textAlign: TextAlign.center, style: TextStyle(color: kMuted)),
+                          textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
                     ),
                   );
                 }
@@ -78,12 +78,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemCount: msgs.length + (controller.mentorBusy ? 1 : 0),
                   itemBuilder: (context, i) {
                     if (i >= msgs.length) {
-                      return const Padding(
+                      return Padding(
                         padding: EdgeInsets.all(14),
                         child: Align(
                             alignment: Alignment.centerLeft,
                             child: SizedBox(width: 22, height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.4, color: kAccent))),
+                                child: CircularProgressIndicator(strokeWidth: 2.4, color: C.accent))),
                       );
                     }
                     return _Bubble(msg: msgs[i]);
@@ -106,7 +106,7 @@ class _ChatScreenState extends State<ChatScreen> {
               IconButton.filled(
                 onPressed: controller.mentorBusy ? null : _send,
                 icon: const Icon(Icons.send, size: 19),
-                style: IconButton.styleFrom(backgroundColor: kAccentDark),
+                style: IconButton.styleFrom(backgroundColor: C.accentDark),
               ),
             ]),
           ),
@@ -126,41 +126,42 @@ class _Bubble extends StatelessWidget {
       case 'system':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Center(child: Text('· ${msg.text}', style: const TextStyle(color: kMuted, fontSize: 12.5))),
+          child: Center(child: Text('· ${msg.text}', style: TextStyle(color: C.muted, fontSize: 12.5))),
         );
       case 'user':
         return Align(
           alignment: Alignment.centerRight,
-          child: _wrap(msg.text, const Color(0xFF1C5A7A)),
+          child: _wrap(msg.text, C.accentDark, isUser: true),
         );
       default:
         return Align(
           alignment: Alignment.centerLeft,
-          child: _wrap(msg.text, kCard2),
+          child: _wrap(msg.text, C.secondary.withAlpha(28), isUser: false),
         );
     }
   }
 
-  Widget _wrap(String text, Color bg) {
+  Widget _wrap(String text, Color bg, {required bool isUser}) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
       constraints: const BoxConstraints(maxWidth: 320),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
       decoration: BoxDecoration(
         color: bg,
+        border: isUser ? null : Border(left: BorderSide(color: C.secondary, width: 3)),
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(16),
           topRight: const Radius.circular(16),
-          bottomLeft: Radius.circular(msg.role == 'user' ? 16 : 4),
-          bottomRight: Radius.circular(msg.role == 'user' ? 4 : 16),
+          bottomLeft: Radius.circular(isUser ? 16 : 4),
+          bottomRight: Radius.circular(isUser ? 4 : 16),
         ),
       ),
       child: MarkdownBody(
         data: text,
         styleSheet: MarkdownStyleSheet(
-          p: const TextStyle(fontSize: 14, height: 1.4, color: kText),
-          code: const TextStyle(fontSize: 12.5, color: kAccent, fontFamily: 'monospace', backgroundColor: kBg),
-          codeblockDecoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(10)),
+          p: TextStyle(fontSize: 14, height: 1.4, color: C.text),
+          code: TextStyle(fontSize: 12.5, color: C.accent, fontFamily: 'monospace', backgroundColor: C.bg),
+          codeblockDecoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(10)),
           codeblockPadding: const EdgeInsets.all(10),
         ),
       ),

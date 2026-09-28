@@ -6,18 +6,18 @@ import 'theme.dart';
 Widget cardBox({required Widget child, Color? accent, EdgeInsets padding = const EdgeInsets.all(14)}) {
   return Container(
     decoration: BoxDecoration(
-      color: kCard,
+      color: C.card,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: accent ?? kBorder, width: accent != null ? 1.5 : 1),
+      border: Border.all(color: accent ?? C.border, width: accent != null ? 1.5 : 1),
     ),
     child: Padding(padding: padding, child: child),
   );
 }
 
-Widget caption(String text, {Color color = kMuted}) => Text(
+Widget caption(String text, {Color? color}) => Text(
       text.toUpperCase(),
       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1),
-    ).addColor(color);
+    ).addColor(color ?? C.muted);
 
 extension TextColorX on Text {
   Text addColor(Color c) {
@@ -29,10 +29,10 @@ extension TextColorX on Text {
 /// statusGlyph — ✓ / ▶ / ○ для статуса задачи.
 Widget statusGlyph(bool done, bool current, {double size = 15}) {
   final (glyph, color) = done
-      ? ('✓', kGood)
+      ? ('✓', C.good)
       : current
-          ? ('▶', kAccent)
-          : ('○', kMuted);
+          ? ('▶', C.accent)
+          : ('○', C.muted);
   return Text(glyph, style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w700));
 }
 
@@ -41,7 +41,7 @@ Widget difficultyDots(int d, {Color? color}) {
   d = d.clamp(1, 5);
   return Text(
     '●' * d + '○' * (5 - d),
-    style: TextStyle(fontSize: 10, color: color ?? kMuted, letterSpacing: 1.5),
+    style: TextStyle(fontSize: 10, color: color ?? C.muted, letterSpacing: 1.5),
   );
 }
 
@@ -68,7 +68,7 @@ PageRouteBuilder<T> pageRoute<T>(Widget page) {
 Widget sectionHeader(String text) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: kAccent)),
+        Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
         const SizedBox(height: 8),
         const Divider(),
       ],

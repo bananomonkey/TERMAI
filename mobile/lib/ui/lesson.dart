@@ -48,13 +48,13 @@ class _LessonScreenState extends State<LessonScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const TabBar(
+        title: TabBar(
           isScrollable: false,
-          labelColor: kAccent,
-          unselectedLabelColor: kMuted,
+          labelColor: C.accent,
+          unselectedLabelColor: C.muted,
           labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
           unselectedLabelStyle: TextStyle(fontSize: 13),
-          indicatorColor: kAccent,
+          indicatorColor: C.accent,
           indicatorSize: TabBarIndicatorSize.tab,
           tabs: [
             Tab(text: 'Справка'),
@@ -69,7 +69,7 @@ class _LessonScreenState extends State<LessonScreen> {
         listenable: controller,
         builder: (context, _) {
           if (t == null) {
-            return const Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: kMuted)));
+            return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
           return TabBarView(
             physics: const BouncingScrollPhysics(),
@@ -111,16 +111,16 @@ class _HelpSlide extends StatelessWidget {
       children: [
         TextField(
           onChanged: onSearch,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'Поиск справочных материалов…',
-            prefixIcon: Icon(Icons.search, color: kMuted),
+            prefixIcon: Icon(Icons.search, color: C.muted),
           ),
         ),
         const SizedBox(height: 14),
         if (paras.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: Text('Ничего не найдено.', style: TextStyle(color: kMuted))),
+            child: Center(child: Text('Ничего не найдено.', style: TextStyle(color: C.muted))),
           )
         else
           ...paras.map((p) => Padding(
@@ -133,21 +133,21 @@ class _HelpSlide extends StatelessWidget {
 }
 
 MarkdownStyleSheet mdStyle() => MarkdownStyleSheet(
-      p: const TextStyle(fontSize: 14.5, height: 1.45, color: kText),
-      h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kText),
-      h2: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kText),
-      h3: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: kText),
-      code: const TextStyle(fontSize: 13, color: kAccent, fontFamily: 'monospace', backgroundColor: kCard2),
+      p: TextStyle(fontSize: 14.5, height: 1.45, color: C.text),
+      h1: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.text),
+      h2: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.text),
+      h3: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: C.text),
+      code: TextStyle(fontSize: 13, color: C.accent, fontFamily: 'monospace', backgroundColor: C.card2),
       codeblockDecoration: BoxDecoration(
         color: const Color(0xFF101318),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder),
+        border: Border.all(color: C.border),
       ),
       codeblockPadding: const EdgeInsets.all(12),
-      listBullet: const TextStyle(fontSize: 14.5, height: 1.4, color: kText),
+      listBullet: TextStyle(fontSize: 14.5, height: 1.4, color: C.text),
       blockquoteDecoration: BoxDecoration(
-        border: Border(left: BorderSide(color: kAccent.withAlpha(120), width: 3)),
-        color: kCard2.withAlpha(80),
+        border: Border(left: BorderSide(color: C.accent.withAlpha(120), width: 3)),
+        color: C.card2.withAlpha(80),
       ),
       blockquotePadding: const EdgeInsets.all(10),
     );
@@ -170,17 +170,17 @@ class _TaskSlide extends StatelessWidget {
         Text(t.title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
         const SizedBox(height: 8),
         Row(children: [
-          Text(t.isQuiz ? 'тест' : 'практика', style: const TextStyle(fontSize: 12, color: kMuted)),
+          Text(t.isQuiz ? 'тест' : 'практика', style: TextStyle(fontSize: 12, color: C.muted)),
           const SizedBox(width: 10),
           difficultyDots(t.difficulty),
           const SizedBox(width: 10),
-          Text('+${t.xp} XP', style: const TextStyle(fontSize: 12, color: kAccent, fontWeight: FontWeight.w700)),
+          Text('+${t.xp} XP', style: TextStyle(fontSize: 12, color: C.accent, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 14),
         cardBox(
-          accent: kAccent.withAlpha(140),
+          accent: C.accent.withAlpha(140),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            caption('Задача', color: kAccent),
+            caption('Задача', color: C.accent),
             const SizedBox(height: 8),
             MarkdownBody(data: t.goal, styleSheet: mdStyle()),
           ]),
@@ -191,12 +191,12 @@ class _TaskSlide extends StatelessWidget {
             Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion:
                 'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.')));
           },
-          icon: const Icon(Icons.emoji_objects_outlined, color: kAccent),
-          label: const Text('Объяснить задание', style: TextStyle(color: kAccent)),
+          icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
+          label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
         ),
         const SizedBox(height: 18),
         if (needQuiz) ...[
-          caption('Тест по теории', color: kAccent),
+          caption('Тест по теории', color: C.accent),
           const SizedBox(height: 10),
           _QuizBlock(t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
         ],
@@ -247,11 +247,11 @@ class _QuizBlock extends StatelessWidget {
               child: GestureDetector(
                 onTap: () => onAnswer(qi, oi),
                 child: cardBox(
-                  accent: answers[qi] == oi ? kAccent : null,
+                  accent: answers[qi] == oi ? C.accent : null,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   child: Row(children: [
                     Icon(answers[qi] == oi ? Icons.radio_button_checked : Icons.radio_button_off,
-                        size: 18, color: answers[qi] == oi ? kAccent : kMuted),
+                        size: 18, color: answers[qi] == oi ? C.accent : C.muted),
                     const SizedBox(width: 10),
                     Expanded(
                         child: Text(t.quiz[qi].options[oi],
@@ -289,11 +289,11 @@ class _HintTile extends StatelessWidget {
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 14),
           childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          collapsedBackgroundColor: kCard,
-          backgroundColor: kCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kBorder)),
-          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kBorder)),
-          title: Text('Подсказка ${index + 1}', style: const TextStyle(fontSize: 14, color: kText)),
+          collapsedBackgroundColor: C.card,
+          backgroundColor: C.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
+          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
+          title: Text('Подсказка ${index + 1}', style: TextStyle(fontSize: 14, color: C.text)),
           onExpansionChanged: (open) {
             if (open && !used) {
               final m = controller.prog.hints[controller.cur.id] ?? {};
@@ -372,20 +372,20 @@ class _TermSlideState extends State<_TermSlide> {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFF0E1116),
+                color: C.termBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kBorder),
+                border: Border.all(color: C.border),
               ),
               child: Column(children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
                   child: Row(children: [
-                    const Text('Терминал', style: TextStyle(fontSize: 11, color: kMuted)),
+                    Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: controller.undoCommand,
-                      icon: const Icon(Icons.undo, size: 16, color: kMuted),
-                      label: const Text('Отменить', style: TextStyle(fontSize: 12, color: kMuted)),
+                      icon: Icon(Icons.undo, size: 16, color: C.muted),
+                      label: Text('Отменить', style: TextStyle(fontSize: 12, color: C.muted)),
                     ),
                     TextButton.icon(
                       onPressed: () {
@@ -393,8 +393,8 @@ class _TermSlideState extends State<_TermSlide> {
                         controller.termLine('  (вывод терминала очищен)');
                         controller.refreshTerminal();
                       },
-                      icon: const Icon(Icons.refresh, size: 16, color: kMuted),
-                      label: const Text('Сбросить', style: TextStyle(fontSize: 12, color: kMuted)),
+                      icon: Icon(Icons.refresh, size: 16, color: C.muted),
+                      label: Text('Сбросить', style: TextStyle(fontSize: 12, color: C.muted)),
                     ),
                   ]),
                 ),
@@ -406,7 +406,7 @@ class _TermSlideState extends State<_TermSlide> {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         controller.termText,
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: Color(0xFFD7DBE0)),
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
                       ),
                     ),
                   ),
@@ -424,7 +424,7 @@ class _TermSlideState extends State<_TermSlide> {
                 onSubmitted: (_) => _run(),
                 decoration: InputDecoration(
                   prefixText: '${controller.prompt} ',
-                  prefixStyle: const TextStyle(fontFamily: 'monospace', fontSize: 13.5, color: kAccent),
+                  prefixStyle: TextStyle(fontFamily: 'monospace', fontSize: 13.5, color: C.secondary),
                   hintText: 'введите команду…',
                 ),
               ),
@@ -435,7 +435,7 @@ class _TermSlideState extends State<_TermSlide> {
               icon: controller.termBusy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.play_arrow),
-              style: IconButton.styleFrom(backgroundColor: kAccentDark),
+              style: IconButton.styleFrom(backgroundColor: C.accentDark),
             ),
           ]),
           const SizedBox(height: 10),
@@ -468,13 +468,13 @@ class _TermSlideState extends State<_TermSlide> {
     final st = controller.state;
     showModalBottomSheet(
       context: context,
-      backgroundColor: kSurface,
+      backgroundColor: C.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => SafeArea(
         child: st.files.isEmpty
-            ? const Padding(
+            ? Padding(
                 padding: EdgeInsets.all(28),
-                child: Center(child: Text('Файлов в песочнице нет.', style: TextStyle(color: kMuted))),
+                child: Center(child: Text('Файлов в песочнице нет.', style: TextStyle(color: C.muted))),
               )
             : ListView(
                 padding: const EdgeInsets.all(16),
@@ -488,10 +488,10 @@ class _TermSlideState extends State<_TermSlide> {
                       child: cardBox(
                         padding: const EdgeInsets.all(12),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(e.key, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: kAccent)),
+                          Text(e.key, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.accent)),
                           const SizedBox(height: 6),
                           Text(e.value, maxLines: 6, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: kMuted)),
+                              style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: C.muted)),
                         ]),
                       ),
                     ),
@@ -558,18 +558,18 @@ class _SolutionSlideState extends State<_SolutionSlide> {
         if (t.solution.isEmpty) ...[
           cardBox(
             child: Column(children: [
-              const Icon(Icons.lock_outline, size: 40, color: kMuted),
+              Icon(Icons.lock_outline, size: 40, color: C.muted),
               const SizedBox(height: 10),
               const Text('Решение скрыто',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              const Text('Сначала попробуй сам — ментор подскажет в чате.\nРешение готовит ИИ после удержания кнопки.',
-                  textAlign: TextAlign.center, style: TextStyle(color: kMuted, fontSize: 13, height: 1.4)),
+              Text('Сначала попробуй сам — ментор подскажет в чате.\nРешение готовит ИИ после удержания кнопки.',
+                  textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
               const SizedBox(height: 16),
               if (controller.solutionLoad)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(color: kAccent),
+                  child: CircularProgressIndicator(color: C.accent),
                 )
               else
                 _HoldButton(progress: _hold, onStart: _startHold, onStop: _stopHold),
@@ -583,7 +583,7 @@ class _SolutionSlideState extends State<_SolutionSlide> {
               ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: 9, sigmaY: 9),
                 child: cardBox(
-                  accent: kAccent.withAlpha(60),
+                  accent: C.accent.withAlpha(60),
                   child: MarkdownBody(data: t.solution, styleSheet: mdStyle()),
                 ),
               ),
@@ -592,12 +592,12 @@ class _SolutionSlideState extends State<_SolutionSlide> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: kBg.withAlpha(200),
+                      color: C.bg.withAlpha(200),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kAccent),
+                      border: Border.all(color: C.accent),
                     ),
-                    child: const Text('удерживай кнопку, чтобы разблюрить',
-                        style: TextStyle(fontSize: 12, color: kText)),
+                    child: Text('удерживай кнопку, чтобы разблюрить',
+                        style: TextStyle(fontSize: 12, color: C.text)),
                   ),
                 ),
               ),
@@ -608,13 +608,13 @@ class _SolutionSlideState extends State<_SolutionSlide> {
         ] else ...[
           cardBox(child: MarkdownBody(data: t.solution, selectable: true, styleSheet: mdStyle())),
           const SizedBox(height: 10),
-          const Text('За подсмотренное решение XP не начисляются.',
-              style: TextStyle(color: kMuted, fontSize: 12)),
+          Text('За подсмотренное решение XP не начисляются.',
+              style: TextStyle(color: C.muted, fontSize: 12)),
         ],
         const SizedBox(height: 12),
         if (!t.peeked && t.solution.isNotEmpty)
-          const Text('Если вы покажете решение, вы не получите XP при решении этой задачи.',
-              style: TextStyle(color: kMuted, fontSize: 12.5, height: 1.35)),
+          Text('Если вы покажете решение, вы не получите XP при решении этой задачи.',
+              style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.35)),
         const SizedBox(height: 30),
       ],
     );
@@ -636,21 +636,21 @@ class _HoldButton extends StatelessWidget {
         child: Container(
           height: 52,
           decoration: BoxDecoration(
-            color: progress > 0 ? kAccentDark.withAlpha(200) : kCard2,
+            color: progress > 0 ? C.accentDark.withAlpha(200) : C.card2,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: kAccent.withAlpha(120)),
+            border: Border.all(color: C.accent.withAlpha(120)),
           ),
           alignment: Alignment.center,
           child: Text(
             progress > 0 ? 'держи ещё… ${((1 - progress) * 5).toStringAsFixed(1)} с' : 'Удерживай 5 секунд — показать решение',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: kText),
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: C.text),
           ),
         ),
       ),
       const SizedBox(height: 8),
       ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: kCard2, color: kAccent),
+        child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: C.card2, color: C.accent),
       ),
     ]);
   }

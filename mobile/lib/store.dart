@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
 import 'models.dart';
 import 'sandbox.dart';
+import 'ui/theme.dart';
 
 class ChatMsg {
   final String role; // user | mentor | system
@@ -66,12 +67,23 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
+    C.p = presetById(config.theme);
     ai = config.apiKey.isEmpty ? null : AIClient(config);
 
     // встроенные курсы из актива + сгенерированные ИИ ранее
     final raw = await rootAssetCourses();
-    courses = raw;
-    courses.addAll(prog.extraCourses);
+    courses = raw.where((c) => !prog.hiddenCourses.contains(c.id)).toList();
+    courses.addAll(prog.extraCourses.where((c) => !prog.hiddenCourses.contains(c.id)));
+    for (final c in courses) {
+      final t = prog.courseTitles[c.id];
+      if (t != null && t.isNotEmpty) c.title = t;
+    }
+    if (prog.courseOrder.isNotEmpty) {
+      courses.sort((a, b) {
+        final ia = prog.courseOrder.indexOf(a.id), ib = prog.courseOrder.indexOf(b.id);
+        return (ia < 0 ? 9999 : ia).compareTo(ib < 0 ? 9999 : ib);
+      });
+    }
     for (final c in courses) {
       c.tasks.addAll(prog.generated[c.id] ?? []);
     }
@@ -97,6 +109,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveConfig() async {
+    C.p = presetById(config.theme);
     final dir = await _dataDir();
     await File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
     ai = config.apiKey.isEmpty ? null : AIClient(config);
@@ -514,6 +527,43 @@ extension AppCourses on AppController {
   List<String> _recentTitles(int n) {
     final t = cur.tasks;
     return t.reversed.take(n).map((x) => x.title).toList();
+  }
+
+  // ---------- менеджмент курсов (долгое нажатие на кружке) ----------
+
+  void renameCourse(int i, String title) {
+    if (i < 0 || i >= courses.length || title.trim().isEmpty) return;
+    courses[i].title = title.trim();
+    prog.courseTitles[courses[i].id] = courses[i].title;
+    saveProgress();
+    notifyListeners();
+  }
+
+  void moveCourse(int from, int delta) {
+    final to = from + delta;
+    if (from < 0 || from >= courses.length || to < 0 || to >= courses.length) return;
+    final c = courses.removeAt(from);
+    courses.insert(to, c);
+    prog.courseOrder = courses.map((x) => x.id).toList();
+    if (courseIdx == from) courseIdx = to;
+    saveProgress();
+    notifyListeners();
+  }
+
+  void deleteCourse(int i) {
+    if (i < 0 || i >= courses.length || courses.length <= 1) return;
+    final c = courses.removeAt(i);
+    if (c.id.startsWith('ai-')) {
+      prog.extraCourses.removeWhere((x) => x.id == c.id);
+    } else {
+      prog.hiddenCourses.add(c.id);
+    }
+    prog.courseOrder = courses.map((x) => x.id).toList();
+    if (courseIdx >= courses.length) courseIdx = 0;
+    if (viewIdx >= (courses.isEmpty ? 0 : cur.tasks.length)) viewIdx = 0;
+    prog.lastCourse = courses.isEmpty ? '' : cur.id;
+    saveProgress();
+    notifyListeners();
   }
 
   String _errMsg(Object e) {
