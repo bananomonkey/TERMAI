@@ -12,7 +12,6 @@ import 'store.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
-import 'ui/conveyor_home.dart';
 import 'ui/chat.dart';
 import 'ui/more.dart';
 
@@ -258,7 +257,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(width: 4),
         ],
       ),
-      body: const ConveyorCoursesView(),
+      body: const CourseGraphView(),
     );
   }
 }

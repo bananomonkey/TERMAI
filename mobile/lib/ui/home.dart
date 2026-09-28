@@ -1,5 +1,6 @@
-// home.dart — главный экран «книжный шкаф»: деревянные полки, книги-курсы,
-// выдвижение книги по тапу, drag-перестановка пальцем, меню по двойному тапу.
+// home.dart — главный экран в стиле Duolingo: вертикальная зигзаг-тропинка
+// из кружков-курсов, толстые соединения (пройдено — ярко, впереди — серо),
+// баннеры модулей каждые пять кружков. Скролл только сверху вниз.
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,7 @@ import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// CourseGraphView — вертикальный скролл полок, на каждой 3 книги-курса.
+/// CourseGraphView — тропинка курсов зигзагом (как в Duolingo).
 class CourseGraphView extends StatelessWidget {
   const CourseGraphView({super.key});
 
@@ -30,233 +31,255 @@ class CourseGraphView extends StatelessWidget {
             ),
           );
         }
-        final shelves = (courses.length + 2) ~/ 3;
-        return Column(
-          children: [
-            const SizedBox(height: 10),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Тап — открыть книгу · двойной тап — меню · удерживай и тащи — переставить',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: C.muted, fontSize: 12),
+        // геометрия тропинки: узлы-курсы + баннеры модулей каждые 5
+        const nodeH = 168.0, bannerH = 88.0, topPad = 24.0, bottomPad = 36.0;
+        const d = 96.0; // диаметр кружка
+        final dxs = [-70.0, 0.0, 70.0, 0.0]; // зигзаг: влево, центр, вправо, центр
+
+        final nodes = <_Node>[];
+        var y = topPad;
+        for (var i = 0; i < courses.length; i++) {
+          nodes.add(_Node(
+            type: _NodeType.course,
+            y: y,
+            dx: dxs[i % dxs.length],
+            courseIdx: i,
+          ));
+          y += nodeH;
+          if ((i + 1) % 5 == 0 && i != courses.length - 1) {
+            nodes.add(_Node(type: _NodeType.module, y: y, moduleNum: (i + 1) ~/ 5));
+            y += bannerH;
+          }
+        }
+        final totalH = y - nodeH + d + 64 + bottomPad;
+
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: LayoutBuilder(builder: (context, box) {
+            final w = box.maxWidth;
+            return SizedBox(
+              height: totalH,
+              width: w,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // соединительные линии под кружками
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _TrailPainter(
+                        nodes: nodes.where((n) => n.type == _NodeType.course).toList(),
+                        center: w / 2,
+                        d: d,
+                      ),
+                    ),
+                  ),
+                  // кружки-курсы
+                  for (final n in nodes.where((n) => n.type == _NodeType.course))
+                    _CourseCircle(node: n, d: d, centerX: w / 2),
+                  // баннеры модулей
+                  for (final n in nodes.where((n) => n.type == _NodeType.module))
+                    Positioned(
+                      left: 28,
+                      right: 28,
+                      top: n.y,
+                      child: _ModuleBanner(number: n.moduleNum),
+                    ),
+                ],
               ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 30),
-                itemCount: shelves,
-                itemBuilder: (context, shelf) {
-                  return _Shelf(
-                    slots: List.generate(3, (k) => shelf * 3 + k),
-                    isLast: shelf == shelves - 1,
-                  );
-                },
-              ),
-            ),
-          ],
+            );
+          }),
         );
       },
     );
   }
 }
 
-/// _Shelf — ряд из трёх слотов (книга или пусто) и деревянная полка под ними.
-class _Shelf extends StatelessWidget {
-  final List<int> slots;
-  final bool isLast;
-  const _Shelf({required this.slots, required this.isLast});
+enum _NodeType { course, module }
+
+class _Node {
+  final _NodeType type;
+  final double y;
+  final double dx;
+  final int courseIdx;
+  final int moduleNum;
+  const _Node({
+    required this.type,
+    required this.y,
+    this.dx = 0,
+    this.courseIdx = -1,
+    this.moduleNum = 0,
+  });
+}
+
+/// _TrailPainter — толстые линии между кружками: пройденный путь яркий,
+/// впереди — серый пунктир.
+class _TrailPainter extends CustomPainter {
+  final List<_Node> nodes;
+  final double center, d;
+  _TrailPainter({required this.nodes, required this.center, required this.d});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dxs = [-70.0, 0.0, 70.0, 0.0];
+    Offset nodeCenter(int i) {
+      final n = nodes[i];
+      return Offset(center + dxs[i % dxs.length], n.y + d / 2);
+    }
+
+    for (var i = 0; i + 1 < nodes.length; i++) {
+      final a = nodeCenter(i), b = nodeCenter(i + 1);
+      final done = controller.isCourseDone(nodes[i].courseIdx);
+      final from = a + Offset(0, d / 2 - 6);
+      final to = b - Offset(0, d / 2 - 6);
+      if (done) {
+        canvas.drawLine(from, to, Paint()
+          ..strokeWidth = 9
+          ..strokeCap = StrokeCap.round
+          ..color = C.good);
+        canvas.drawLine(from, to, Paint()
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round
+          ..color = Colors.white.withAlpha(70));
+      } else {
+        // серый пунктир
+        const dash = 9.0, gap = 7.0;
+        final dir = to - from;
+        final len = dir.distance;
+        if (len == 0) continue;
+        final step = dir / len;
+        for (var t = 0.0; t < len; t += dash + gap) {
+          final segEnd = (t + dash) < len ? t + dash : len;
+          canvas.drawLine(from + step * t, from + step * segEnd,
+              Paint()..strokeWidth = 7 ..strokeCap = StrokeCap.round ..color = C.border);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrailPainter old) => old.nodes != nodes;
+}
+
+/// _CourseCircle — кружок курса: пройден (зелёный ✓), текущий (акцент, свечение),
+/// впереди (серый). Под кружком — название.
+class _CourseCircle extends StatelessWidget {
+  final _Node node;
+  final double d;
+  final double centerX;
+  const _CourseCircle({required this.node, required this.d, required this.centerX});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final i in slots)
-                Expanded(
-                  child: i < controller.courses.length
-                      ? _BookSlot(index: i)
-                      : const _EmptySlot(),
+    final i = node.courseIdx;
+    final c = controller.courses[i];
+    final done = controller.isCourseDone(i);
+    final current = !done && i == _currentIdx();
+
+    return Positioned(
+      left: centerX + node.dx - 90,
+      top: node.y,
+      width: 180,
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: i))),
+            onDoubleTap: () => _showCourseActions(context, i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: done ? C.good : current ? C.accent : C.card,
+                border: Border.all(
+                  color: done ? C.good : current ? C.accent : C.border,
+                  width: current ? 3 : 2,
                 ),
-            ],
-          ),
-        ),
-        // деревянная полка
-        Container(
-          height: 12,
-          margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF5C3F27), Color(0xFF7A5535), Color(0xFF5C3F27)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(0, 4))],
-          ),
-          child: Container(
-            margin: const EdgeInsets.only(top: 1.5, left: 6, right: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              color: Colors.white.withAlpha(22),
+                boxShadow: current
+                    ? [BoxShadow(color: C.accent.withAlpha(70), blurRadius: 22, spreadRadius: 2)]
+                    : const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4))],
+              ),
+              child: Center(
+                child: done
+                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 42)
+                    : Text(
+                        String.fromCharCodes(c.title.runes.take(2)).toUpperCase(),
+                        style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: current ? Colors.white : C.muted),
+                      ),
+              ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// _BookSlot — курс-книга: тап (выдвижение + переход), двойной тап (меню), drag (перестановка).
-class _BookSlot extends StatelessWidget {
-  final int index;
-  const _BookSlot({required this.index});
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<int>(
-      onWillAccept: (data) => data != null && data != index,
-      onAccept: (data) => controller.moveCourse(data, index),
-      builder: (context, candidate, _) {
-        final highlighted = candidate.isNotEmpty;
-        return Draggable<int>(
-          data: index,
-          feedback: Material(
-            color: Colors.transparent,
-            child: _Book(index: index, pulled: true, dragging: true),
+          const SizedBox(height: 6),
+          Text(
+            c.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: current ? C.accent : done ? C.text : C.muted),
           ),
-          childWhenDragging: Opacity(opacity: 0.3, child: _Book(index: index, pulled: false)),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: highlighted ? Border.all(color: C.accent, width: 2) : null,
-            ),
-            child: _Book(index: index, pulled: false),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// _EmptySlot — пустое место на полке: тоже принимает книги (в конец списка).
-class _EmptySlot extends StatelessWidget {
-  const _EmptySlot();
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<int>(
-      onWillAccept: (data) => data != null,
-      onAccept: (data) => controller.moveCourse(data, controller.courses.length),
-      builder: (context, candidate, _) => Container(
-        height: 168,
-        margin: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: candidate.isNotEmpty
-              ? Border.all(color: C.accent, width: 2)
-              : Border.all(color: C.border.withAlpha(90)),
-        ),
-        child: candidate.isNotEmpty
-            ? Center(child: Icon(Icons.move_down, color: C.accent))
-            : const SizedBox(),
+        ],
       ),
     );
   }
-}
 
-/// _Book — книга-курс с корешком (название снизу вверх) и выдвижением по тапу.
-class _Book extends StatefulWidget {
-  final int index;
-  final bool pulled;
-  final bool dragging;
-  const _Book({required this.index, required this.pulled, this.dragging = false});
-
-  @override
-  State<_Book> createState() => _BookState();
-}
-
-class _BookState extends State<_Book> {
-  bool _animating = false;
-
-  // приглушённые цвета корешков — книги выглядят как книги в любой теме
-  static const _spines = <Color>[
-    Color(0xFF8A5A44), Color(0xFF4E6E58), Color(0xFF54679A),
-    Color(0xFF9A6B5A), Color(0xFF6B5E8A), Color(0xFF8A7D4E),
-  ];
-
-  void _open() {
-    if (_animating) return;
-    setState(() => _animating = true);
-    Future.delayed(const Duration(milliseconds: 230), () {
-      if (!mounted) return;
-      Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: widget.index)));
-      Future.delayed(const Duration(milliseconds: 350), () {
-        if (mounted) setState(() => _animating = false);
-      });
-    });
+  int _currentIdx() {
+    for (var i = 0; i < controller.courses.length; i++) {
+      if (!controller.isCourseDone(i)) return i;
+    }
+    return controller.courses.length - 1;
   }
+}
+
+/// _ModuleBanner — баннер между блоками тропинки.
+class _ModuleBanner extends StatelessWidget {
+  final int number;
+  const _ModuleBanner({required this.number});
 
   @override
   Widget build(BuildContext context) {
-    final c = controller.courses[widget.index];
-    final out = widget.pulled || _animating || widget.dragging;
-    return GestureDetector(
-      onTap: _open,
-      onDoubleTap: () => _showCourseActions(context, widget.index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        height: out ? 172 : 156,
-        width: out ? 96 : 88,
-        margin: const EdgeInsets.all(4),
-        transform: Matrix4.translationValues(0, out ? -16 : 0, 0),
-        decoration: BoxDecoration(
-          color: _spines[widget.index % _spines.length],
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(5),
-            topRight: Radius.circular(9),
-            bottomRight: Radius.circular(9),
-            bottomLeft: Radius.circular(3),
-          ),
-          border: Border.all(color: Colors.black.withAlpha(70)),
-          boxShadow: [
-            BoxShadow(
-              color: out ? C.accent.withAlpha(90) : Colors.black54,
-              blurRadius: out ? 22 : 8,
-              offset: Offset(0, out ? 10 : 5),
-            ),
-          ],
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [C.accentDark, C.accent],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
-        child: Column(children: [
-          Container(height: 7, decoration: BoxDecoration(color: Colors.black.withAlpha(60), borderRadius: const BorderRadius.vertical(top: Radius.circular(5)))),
-          Expanded(
-            child: Center(
-              child: RotatedBox(
-                quarterTurns: 3,
-                child: Text(
-                  c.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Colors.white),
-                ),
-              ),
+        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4))],
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Row(children: [
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+              child: Icon(Icons.emoji_events, color: Colors.white, size: 24),
             ),
           ),
-          Container(height: 7, decoration: BoxDecoration(color: Colors.black.withAlpha(40), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(3)))),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text('Модуль пройден — впереди новые темы!',
+                style: TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
         ]),
       ),
     );
   }
 }
 
-/// Двойной тап по книге: размытие фона + окно действий (открыть/переименовать/удалить).
-void _showCourseActions(BuildContext context, int i) {
-  final cid = controller.courses[i].id;
+/// Двойной тап по кружку: размытие фона + окно (открыть/переименовать/удалить).
+void _showCourseActions(BuildContext context, int courseIdx) {
+  final cid = controller.courses[courseIdx].id;
   showGeneralDialog(
     context: context,
     barrierDismissible: true,
@@ -272,17 +295,12 @@ void _showCourseActions(BuildContext context, int i) {
           child: StatefulBuilder(
             builder: (ctx, setSheet) {
               final idx = controller.courses.indexWhere((x) => x.id == cid);
-              if (idx < 0) {
-                return cardBox(child: const Text('Курс удалён'));
-              }
+              if (idx < 0) return cardBox(child: const Text('Курс удалён'));
               final c = controller.courses[idx];
               return Container(
                 width: 300,
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: C.surface,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(20)),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,7 +336,7 @@ void _showCourseActions(BuildContext context, int i) {
                             backgroundColor: C.surface,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             title: const Text('Удалить курс?'),
-                            content: Text('«' + c.title + '» исчезнет с полки. Прогресс курса сохранится.'),
+                            content: Text('«' + c.title + '» исчезнет с тропинки. Прогресс сохранится.'),
                             actions: [
                               OutlinedButton(
                                 onPressed: () => Navigator.pop(dctx),
@@ -413,7 +431,7 @@ class _TaskGroups extends StatelessWidget {
                   : controller.ai == null
                       ? 'Нет API-ключа — курс нечем наполнить.\nНастрой ИИ в «Ещё» → Настройки.'
                       : (controller.lastFillError.isNotEmpty
-                          ? 'Не получилось сгенерировать:\n${controller.lastFillError}\n\nПопробуй ещё раз — ИИ иногда отвечает в неудобном формате.'
+                          ? 'Не получилось сгенерировать:\n${controller.lastFillError}\n\nПопробуй ещё раз.'
                           : 'Задач пока нет.'),
               textAlign: TextAlign.center,
               style: TextStyle(color: C.muted, height: 1.5),

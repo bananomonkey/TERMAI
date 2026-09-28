@@ -207,6 +207,15 @@ extension AppCourses on AppController {
 
   bool isDone(Task t) => prog.completed[cur.id]?[t.id] ?? false;
 
+  /// isCourseDone — курс пройден целиком (есть задачи и все решены).
+  bool isCourseDone(int i) {
+    if (i < 0 || i >= courses.length) return false;
+    final tasks = courses[i].tasks;
+    if (tasks.isEmpty) return false;
+    final done = prog.completed[courses[i].id] ?? {};
+    return tasks.every((t) => done[t.id] ?? false);
+  }
+
   bool quizDone(Task t) => prog.quizDone[cur.id]?[t.id] ?? false;
 
   void selectTask(int i) {
