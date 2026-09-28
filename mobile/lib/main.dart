@@ -4,11 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+
 import 'store.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
-import 'ui/physics_home.dart';
+import 'ui/conveyor_home.dart';
 import 'ui/chat.dart';
 import 'ui/more.dart';
 
@@ -64,6 +68,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
     C.p = presetById(controller.config.theme);
+    _scheduleReminder();
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
@@ -114,6 +119,45 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
         ),
       ),
     );
+  }
+}
+
+/// _scheduleReminder — ежедневное напоминание в 20:00 (Барсик и серия).
+Future<void> _scheduleReminder() async {
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ));
+    final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
+    tzdata.initializeTimeZones();
+    try {
+      tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
+    } catch (_) {
+      tz.setLocalLocation(tz.getLocation('Europe/Moscow'));
+    }
+    final now = tz.TZDateTime.now(tz.local);
+    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, 20);
+    if (when.isBefore(now)) when = when.add(const Duration(days: 1));
+    await plugin.cancel(1);
+    await plugin.zonedSchedule(
+      1,
+      'TERMAI — Барсик ждёт',
+      controller.prog.streak > 0
+          ? 'Серия ' + controller.prog.streak.toString() + ' дн. под угрозой — реши задачу дня!'
+          : 'Заходи на задачу дня — начнём серию!',
+      when,
+      const NotificationDetails(
+        android: AndroidNotificationDetails('reminders', 'Напоминания',
+            importance: Importance.defaultImportance, priority: Priority.defaultPriority),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  } catch (_) {
+    // уведомления не критичны
   }
 }
 
@@ -214,7 +258,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(width: 4),
         ],
       ),
-      body: const PhysicsCoursesView(),
+      body: const ConveyorCoursesView(),
     );
   }
 }

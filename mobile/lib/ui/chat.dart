@@ -9,7 +9,8 @@ import 'widgets.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? autoQuestion;
-  const ChatScreen({super.key, this.autoQuestion});
+  final bool interview;
+  const ChatScreen({super.key, this.autoQuestion, this.interview = false});
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -22,6 +23,15 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.interview) {
+      controller.startInterview();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_asked) {
+          _asked = true;
+          controller.sendChat('(Начни собеседование: коротко представься и задай первый вопрос по материалу курса)');
+        }
+      });
+    }
     if ((widget.autoQuestion ?? '').isNotEmpty && !_asked) {
       _asked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -32,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (widget.interview) controller.stopInterview();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -54,7 +65,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ментор', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+      appBar: AppBar(title: Text(widget.interview ? 'Собеседование' : 'Ментор',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: widget.interview ? C.warn : C.text))),
       body: SafeArea(
         child: Column(children: [
           Expanded(

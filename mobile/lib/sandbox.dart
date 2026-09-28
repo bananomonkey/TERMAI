@@ -21,9 +21,79 @@ class LocalResult {
 }
 
 LocalResult? tryLocalCommand(String raw, SandboxState st) {
+  // перенаправление: cmd > file / cmd >> file (только для локальных команд)
+  final redirect = RegExp(r'^(.*?)\s*(>>?)\s*(\S+)$').firstMatch(raw.trim());
+  if (redirect != null && redirect.group(1)!.trim().isNotEmpty) {
+    final inner = tryLocalCommand(redirect.group(1)!, st);
+    if (inner != null && inner.handled) {
+      final file = redirect.group(3)!;
+      final prev = redirect.group(2) == '>>' && st.files.containsKey(file) ? st.files[file]! : '';
+      st.files[file] = prev + inner.out;
+      return LocalResult(true, '');
+    }
+    return null;
+  }
   final fields = raw.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
   if (fields.isEmpty) return null;
   switch (fields[0]) {
+    case 'whoami':
+      return LocalResult(true, 'user');
+    case 'uname':
+      return LocalResult(true, 'Linux termai 6.1.0-generic #1 SMP x86_64 GNU/Linux');
+    case 'date':
+      return LocalResult(true, DateTime.now().toString().substring(0, 19));
+    case 'mkdir':
+      for (final f in fields.where((x) => x != 'mkdir' && x != '-p')) {
+        st.files['' + f + '/'] = '';
+      }
+      return LocalResult(true, '');
+    case 'touch':
+      for (final f in fields.skip(1)) {
+        st.files.putIfAbsent(f, () => '');
+      }
+      return LocalResult(true, '');
+    case 'rm':
+      final targets = fields.skip(1).where((x) => x != '-r' && x != '-f' && x != '-rf').toList();
+      if (targets.isEmpty) return LocalResult(true, 'rm: missing operand');
+      for (final t in targets) {
+        st.files.remove(t);
+        st.files.remove('' + t + '/');
+        st.files.removeWhere((k, v) => k.startsWith('' + t + '/'));
+      }
+      return LocalResult(true, '');
+    case 'mv':
+    case 'cp':
+      if (fields.length < 3) return LocalResult(true, fields[0] + ': missing destination');
+      final src = fields[1], dst = fields[2];
+      final body = st.files[src];
+      if (body == null && !st.files.containsKey('' + src + '/')) {
+        return LocalResult(true, fields[0] + ': cannot stat ' + src + ': No such file or directory');
+      }
+      if (st.files.containsKey('' + src + '/')) {
+        // перенос каталога
+        st.files = st.files.map((k, v) => MapEntry(k.startsWith('' + src + '/') ? dst + '/' + k.substring(('' + src + '/').length) : k, v));
+        if (fields[0] == 'mv') st.files.remove('' + src + '/');
+        st.files['' + dst + '/'] = '';
+      } else {
+        st.files[dst] = body!;
+        if (fields[0] == 'mv') st.files.remove(src);
+      }
+      return LocalResult(true, '');
+    case 'grep':
+      if (fields.length < 3) return LocalResult(true, 'usage: grep PATTERN FILE');
+      final body = st.files[fields[2]];
+      if (body == null) return LocalResult(true, 'grep: ' + fields[2] + ': No such file or directory');
+      final hits = body.split('\n').where((l) => l.contains(fields[1])).toList();
+      return LocalResult(true, hits.isEmpty ? '' : hits.join('\n'));
+    case 'head':
+    case 'tail':
+      if (fields.length < 2) return LocalResult(true, 'usage: ' + fields[0] + ' FILE');
+      final body = st.files[fields[1]];
+      if (body == null) return LocalResult(true, fields[0] + ': ' + fields[1] + ': No such file or directory');
+      final lines = body.split('\n');
+      return LocalResult(true, (fields[0] == 'head' ? lines.take(10) : lines.length > 10 ? lines.skip(lines.length - 10) : lines).join('\n'));
+    case 'git':
+      return _git(fields.sublist(1), st);
     case 'pwd':
       return LocalResult(true, st.workdir);
     case 'echo':
@@ -204,4 +274,46 @@ String termPrompt(SandboxState st) {
     cwd = '~${cwd.substring(home.length)}';
   }
   return 'user@termai:$cwd\$ ';
+}
+
+// _git — минимальный оффлайн-git поверх файлов песочницы.
+LocalResult _git(List<String> args, SandboxState st) {
+  const gitDir = '.git/HEAD';
+  switch (args.isEmpty ? '' : args[0]) {
+    case 'init':
+      st.files[gitDir] = 'ref: refs/heads/main';
+      st.files['.git/committed.txt'] = '';
+      st.events.add('git init');
+      return LocalResult(true, 'Initialized empty Git repository in /workspace/.git');
+    case 'add':
+      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository (or any of the parent directories): .git');
+      st.events.add('git add ' + args.skip(1).join(' '));
+      return LocalResult(true, '');
+    case 'commit':
+      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
+      final mi = args.indexOf('-m');
+      final msg = mi >= 0 && mi + 1 < args.length ? args[mi + 1] : '(без сообщения)';
+      st.files['.git/committed.txt'] = st.files.keys.where((k) => !k.startsWith('.git')).join('\n');
+      final id = fakeID('commit:' + msg + st.events.length.toString());
+      st.events.add('commit ' + id + ' ' + msg);
+      return LocalResult(true, '[main ' + id.substring(0, 7) + '] ' + msg);
+    case 'status':
+      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
+      final committed = (st.files['.git/committed.txt'] ?? '').split('\n').where((s) => s.isNotEmpty).toSet();
+      final untracked = st.files.keys.where((k) => !k.startsWith('.git') && !committed.contains(k)).toList();
+      if (untracked.isEmpty) return LocalResult(true, 'On branch main\nnothing to commit, working tree clean');
+      return LocalResult(true, 'On branch main\nUntracked files:\n' + untracked.map((u) => '  ' + u).join('\n'));
+    case 'log':
+      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
+      final commits = st.events.where((e) => e.startsWith('commit ')).toList().reversed;
+      if (commits.isEmpty) return LocalResult(true, 'fatal: your current branch (main) does not have any commits yet');
+      return LocalResult(true, commits.map((c) => c.replaceFirst('commit ', 'commit ')).join('\n'));
+    case 'branch':
+      if (args.length > 1) {
+        st.events.add('branch ' + args[1]);
+        return LocalResult(true, '');
+      }
+      return LocalResult(true, '* main');
+  }
+  return LocalResult(true, 'git: ' + (args.isEmpty ? '' : args[0]) + ' — см. help');
 }

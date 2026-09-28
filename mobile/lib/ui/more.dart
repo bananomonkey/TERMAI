@@ -5,6 +5,8 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'chat.dart';
+import 'lesson.dart';
+import 'review.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -32,6 +34,53 @@ void showMoreSheet(BuildContext context) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
                   }
                 }
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.fact_check_outlined,
+              title: 'Экзамен',
+              subtitle: '5 задач по пройденному · оценка и бонус XP',
+              onTap: () async {
+                Navigator.pop(ctx);
+                final err = await controller.startExam();
+                if (err.isNotEmpty && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                  return;
+                }
+                if (context.mounted) Navigator.of(context).push(pageRoute(const LessonScreen()));
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.refresh,
+              title: 'Повторение',
+              subtitle: 'Закладки, которые пора освежить',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(pageRoute(const ReviewScreen()));
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.work_history_outlined,
+              title: 'Собеседование',
+              subtitle: 'ИИ-техлид прогонит тебя по материалу курса',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(pageRoute(const ChatScreen(interview: true)));
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.cleaning_services_outlined,
+              title: 'Очистить генерацию курса',
+              subtitle: 'Убрать задачи от ИИ из текущего курса (если перепутались предметы)',
+              onTap: () {
+                Navigator.pop(ctx);
+                controller.clearGeneratedTasks();
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Сгенерированные задачи курса удалены')));
               },
             ),
             const SizedBox(height: 8),
@@ -244,6 +293,45 @@ void _showSettings(BuildContext context) {
               controller: baseCtrl,
               decoration: const InputDecoration(labelText: 'Base URL (пусто — из пресета)'),
             ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final path = await controller.exportProgress();
+                    if (ctx.mounted) {
+                      showDialog(
+                        context: ctx,
+                        builder: (d) => AlertDialog(
+                          backgroundColor: C.surface,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: const Text('Экспорт готов'),
+                          content: Text('Файл сохранён:\n' + path, style: const TextStyle(fontSize: 12.5)),
+                          actions: [FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Понятно'))],
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.upload_outlined, size: 17),
+                  label: const Text('Экспорт', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final err = await controller.importProgress();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(err.isEmpty ? 'Прогресс импортирован' : err)));
+                    }
+                  },
+                  icon: const Icon(Icons.download_outlined, size: 17),
+                  label: const Text('Импорт', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+            ]),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: () async {

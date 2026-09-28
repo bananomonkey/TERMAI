@@ -233,6 +233,24 @@ class HistEntry {
       HistEntry(cmd: j['cmd'] as String? ?? '', out: j['out'] as String? ?? '');
 }
 
+// ---------- закладки ----------
+
+class Bookmark {
+  String taskId, courseId, due;
+  int intervalDays;
+  Bookmark({required this.taskId, required this.courseId, this.intervalDays = 1, required this.due});
+
+  factory Bookmark.fromJson(Map<String, dynamic> j) => Bookmark(
+        taskId: j['task_id'] as String? ?? '',
+        courseId: j['course_id'] as String? ?? '',
+        intervalDays: j['interval_days'] as int? ?? 1,
+        due: j['due'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'task_id': taskId, 'course_id': courseId, 'interval_days': intervalDays, 'due': due};
+}
+
 // ---------- настройки и прогресс ----------
 
 class Config {
@@ -260,6 +278,7 @@ class Progress {
   Map<String, List<Task>> generated = {};
   List<Course> extraCourses = [];
   Map<String, String> achieved = {};
+  Map<String, Bookmark> bookmarks = {};
   Map<String, String> courseTitles = {};
   List<String> courseOrder = [];
   List<String> hiddenCourses = [];
@@ -286,6 +305,8 @@ class Progress {
     p.extraCourses = ((j['extra_courses'] as List?) ?? [])
         .map((c) => Course.fromJson(c as Map<String, dynamic>)).toList();
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
+    p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
+        MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
     p.courseTitles = (j['course_titles'] as Map?)?.cast<String, String>() ?? {};
     p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
     p.hiddenCourses = (j['hidden_courses'] as List?)?.cast<String>() ?? [];
@@ -299,6 +320,8 @@ class Progress {
         'hints': hints, 'generated': generated.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'extra_courses': extraCourses.map((c) => c.toJson()).toList(),
         'achievements': achieved,
+        'achievements': achieved,
+        'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
         'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
       };
 

@@ -207,14 +207,21 @@ class AIClient {
       '- Используй markdown умеренно: **жирный**, `код`, списки.\n'
       '- Не выдумывай несуществующие команды и флаги.';
 
-  Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question) {
+  static const _sysInterviewer =
+      'Ты — техлид, проводящий собеседование DevOps-инженера по материалу курса и смежным темам.\n'
+      '- По одному вопросу за раз; после ответа студента — коротко оцени его и задай следующий, чуть сложнее.\n'
+      '- В конце (после 6–8 вопросов) дай разбор: что отвечено хорошо, что подтянуть, и вердикт.\n'
+      '- Отвечай по-русски, кратко, без markdown-заголовков.';
+
+  Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question,
+      {bool interview = false}) {
     final b = StringBuffer('Курс: ${c.title}\n');
     if (task != null) b.write('Текущая задача: ${task.title} — ${task.goal}\n');
     b.write(stateSummary(st));
     b.write('\nНедавние команды:\n${formatHist(hist, 160)}');
     if (chatLog.isNotEmpty) b.write('\nНедавний диалог:\n${chatLog.join('\n')}\n');
     b.write('\nВопрос студента: $question');
-    return chatText(_sysMentor, b.toString(), 0.7);
+    return chatText(interview ? _sysInterviewer : _sysMentor, b.toString(), 0.7);
   }
 
   // ---------- роль 4: генератор задач ----------

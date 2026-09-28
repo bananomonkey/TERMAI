@@ -1,7 +1,7 @@
 // store.dart — контроллер приложения: настройки, прогресс, песочница,
 // поток команды (fast-path → ИИ), проверка задач, XP и достижения.
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
@@ -49,19 +49,30 @@ class AppController extends ChangeNotifier {
   bool ready = false;
   String lastFillError = '';
 
+  // экзамен
+  bool examActive = false;
+  List<Task> examTasks = [];
+  int examIdx = 0;
+  final examResults = <bool>[];
+  String? examSummary;
+
+  // режимы
+  bool interviewMode = false;
+  String? reviewKey;
+
   String? lastAchievement; // для всплывашки
 
   // ---------- инициализация ----------
 
   Future<void> init() async {
     final dir = await _dataDir();
-    final cfgFile = File('$dir/termai.json');
+    final cfgFile = io.File('$dir/termai.json');
     if (await cfgFile.exists()) {
       try {
         config = Config.fromJson(jsonDecode(await cfgFile.readAsString()) as Map<String, dynamic>);
       } catch (_) {}
     }
-    final progFile = File('$dir/termai-progress.json');
+    final progFile = io.File('$dir/termai-progress.json');
     if (await progFile.exists()) {
       try {
         prog = Progress.fromJson(jsonDecode(await progFile.readAsString()) as Map<String, dynamic>);
@@ -72,7 +83,23 @@ class AppController extends ChangeNotifier {
     C.p = presetById(config.theme);
     ai = config.apiKey.isEmpty ? null : AIClient(config);
 
-    // встроенные курсы из актива + сгенерированные ИИ ранее
+    await _assembleCourses();
+    for (final c in courses) {
+      c.tasks.addAll(prog.generated[c.id] ?? []);
+    }
+    if (prog.lastCourse.isNotEmpty) {
+      final i = courses.indexWhere((c) => c.id == prog.lastCourse);
+      if (i >= 0) courseIdx = i;
+    }
+    _bumpStreak();
+    resetCourseState();
+    ready = true;
+    notifyListeners();
+  }
+
+  /// _assembleCourses — собирает список курсов из актива + прогресса
+  /// (используется при старте и после импорта).
+  Future<void> _assembleCourses() async {
     final raw = await rootAssetCourses();
     courses = raw.where((c) => !prog.hiddenCourses.contains(c.id)).toList();
     courses.addAll(prog.extraCourses.where((c) => !prog.hiddenCourses.contains(c.id)));
@@ -86,17 +113,11 @@ class AppController extends ChangeNotifier {
         return (ia < 0 ? 9999 : ia).compareTo(ib < 0 ? 9999 : ib);
       });
     }
-    for (final c in courses) {
-      c.tasks.addAll(prog.generated[c.id] ?? []);
-    }
     if (prog.lastCourse.isNotEmpty) {
       final i = courses.indexWhere((c) => c.id == prog.lastCourse);
       if (i >= 0) courseIdx = i;
     }
-    _bumpStreak();
-    resetCourseState();
-    ready = true;
-    notifyListeners();
+    if (courseIdx >= courses.length) courseIdx = 0;
   }
 
   static Future<String> _dataDir() async {
@@ -113,14 +134,48 @@ class AppController extends ChangeNotifier {
   Future<void> saveConfig() async {
     C.p = presetById(config.theme);
     final dir = await _dataDir();
-    await File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
+    await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
     ai = config.apiKey.isEmpty ? null : AIClient(config);
     notifyListeners();
   }
 
   Future<void> saveProgress() async {
     final dir = await _dataDir();
-    await File('$dir/termai-progress.json').writeAsString(jsonEncode(prog.toJson()));
+    await io.File('$dir/termai-progress.json').writeAsString(jsonEncode(prog.toJson()));
+  }
+  // ---------- экспорт / импорт ----------
+
+  Future<String> exportProgress() async {
+    final dir = await _dataDir();
+    final f = io.File(dir + '/termai-progress-export.json');
+    await f.writeAsString(const JsonEncoder.withIndent('  ').convert(prog.toJson()));
+    return f.path;
+  }
+
+  Future<String> importProgress() async {
+    final dir = await _dataDir();
+    final f = io.File(dir + '/termai-progress-export.json');
+    if (!await f.exists()) {
+      return 'Файл не найден: ' + f.path + ' — сначала сделай экспорт.';
+    }
+    try {
+      final p = Progress.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>);
+      prog = p;
+      await _assembleCourses();
+      states.clear();
+      history.clear();
+      stateTask.clear();
+      examActive = false;
+      reviewKey = null;
+      await saveProgress();
+      resetCourseState();
+      selectFirstUndone();
+      termLine('  ✓ прогресс импортирован: ' + prog.xp.toString() + ' XP, серия ' + prog.streak.toString() + ' дн.');
+      refreshTerminal();
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    }
   }
 }
 
@@ -132,7 +187,7 @@ Future<String> Function() loadCoursesAsset = () async => '[]';
 extension AppCourses on AppController {
   Course get cur => courses[courseIdx];
 
-  String get stateKey => cur.id;
+  String get stateKey => examActive ? '__exam' : cur.id;
 
   void ensureStateForTask(Task t) {
     if (stateTask[stateKey] == t.id) return;
@@ -292,6 +347,7 @@ extension AppCourses on AppController {
   }
 
   Task? get currentTask {
+    if (examActive && examIdx < examTasks.length) return examTasks[examIdx];
     final tasks = cur.tasks;
     if (viewIdx < 0 || viewIdx >= tasks.length) return null;
     return tasks[viewIdx];
@@ -340,8 +396,10 @@ extension AppCourses on AppController {
     if (task == null) return 'Активной задачи нет.';
     if (busy) return '';
     if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
-    if (task.isQuiz && !quizDone(task) && !isDone(task)) return 'Сначала пройди тест по теории.';
-    if (isDone(task)) return 'Эта задача уже решена.';
+    if (!examActive) {
+      if (task.isQuiz && !quizDone(task) && !isDone(task)) return 'Сначала пройди тест по теории.';
+      if (isDone(task)) return 'Эта задача уже решена.';
+    }
     termBusy = true;
     termLine('  …проверяю выполнение по истории терминала');
     refreshTerminal();
@@ -349,6 +407,22 @@ extension AppCourses on AppController {
       final tail = termText.length > 1600 ? termText.substring(termText.length - 1600) : termText;
       final res = await ai!.verify(cur, task, state, _lastHist(20), termTail: tail);
       termBusy = false;
+      if (examActive) {
+        examResults.add(res.solved);
+        termLine(res.solved ? '  ✓ засчитано' : '  ✗ не засчитано: ' + res.comment);
+        refreshTerminal();
+        examIdx++;
+        if (examIdx >= examTasks.length) {
+          _finishExam();
+        } else {
+          states[stateKey] = examTasks[examIdx].start.clone();
+          history[stateKey] = [];
+          termLine('Вопрос ' + (examIdx + 1).toString() + '/' + examTasks.length.toString() + ': ' + examTasks[examIdx].title);
+          refreshTerminal();
+          notifyListeners();
+        }
+        return '';
+      }
       if (res.solved) {
         await _completeTask(task, res.comment, res.difficulty);
         return '';
@@ -370,6 +444,16 @@ extension AppCourses on AppController {
     if (checkerDiff >= 1 && checkerDiff <= 5) {
       diff = checkerDiff;
       t.difficulty = diff;
+    }
+    if (reviewKey != null) {
+      final b = prog.bookmarks[reviewKey];
+      if (b != null) {
+        b.intervalDays = (b.intervalDays * 2).clamp(2, 30);
+        b.due = DateTime.now().add(Duration(days: b.intervalDays)).toIso8601String().substring(0, 10);
+        termLine('  ✓ повтор засчитан — следующее через ' + b.intervalDays.toString() + ' дн.');
+      }
+      grant('review1');
+      reviewKey = null;
     }
     final xp = t.peeked ? 0 : t.xp;
     final m = prog.completed[cur.id] ?? {};
@@ -435,7 +519,8 @@ extension AppCourses on AppController {
     mentorBusy = true;
     notifyListeners();
     try {
-      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), chatLog, question);
+      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), chatLog, question,
+          interview: interviewMode);
       chatMsgs.add(ChatMsg('mentor', answer));
       chatLog = _trim(chatLog, 'Наставник: $answer', 8);
     } catch (e) {
@@ -527,29 +612,58 @@ extension AppCourses on AppController {
     }
   }
 
-  /// fillCourse — наполняет текущий курс пакетом задач от ИИ (сразу много).
+  /// fillCourse — наполняет курс задачами: один запрос на тему программы,
+  /// чтобы задачи одного предмета не смешивались с другим.
   Future<String> fillCourse({int count = 8}) async {
     if (generating || busy) return '';
     if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
     generating = true;
     lastFillError = '';
     notifyListeners();
+    var added = 0;
     try {
-      final tasks = await ai!.generateTaskBatch(cur, count);
-      cur.tasks.addAll(tasks);
-      (prog.generated[cur.id] ??= []).addAll(tasks);
+      final topics = cur.syllabus.isEmpty
+          ? List.generate(count, (i) => 'повторение и углубление темы ' + (i + 1).toString() + ' курса «' + cur.title + '»')
+          : (cur.syllabus.length >= count ? cur.syllabus.take(count).toList() : cur.syllabus.toList());
+      for (var i = 0; i < topics.length; i++) {
+        try {
+          final t = await ai!.generateTask(cur.title, topics[i], _recentTitles(8), '');
+          cur.tasks.add(t);
+          (prog.generated[cur.id] ??= []).add(t);
+          added++;
+          termLine('  + задача ' + added.toString() + '/' + count.toString() + ': ' + t.title);
+          notifyListeners();
+        } catch (e) {
+          // одна неудачная тема не рушит пакет
+        }
+      }
+      if (added == 0) {
+        lastFillError = 'ИИ не вернул ни одной задачи — попробуй ещё раз.';
+        notifyListeners();
+        return lastFillError;
+      }
       await saveProgress();
-      termLine('  + курс «${cur.title}» наполнен: ${tasks.length} задач');
+      termLine('  + курс «' + cur.title + '» наполнен: ' + added.toString() + ' задач');
       refreshTerminal();
       final next = cur.tasks.indexWhere((t) => !isDone(t));
       selectTask(next >= 0 ? next : 0);
       return '';
-    } catch (e) {
-      lastFillError = _errMsg(e);
-      notifyListeners();
-      return lastFillError;
     } finally {
       generating = false;
+      notifyListeners();
+    }
+  }
+
+  /// clearGeneratedTasks — убрать всю ИИ-генерацию из текущего курса
+  /// (например, если старые задачи перепутали предметы).
+  void clearGeneratedTasks() {
+    final gen = prog.generated[cur.id];
+    if (gen != null && gen.isNotEmpty) {
+      final ids = gen.map((t) => t.id).toSet();
+      cur.tasks.removeWhere((t) => ids.contains(t.id));
+      prog.generated.remove(cur.id);
+      viewIdx = viewIdx.clamp(0, cur.tasks.length - 1);
+      saveProgress();
       notifyListeners();
     }
   }
@@ -595,6 +709,120 @@ extension AppCourses on AppController {
     saveProgress();
     notifyListeners();
   }
+
+  // ---------- экзамен ----------
+
+  Future<String> startExam() async {
+    if (busy || generating || examActive) return '';
+    if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    termBusy = true;
+    notifyListeners();
+    try {
+      final tasks = <Task>[];
+      for (var i = 0; i < 5; i++) {
+        final t = await ai!.generateTask(cur.title,
+            'повторение пройденного материала курса — выбери сам подходящую уже изученную тему (задача ' + (i + 1).toString() + ' из 5)',
+            tasks.map((x) => x.title).toList(), '');
+        tasks.add(t);
+      }
+      examTasks = tasks;
+      examIdx = 0;
+      examResults.clear();
+      examActive = true;
+      states['__exam'] = tasks[0].start.clone();
+      history['__exam'] = [];
+      termLine('');
+      termLine('── ЭКЗАМЕН: 5 задач по курсу «' + cur.title + '» ──');
+      refreshTerminal();
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    } finally {
+      termBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void _finishExam() {
+    final score = examResults.where((r) => r).length;
+    final bonus = score * 10;
+    prog.xp += bonus;
+    examActive = false;
+    saveProgress();
+    _checkAchievements();
+    termLine('── Экзамен завершён: ' + score.toString() + '/5 · бонус +' + bonus.toString() + ' XP ──');
+    refreshTerminal();
+    if (score >= 4) grant('exam-good');
+    if (score == 5) grant('exam-perfect');
+    final grade = score == 5
+        ? '5 — отлично!'
+        : score == 4
+            ? '4 — хорошо'
+            : score == 3
+                ? '3 — удовлетворительно'
+                : '2 — нужно повторить тему';
+    examSummary = 'Оценка: ' + grade + '\nВерных задач: ' + score.toString() + ' из 5\nБонус: +' + bonus.toString() + ' XP';
+    selectFirstUndone();
+  }
+
+  // ---------- закладки и повторение ----------
+
+  bool isBookmarked(Task t) => prog.bookmarks.containsKey(cur.id + '|' + t.id);
+
+  void toggleBookmark() {
+    final t = currentTask;
+    if (t == null || examActive) return;
+    final key = cur.id + '|' + t.id;
+    if (prog.bookmarks.containsKey(key)) {
+      prog.bookmarks.remove(key);
+      termLine('  ☆ закладка снята');
+    } else {
+      prog.bookmarks[key] = Bookmark(
+        taskId: t.id, courseId: cur.id, intervalDays: 1,
+        due: DateTime.now().toIso8601String().substring(0, 10),
+      );
+      termLine('  ★ в закладках — вернёмся через день для повторения');
+    }
+    saveProgress();
+    notifyListeners();
+  }
+
+  List<MapEntry<String, Bookmark>> dueBookmarks() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final out = <MapEntry<String, Bookmark>>[];
+    for (final e in prog.bookmarks.entries) {
+      if (e.value.due.compareTo(today) <= 0) out.add(e);
+    }
+    out.sort((a, b) => a.value.due.compareTo(b.value.due));
+    return out;
+  }
+
+  void reviewFromBookmark(String key) {
+    final b = prog.bookmarks[key];
+    if (b == null) return;
+    final ci = courses.indexWhere((c) => c.id == b.courseId);
+    if (ci < 0) {
+      prog.bookmarks.remove(key);
+      saveProgress();
+      return;
+    }
+    switchCourseSilent(ci);
+    final ti = cur.tasks.indexWhere((t) => t.id == b.taskId);
+    if (ti < 0) return;
+    reviewKey = key;
+    selectTask(ti);
+  }
+
+  // ---------- собеседование ----------
+
+  void startInterview() {
+    interviewMode = true;
+  }
+
+  void stopInterview() {
+    interviewMode = false;
+  }
+
 
   String _errMsg(Object e) {
     var s = e.toString();

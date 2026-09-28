@@ -37,6 +37,25 @@ class _LessonScreenState extends State<LessonScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _maybeExamDialog() {
+    final summary = controller.examSummary;
+    if (summary == null) return;
+    controller.examSummary = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: C.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Экзамен завершён'),
+          content: Text(summary, style: const TextStyle(height: 1.45)),
+          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Понятно'))],
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = controller.currentTask;
@@ -71,6 +90,7 @@ class _LessonScreenState extends State<LessonScreen> {
           if (t == null) {
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
+          _maybeExamDialog();
           return TabBarView(
             physics: const BouncingScrollPhysics(),
             children: [
@@ -169,6 +189,33 @@ class _TaskSlide extends StatelessWidget {
       children: [
         Text(t.title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
         const SizedBox(height: 8),
+        if (controller.examActive)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: C.warn.withAlpha(30),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: C.warn),
+            ),
+            child: Text(
+              'ЭКЗАМЕН · вопрос ' + (controller.examIdx + 1).toString() + '/' + controller.examTasks.length.toString()
+                  + ' · верных: ' + controller.examResults.where((r) => r).length.toString(),
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: C.warn),
+            ),
+          )
+        else if (controller.reviewKey != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: C.secondary.withAlpha(28),
+              borderRadius: BorderRadius.circular(10),
+              border: Border(left: BorderSide(color: C.secondary, width: 3)),
+            ),
+            child: Text('РЕЖИМ ПОВТОРЕНИЯ — освежи память и сдай снова',
+                style: TextStyle(fontSize: 12.5, color: C.text)),
+          ),
         Row(children: [
           Text(t.isQuiz ? 'тест' : 'практика', style: TextStyle(fontSize: 12, color: C.muted)),
           const SizedBox(width: 10),
@@ -186,14 +233,27 @@ class _TaskSlide extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion:
-                'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.')));
-          },
-          icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
-          label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
-        ),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion:
+                    'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.')));
+              },
+              icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
+              label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
+            ),
+          ),
+          if (!controller.examActive) ...[
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: controller.toggleBookmark,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(52, 48), padding: const EdgeInsets.symmetric(horizontal: 12)),
+              child: Text(controller.isBookmarked(t) ? '★' : '☆',
+                  style: TextStyle(fontSize: 17, color: controller.isBookmarked(t) ? C.warn : C.muted)),
+            ),
+          ],
+        ]),
         const SizedBox(height: 18),
         if (needQuiz) ...[
           caption('Тест по теории', color: C.accent),
@@ -208,7 +268,7 @@ class _TaskSlide extends StatelessWidget {
                     final err = await controller.submitTask();
                     if (err.isNotEmpty) onSnack(err);
                   },
-            child: const Text('Отправить на проверку'),
+            child: Text(controller.examActive ? 'Сдать задачу' : 'Отправить на проверку'),
           ),
           const SizedBox(height: 12),
         ],
