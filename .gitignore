@@ -1,8 +1,8 @@
-# бинарники и сборка
-termai
-termai-*
-TERMAI*
-docker-trainer
+# бинарники и сборка (анкеры — чтобы не игнорить папки вида kotlin/com/vlad/termai)
+/termai
+/termai-*
+/TERMAI*
+/docker-trainer
 *.exe
 *.apk
 fyne-cross/
@@ -18,8 +18,8 @@ release/
 *.json.bak
 
 # конфиги с API-ключами — НИКОГДА в репозиторий
-docker-trainer.json
-termai.json
+/docker-trainer.json
+/termai.json
 *config*.json
 
 # мусор
