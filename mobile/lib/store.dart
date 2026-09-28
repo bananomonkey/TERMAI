@@ -47,6 +47,7 @@ class AppController extends ChangeNotifier {
   bool solutionLoad = false;
   bool generating = false;
   bool ready = false;
+  String lastFillError = '';
 
   String? lastAchievement; // для всплывашки
 
@@ -345,7 +346,8 @@ extension AppCourses on AppController {
     termLine('  …проверяю выполнение по истории терминала');
     refreshTerminal();
     try {
-      final res = await ai!.verify(cur, task, state, _lastHist(12));
+      final tail = termText.length > 1600 ? termText.substring(termText.length - 1600) : termText;
+      final res = await ai!.verify(cur, task, state, _lastHist(20), termTail: tail);
       termBusy = false;
       if (res.solved) {
         await _completeTask(task, res.comment, res.difficulty);
@@ -530,6 +532,7 @@ extension AppCourses on AppController {
     if (generating || busy) return '';
     if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
     generating = true;
+    lastFillError = '';
     notifyListeners();
     try {
       final tasks = await ai!.generateTaskBatch(cur, count);
@@ -542,7 +545,9 @@ extension AppCourses on AppController {
       selectTask(next >= 0 ? next : 0);
       return '';
     } catch (e) {
-      return _errMsg(e);
+      lastFillError = _errMsg(e);
+      notifyListeners();
+      return lastFillError;
     } finally {
       generating = false;
       notifyListeners();

@@ -182,9 +182,15 @@ class AIClient {
       'Также оцени объективную сложность 1-5.\n'
       'Ответ — только JSON: {"solved": true|false, "comment": "1-2 фразы по-русски", "difficulty": 3}';
 
-  Future<CheckResult> verify(Course c, Task task, SandboxState st, List<HistEntry> hist) async {
+  Future<CheckResult> verify(Course c, Task task, SandboxState st, List<HistEntry> hist,
+      {String termTail = ''}) async {
+    final histStr = formatHist(hist, 400);
     final user = 'Курс: ${c.title}\nЗадача: ${task.title}\nУсловие: ${task.goal}\nКритерий: ${task.check}\n\n'
-        'История терминала студента:\n${formatHist(hist, 300)}\n\nФинальное состояние:\n${jsonEncode(st.toJson())}';
+        'ИСТОРИЯ ТЕРМИНАЛА СТУДЕНТА (команды и вывод в порядке ввода — главная улика того, что студент делал сам):\n$histStr'
+        '${termTail.isEmpty ? '' : '\n\nСЫРОЙ ЛОГ ТЕРМИНАЛА (последние строки):\n$termTail'}'
+        '\n\nФинальное состояние:\n${jsonEncode(st.toJson())}'
+        '\n\nЕсли команды из условия видны в истории/логе — студент выполнял их сам: ставь solved=true при выполнении критерия. '
+        'Пустая история — единственный повод считать, что студент ничего не делал.';
     final j = await chatJSON(_sysChecker, user, 0.0);
     var diff = (j['difficulty'] as num?)?.toInt() ?? task.difficulty;
     if (diff < 1 || diff > 5) diff = task.difficulty;
@@ -250,9 +256,19 @@ class AIClient {
         + syllabus.take(count).join('\n')
         + '\n\nСгенерируй РОВНО ' + count.toString() + ' задач по этим темам. Если тем меньше — добавь задачи на углубление и повторение.'
         + '\nНедавние задачи курса (не повторять): ' + course.tasks.map((t) => t.title).take(10).join('; ')
+        + '\n\nВАЖНО: все задачи строго по предмету курса «' + course.title + '» и только по перечисленным темам. Никаких других предметов (например, для курса Linux — только Linux, без Git/Docker).'
         + '\n\nОтвет — только JSON: {"tasks": [ {задача по схеме}, … ]}';
     final j = await chatJSON(_sysTaskGen, user, 0.55);
-    final list = (j['tasks'] as List?) ?? [];
+    // модель иногда шлёт одну задачу без обёртки — принимаем оба варианта
+    final raw = j['tasks'];
+    final List list;
+    if (raw is List) {
+      list = raw;
+    } else if (j.containsKey('title') || j.containsKey('goal')) {
+      list = [j];
+    } else {
+      list = [];
+    }
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final tasks = <Task>[];
     for (var i = 0; i < list.length && i < count + 2; i++) {

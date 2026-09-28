@@ -412,10 +412,20 @@ class _TaskGroups extends StatelessWidget {
                   ? 'ИИ пишет задачи курса «${c.title}»…\n(пакет из 8 — это занимает до минуты)'
                   : controller.ai == null
                       ? 'Нет API-ключа — курс нечем наполнить.\nНастрой ИИ в «Ещё» → Настройки.'
-                      : 'Задач пока нет.',
+                      : (controller.lastFillError.isNotEmpty
+                          ? 'Не получилось сгенерировать:\n${controller.lastFillError}\n\nПопробуй ещё раз — ИИ иногда отвечает в неудобном формате.'
+                          : 'Задач пока нет.'),
               textAlign: TextAlign.center,
               style: TextStyle(color: C.muted, height: 1.5),
             ),
+            if (!controller.generating && controller.ai != null) ...[
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () => controller.fillCourse(),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('Наполнить задачами от ИИ'),
+              ),
+            ],
           ],
         ),
       );
