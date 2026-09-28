@@ -45,6 +45,7 @@ class AppController extends ChangeNotifier {
   bool termBusy = false;
   bool mentorBusy = false;
   bool solutionLoad = false;
+  bool generating = false;
   bool ready = false;
 
   String? lastAchievement; // для всплывашки
@@ -520,6 +521,30 @@ extension AppCourses on AppController {
       return _errMsg(e);
     } finally {
       termBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// fillCourse — наполняет текущий курс пакетом задач от ИИ (сразу много).
+  Future<String> fillCourse({int count = 8}) async {
+    if (generating || busy) return '';
+    if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    generating = true;
+    notifyListeners();
+    try {
+      final tasks = await ai!.generateTaskBatch(cur, count);
+      cur.tasks.addAll(tasks);
+      (prog.generated[cur.id] ??= []).addAll(tasks);
+      await saveProgress();
+      termLine('  + курс «${cur.title}» наполнен: ${tasks.length} задач');
+      refreshTerminal();
+      final next = cur.tasks.indexWhere((t) => !isDone(t));
+      selectTask(next >= 0 ? next : 0);
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    } finally {
+      generating = false;
       notifyListeners();
     }
   }

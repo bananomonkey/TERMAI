@@ -134,9 +134,22 @@ class _Bubble extends StatelessWidget {
           child: _wrap(msg.text, C.accentDark, isUser: true),
         );
       default:
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: _wrap(msg.text, C.secondary.withAlpha(28), isUser: false),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundImage: AssetImage('assets/icon/clawd.png'),
+                  backgroundColor: C.card,
+                ),
+              ),
+              Expanded(child: _wrap(msg.text, C.secondary.withAlpha(28), isUser: false)),
+            ],
+          ),
         );
     }
   }

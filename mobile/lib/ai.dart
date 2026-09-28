@@ -7,7 +7,8 @@ import 'models.dart';
 class ProviderPreset {
   final String id, title, baseUrl, defaultModel;
   final List<String> models;
-  const ProviderPreset(this.id, this.title, this.baseUrl, this.defaultModel, this.models);
+  final String auth; // bearer | apikey
+  const ProviderPreset(this.id, this.title, this.baseUrl, this.defaultModel, this.models, {this.auth = 'bearer'});
 }
 
 const providers = <ProviderPreset>[
@@ -18,6 +19,10 @@ const providers = <ProviderPreset>[
   ProviderPreset('openrouter', 'OpenRouter', 'https://openrouter.ai/api/v1', 'deepseek/deepseek-chat', ['deepseek/deepseek-chat', 'anthropic/claude-3.5-sonnet', 'meta-llama/llama-3.3-70b-instruct']),
   ProviderPreset('groq', 'Groq', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']),
   ProviderPreset('mistral', 'Mistral', 'https://api.mistral.ai/v1', 'mistral-large-latest', ['mistral-large-latest', 'mistral-small-latest']),
+  ProviderPreset('gigachat', 'GigaChat (Сбер)', 'https://gigachat.devices.sberbank.ru/api/v1', 'GigaChat', ['GigaChat', 'GigaChat-Pro'],
+      auth: 'bearer'), // в поле ключа — Access Token из OAuth GigaChat
+  ProviderPreset('yandex', 'YandexGPT', 'https://openai-compat.llm.api.cloud.yandex.net/v1', 'yandexgpt-lite', ['yandexgpt-lite', 'yandexgpt-pro'],
+      auth: 'apikey'), // в поле ключа — API-ключ Яндекс.Облака
   ProviderPreset('ollama', 'Ollama (локально)', 'http://localhost:11434/v1', 'llama3.1', ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral']),
   ProviderPreset('custom', 'Свой (OpenAI-совместимый)', '', '', []),
 ];
@@ -45,8 +50,8 @@ String formatHist(List<HistEntry> hist, int maxOut) {
 }
 
 class AIClient {
-  final String base, key, model;
-  AIClient._(this.base, this.key, this.model);
+  final String base, key, model, auth;
+  AIClient._(this.base, this.key, this.model, this.auth);
 
   factory AIClient(Config cfg) {
     final p = findProvider(cfg.provider);
@@ -56,7 +61,7 @@ class AIClient {
       k = 'local';
     }
     final m = cfg.model.trim().isNotEmpty ? cfg.model.trim() : p.defaultModel;
-    return AIClient._(b, k, m);
+    return AIClient._(b, k, m, p.auth);
   }
 
   bool get ready => key.isNotEmpty && base.isNotEmpty && model.isNotEmpty;
@@ -65,7 +70,7 @@ class AIClient {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $key',
+        'Authorization': '${auth == 'apikey' ? 'Api-Key' : 'Bearer'} $key',
       };
 
   Future<Map<String, dynamic>> _chat(List<Map<String, String>> messages, double temp, {bool jsonMode = true}) async {
@@ -233,6 +238,35 @@ class AIClient {
     if (t.hints.isEmpty) t.hints = ['Перечитай условие и теорию.', 'Спроси ментора в чате.'];
     if (t.check.isEmpty) t.check = t.goal;
     return t;
+  }
+
+  /// generateTaskBatch — сразу много задач по курсу (по темам программы).
+  Future<List<Task>> generateTaskBatch(Course course, int count) async {
+    final syllabus = course.syllabus.isEmpty
+        ? ['cmd: базовая практика по теме курса']
+        : course.syllabus;
+    final user = 'Курс: ' + course.title
+        + '\nТемы программы (по одной на задачу, по порядку или группами):\n'
+        + syllabus.take(count).join('\n')
+        + '\n\nСгенерируй РОВНО ' + count.toString() + ' задач по этим темам. Если тем меньше — добавь задачи на углубление и повторение.'
+        + '\nНедавние задачи курса (не повторять): ' + course.tasks.map((t) => t.title).take(10).join('; ')
+        + '\n\nОтвет — только JSON: {"tasks": [ {задача по схеме}, … ]}';
+    final j = await chatJSON(_sysTaskGen, user, 0.55);
+    final list = (j['tasks'] as List?) ?? [];
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final tasks = <Task>[];
+    for (var i = 0; i < list.length && i < count + 2; i++) {
+      final t = Task.fromJson(list[i] as Map<String, dynamic>);
+      if (t.title.trim().isEmpty || t.goal.trim().isEmpty) continue;
+      t.id = t.id.isEmpty ? 'ai-${now % 100000}-$i' : t.id;
+      t.kind = t.isQuiz ? 'quiz' : 'cmd';
+      t.difficulty = t.difficulty < 1 || t.difficulty > 5 ? 3 : t.difficulty;
+      if (t.hints.isEmpty) t.hints = ['Перечитай условие и теорию.', 'Спроси ментора в чате.'];
+      if (t.check.isEmpty) t.check = t.goal;
+      tasks.add(t);
+    }
+    if (tasks.isEmpty) throw Exception('модель не вернула ни одной задачи');
+    return tasks;
   }
 
   // ---------- роль 5: генератор курсов ----------

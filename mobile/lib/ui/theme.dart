@@ -22,36 +22,41 @@ class ThemePreset {
 }
 
 const themePresets = <ThemePreset>[
+  // Приятный зелёный — «приложение-эко»
   ThemePreset(
-    id: 'sage', title: 'Кибер-Шалфей',
-    bg: Color(0xFF1E222A), surface: Color(0xFF232833), card: Color(0xFF272D38), card2: Color(0xFF2E3542),
-    secondary: Color(0xFF7DA87B), accent: Color(0xFF61AFEF), accentDark: Color(0xFF4A87C9),
-    text: Color(0xFFE8EAED), muted: Color(0xFF8B93A1), good: Color(0xFF7DA87B), warn: Color(0xFFE2B34C),
-    danger: Color(0xFFE06C75), border: Color(0xFF2F3642), termBg: Color(0xFF171B22), termText: Color(0xFFABB2BF),
+    id: 'emerald', title: 'Изумруд',
+    bg: Color(0xFF121A15), surface: Color(0xFF19241D), card: Color(0xFF1F2C24), card2: Color(0xFF26352B),
+    secondary: Color(0xFF6FA287), accent: Color(0xFF7FD1A7), accentDark: Color(0xFF5FB087),
+    text: Color(0xFFE3EEE7), muted: Color(0xFF8AA396), good: Color(0xFF7FD1A7), warn: Color(0xFFD9C36B),
+    danger: Color(0xFFE08A7A), border: Color(0xFF2A3A31), termBg: Color(0xFF0E1511), termText: Color(0xFFBFD8C8),
   ),
+  // Классическая тёмная консоль
   ThemePreset(
-    id: 'matrix', title: 'Матрица 2.0',
-    bg: Color(0xFF14171A), surface: Color(0xFF1A1E23), card: Color(0xFF20252B), card2: Color(0xFF272D35),
-    secondary: Color(0xFF5E81AC), accent: Color(0xFFA3BE8C), accentDark: Color(0xFF8FAE76),
-    text: Color(0xFFE5E9F0), muted: Color(0xFF7F8A99), good: Color(0xFFA3BE8C), warn: Color(0xFFEBCB8B),
-    danger: Color(0xFFE06C75), border: Color(0xFF2A3038), termBg: Color(0xFF0F1216), termText: Color(0xFFABB2BF),
+    id: 'matrix', title: 'Матрица',
+    bg: Color(0xFF0B0E0B), surface: Color(0xFF111611), card: Color(0xFF151C15), card2: Color(0xFF1B241B),
+    secondary: Color(0xFF4C6B4C), accent: Color(0xFF89D185), accentDark: Color(0xFF6FB46C),
+    text: Color(0xFFDCE8DC), muted: Color(0xFF7C8F7C), good: Color(0xFF89D185), warn: Color(0xFFD6C08A),
+    danger: Color(0xFFE08A7A), border: Color(0xFF202A20), termBg: Color(0xFF070907), termText: Color(0xFFA8D8A8),
   ),
+  // Фирменный синий Docker — фон с синим подтоном
   ThemePreset(
-    id: 'docker', title: 'Docker & Эко',
-    bg: Color(0xFF23272E), surface: Color(0xFF282D35), card: Color(0xFF2D333C), card2: Color(0xFF343B46),
-    secondary: Color(0xFF879B82), accent: Color(0xFF0DB7ED), accentDark: Color(0xFF0B99C6),
-    text: Color(0xFFE8EAED), muted: Color(0xFF8B95A1), good: Color(0xFF879B82), warn: Color(0xFFE2B34C),
-    danger: Color(0xFFE06C75), border: Color(0xFF313844), termBg: Color(0xFF1A1E24), termText: Color(0xFFABB2BF),
+    id: 'docker', title: 'Голубой Docker',
+    bg: Color(0xFF16202B), surface: Color(0xFF1C2836), card: Color(0xFF223040), card2: Color(0xFF293A4D),
+    secondary: Color(0xFF5E81AC), accent: Color(0xFF0DB7ED), accentDark: Color(0xFF0B99C6),
+    text: Color(0xFFE4EBF2), muted: Color(0xFF8595A6), good: Color(0xFF7FBFA0), warn: Color(0xFFE2B34C),
+    danger: Color(0xFFE06C75), border: Color(0xFF2C3A4A), termBg: Color(0xFF101820), termText: Color(0xFFABB2BF),
   ),
+  // Чёрный + синий — как в редакторах кода
   ThemePreset(
-    id: 'coding', title: 'Кодинг (чёрный + синий)',
+    id: 'coding', title: 'Тёмный кодинг',
     bg: Color(0xFF0D1117), surface: Color(0xFF161B22), card: Color(0xFF1C2128), card2: Color(0xFF22272E),
     secondary: Color(0xFF8B949E), accent: Color(0xFF58A6FF), accentDark: Color(0xFF3F8FE8),
     text: Color(0xFFE6EDF3), muted: Color(0xFF7D8590), good: Color(0xFF3FB950), warn: Color(0xFFD29922),
     danger: Color(0xFFE06C75), border: Color(0xFF30363D), termBg: Color(0xFF0A0D12), termText: Color(0xFFABB2BF),
   ),
+  // Тёплый бизнес: коричневый + бежевый + терракота
   ThemePreset(
-    id: 'business', title: 'Бизнес (тёплый)',
+    id: 'cocoa', title: 'Какао',
     bg: Color(0xFF1B1713), surface: Color(0xFF241F1A), card: Color(0xFF2B2520), card2: Color(0xFF332C25),
     secondary: Color(0xFFA78B6F), accent: Color(0xFFD97757), accentDark: Color(0xFFC05F42),
     text: Color(0xFFEDE6DE), muted: Color(0xFF9C9083), good: Color(0xFFA3BE8C), warn: Color(0xFFD9A05B),
