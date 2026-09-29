@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'ambient.dart';
 import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -32,7 +33,8 @@ class CourseGraphView extends StatelessWidget {
             ),
           );
         }
-        return Column(
+        final ambient = controller.config.ambient;
+        final list = Column(
           children: [
             if (controller.generating && controller.fillTotal > 0)
               Padding(
@@ -67,9 +69,16 @@ class CourseGraphView extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
                 itemCount: courses.length,
-                itemBuilder: (context, i) => _CourseTile(index: i),
+                itemBuilder: (context, i) => _CourseTile(index: i, ambient: ambient),
               ),
             ),
+          ],
+        );
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (ambient) const Positioned.fill(child: AmbientBackground()),
+            Positioned.fill(child: list),
           ],
         );
       },
@@ -80,7 +89,8 @@ class CourseGraphView extends StatelessWidget {
 /// _CourseTile — плитка курса: имя, зелёный прогресс-бар, процент.
 class _CourseTile extends StatelessWidget {
   final int index;
-  const _CourseTile({required this.index});
+  final bool ambient;
+  const _CourseTile({required this.index, required this.ambient});
 
   @override
   Widget build(BuildContext context) {
@@ -97,11 +107,15 @@ class _CourseTile extends StatelessWidget {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
         onDoubleTap: () => _showCourseActions(context, index),
-        child: AnimatedContainer(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: ambient ? 14 : 0, sigmaY: ambient ? 14 : 0),
+            child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: C.surface,
+            color: ambient ? C.surface.withAlpha(150) : C.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: current ? C.accent : C.border, width: current ? 1.6 : 1),
           ),
@@ -134,6 +148,8 @@ class _CourseTile extends StatelessWidget {
             else
               Icon(Icons.chevron_right, color: C.muted, size: 22),
           ]),
+        ),
+          ),
         ),
       ),
     );

@@ -63,6 +63,8 @@ class AppController extends ChangeNotifier {
   String? reviewKey;
 
   String? lastAchievement; // для всплывашки
+  final pendingAchievements = <String>[];
+  Map<String, dynamic>? lastCompletion; // данные окна «Задача выполнена»
 
   // ---------- инициализация ----------
 
@@ -493,10 +495,16 @@ extension AppCourses on AppController {
     _checkAchievements();
     await saveProgress();
 
-    termLine(t.peeked
-        ? '  ✓ решено: ${t.title} (решение подсмотрено — без XP)'
-        : '  ✓ решено: ${t.title} (+$xp XP, сложность $diff/5)');
-    if (note.isNotEmpty) termLine('  $note');
+    // результат — в окно, не в терминал
+    final achs = List<String>.from(pendingAchievements);
+    pendingAchievements.clear();
+    lastCompletion = {
+      'title': t.title,
+      'xp': xp,
+      'peeked': t.peeked,
+      'comment': note,
+      'achievements': achs,
+    };
     refreshTerminal();
 
     // следующая задача

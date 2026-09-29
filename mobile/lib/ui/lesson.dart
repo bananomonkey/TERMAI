@@ -37,6 +37,110 @@ class _LessonScreenState extends State<LessonScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _maybeCompletionDialog() {
+    final lc = controller.lastCompletion;
+    if (lc == null) return;
+    controller.lastCompletion = null;
+    final achievements = (lc['achievements'] as List).cast<String>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: C.surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: C.good.withAlpha(120)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.elasticOut,
+                  builder: (context, v, _) => Transform.scale(
+                    scale: v,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(color: C.good, shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: C.good.withAlpha(90), blurRadius: 26, spreadRadius: 3)]),
+                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 42),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('Задача выполнена!',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
+                const SizedBox(height: 6),
+                Text(lc['title'] as String,
+                    style: TextStyle(fontSize: 13, color: C.muted)),
+                const SizedBox(height: 10),
+                if ((lc['xp'] as int) > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(color: C.good.withAlpha(40), borderRadius: BorderRadius.circular(20)),
+                    child: Text('+${lc['xp']} XP',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: C.good)),
+                  ),
+                if ((lc['peeked'] as bool)) ...[
+                  const SizedBox(height: 8),
+                  Text('Решение подсмотрено — XP не начисляются.',
+                      style: TextStyle(fontSize: 12, color: C.muted)),
+                ],
+                if ((lc['comment'] as String).isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: C.card,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(left: BorderSide(color: C.secondary, width: 3)),
+                    ),
+                    child: Text(lc['comment'] as String,
+                        style: TextStyle(fontSize: 13, height: 1.4, color: C.text)),
+                  ),
+                ],
+                if (achievements.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Align(alignment: Alignment.centerLeft, child: caption('НОВЫЕ ДОСТИЖЕНИЯ', color: C.accent)),
+                  const SizedBox(height: 6),
+                  for (var i = 0; i < achievements.length; i++)
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: Duration(milliseconds: 350 + i * 150),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset((1 - v) * 24, 0),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(children: [
+                              Icon(Icons.workspace_premium, color: C.warn, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(achievements[i],
+                                  style: TextStyle(fontSize: 13, color: C.text))),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   void _maybeExamDialog() {
     final summary = controller.examSummary;
     if (summary == null) return;
@@ -71,7 +175,8 @@ class _LessonScreenState extends State<LessonScreen> {
           isScrollable: false,
           labelColor: C.accent,
           unselectedLabelColor: C.muted,
-          labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
           unselectedLabelStyle: TextStyle(fontSize: 13),
           indicatorColor: C.accent,
           indicatorSize: TabBarIndicatorSize.tab,
@@ -91,6 +196,7 @@ class _LessonScreenState extends State<LessonScreen> {
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
           _maybeExamDialog();
+          _maybeCompletionDialog();
           return TabBarView(
             physics: const BouncingScrollPhysics(),
             children: [
@@ -259,18 +365,6 @@ class _TaskSlide extends StatelessWidget {
           caption('Тест по теории', color: C.accent),
           const SizedBox(height: 10),
           _QuizBlock(t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
-        ],
-        if (!needQuiz && !t.isQuiz) ...[
-          FilledButton(
-            onPressed: controller.busy
-                ? null
-                : () async {
-                    final err = await controller.submitTask();
-                    if (err.isNotEmpty) onSnack(err);
-                  },
-            child: Text(controller.examActive ? 'Сдать задачу' : 'Отправить на проверку'),
-          ),
-          const SizedBox(height: 12),
         ],
         if (t.hints.isNotEmpty) ...[
           caption('Подсказки'),
@@ -441,6 +535,12 @@ class _TermSlideState extends State<_TermSlide> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
                   child: Row(children: [
                     Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Чат с ментором',
+                      onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+                      icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                    ),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: controller.undoCommand,
@@ -475,18 +575,14 @@ class _TermSlideState extends State<_TermSlide> {
             ),
           ),
           // строка ввода
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(children: [
             Expanded(
               child: TextField(
                 controller: _input,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
                 onSubmitted: (_) => _run(),
-                decoration: InputDecoration(
-                  prefixText: '${controller.prompt} ',
-                  prefixStyle: TextStyle(fontFamily: 'monospace', fontSize: 13.5, color: C.secondary),
-                  hintText: 'введите команду…',
-                ),
+                decoration: const InputDecoration(hintText: 'введите команду…'),
               ),
             ),
             const SizedBox(width: 8),
@@ -498,7 +594,7 @@ class _TermSlideState extends State<_TermSlide> {
               style: IconButton.styleFrom(backgroundColor: C.accentDark),
             ),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(children: [
             OutlinedButton.icon(
               onPressed: () => _showFiles(context),

@@ -255,7 +255,8 @@ class Bookmark {
 
 class Config {
   String apiKey, provider, model, baseUrl, theme;
-  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'cocoa'});
+  bool ambient;
+  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'cocoa', this.ambient = true});
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -265,7 +266,7 @@ class Config {
         theme: j['theme'] as String? ?? 'sage',
       );
 
-  Map<String, dynamic> toJson() => {'api_key': apiKey, 'provider': provider, 'model': model, 'base_url': baseUrl, 'theme': theme};
+  Map<String, dynamic> toJson() => {'api_key': apiKey, 'provider': provider, 'model': model, 'base_url': baseUrl, 'theme': theme, 'ambient': ambient};
 }
 
 class Progress {
