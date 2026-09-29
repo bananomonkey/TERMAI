@@ -90,26 +90,31 @@ class _FogScenePainter extends CustomPainter {
   final double t;
   final List<_FogBlob> blobs;
   static const _spriteW = 256.0, _spriteH = 170.0;
-  static final Paint _shaderPaint = Paint()
-    ..shader = RadialGradient(colors: [
-      const Color(0xFFC9D4DE),
-      const Color(0xFFC9D4DE).withAlpha(0),
-    ]).createShader(const Rect.fromLTWH(0, 0, _spriteW, _spriteH));
   static final Map<int, Paint> _paintCache = {};
 
   _FogScenePainter({required this.t, required this.blobs, required Listenable repaint})
       : super(repaint: repaint);
 
-  Paint _paintFor(double opacity) {
-    final bucket = (opacity * 40).round(); // 10 уровней прозрачности
-    return _paintCache.putIfAbsent(bucket, () => Paint()
-      ..shader = _shaderPaint.shader
-      ..color = Colors.white.withAlpha((bucket / 40 * 255).round())
-      ..blendMode = BlendMode.modulate);
+  static Paint _paintFor(int alpha255) {
+    return _paintCache.putIfAbsent(alpha255, () => Paint()
+      ..shader = RadialGradient(colors: [
+        const Color(0xFFCBD5DF).withAlpha(alpha255),
+        const Color(0xFFCBD5DF).withAlpha(0),
+      ]).createShader(const Rect.fromLTWH(0, 0, _spriteW, _spriteH)));
   }
 
   @override
   void paint(Canvas canvas, Size size) {
+    // плотная туманная масса у земли
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height * 0.55, size.width, size.height * 0.45),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [const Color(0x00C4CFDA), const Color(0x22C4CFDA)],
+        ).createShader(Rect.fromLTWH(0, size.height * 0.55, size.width, size.height * 0.45)),
+    );
     // ночная база: глубокий тёмно-нейтральный, чуть светлее кверху
     canvas.drawRect(
       Offset.zero & size,
@@ -157,7 +162,9 @@ class _FogScenePainter extends CustomPainter {
       canvas.save();
       canvas.translate(rect.left, rect.top);
       canvas.scale(rect.width / _spriteW, rect.height / _spriteH);
-      canvas.drawRect(const Rect.fromLTWH(0, 0, _spriteW, _spriteH), _paintFor(b.opacity));
+      canvas.drawRect(
+          const Rect.fromLTWH(0, 0, _spriteW, _spriteH),
+          _paintFor((b.opacity * 255).round()));
       canvas.restore();
     }
   }
