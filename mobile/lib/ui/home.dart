@@ -107,17 +107,38 @@ class _CourseTile extends StatelessWidget {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
         onDoubleTap: () => _showCourseActions(context, index),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: ambient ? 14 : 0, sigmaY: ambient ? 14 : 0),
-            child: AnimatedContainer(
+        child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(15),
+          foregroundDecoration: ambient
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withAlpha(50),
+                      Colors.white.withAlpha(8),
+                      Colors.black.withAlpha(20),
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
+                  ),
+                )
+              : null,
           decoration: BoxDecoration(
-            color: ambient ? C.surface.withAlpha(150) : C.surface,
+            color: ambient ? C.surface.withAlpha(110) : C.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: current ? C.accent : C.border, width: current ? 1.6 : 1),
+            border: Border.all(
+              color: current ? C.accent : (ambient ? Colors.white.withAlpha(40) : C.border),
+              width: current ? 1.6 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(60),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Row(children: [
             Expanded(
@@ -148,8 +169,6 @@ class _CourseTile extends StatelessWidget {
             else
               Icon(Icons.chevron_right, color: C.muted, size: 22),
           ]),
-        ),
-          ),
         ),
       ),
     );

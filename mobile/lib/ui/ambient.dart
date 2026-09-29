@@ -1,11 +1,11 @@
-// ambient.dart — кинематографичный живой фон: глубокий градиент ночи/заката,
-// парящая пыль (микрочастицы на CustomPainter, 60 FPS, лёгкая).
+// ambient.dart — кинематографичный живой туман: три параллакс-слоя туманных
+// банков (дальний — медленный и бледный, ближний — плотный и быстрый),
+// лунная подсветка из угла. Ничего тяжёлого: ~26 радиальных клобов на канве.
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// AmbientBackground — многослойный фон: ночь → фиолетовое свечение → тёплый
-/// отблеск заката в углу + парящая пыль.
+/// AmbientBackground — туманная сцена.
 class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key});
   @override
@@ -15,22 +15,47 @@ class AmbientBackground extends StatefulWidget {
 class _AmbientBackgroundState extends State<AmbientBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 30))..repeat();
-  late final List<_Dust> _dust;
+      AnimationController(vsync: this, duration: const Duration(seconds: 90))..repeat();
+  late final List<_FogBlob> _blobs;
 
   @override
   void initState() {
     super.initState();
-    final r = math.Random(11);
-    _dust = List.generate(44, (_) => _Dust(
-      x: r.nextDouble(),
-      y: r.nextDouble(),
-      radius: 0.6 + r.nextDouble() * 1.1,      // 0.6–1.7 логических px
-      speed: 0.015 + r.nextDouble() * 0.05,     // доля экрана за цикл
-      drift: (r.nextDouble() * 2 - 1) * 0.02,
-      phase: r.nextDouble() * math.pi * 2,
-      opacity: 0.10 + r.nextDouble() * 0.30,    // 0.10–0.40
-    ));
+    final r = math.Random(5);
+    _blobs = [];
+    // дальний слой: мелкий, бледный, медленный — живёт выше
+    for (var i = 0; i < 10; i++) {
+      _blobs.add(_FogBlob(
+        x: r.nextDouble(), y: 0.05 + r.nextDouble() * 0.55,
+        radius: 0.16 + r.nextDouble() * 0.14,
+        speed: 0.008 + r.nextDouble() * 0.008,
+        amp: 0.012 + r.nextDouble() * 0.02,
+        phase: r.nextDouble() * math.pi * 2,
+        opacity: 0.022 + r.nextDouble() * 0.02,
+      ));
+    }
+    // средний слой
+    for (var i = 0; i < 9; i++) {
+      _blobs.add(_FogBlob(
+        x: r.nextDouble(), y: 0.25 + r.nextDouble() * 0.6,
+        radius: 0.26 + r.nextDouble() * 0.18,
+        speed: 0.02 + r.nextDouble() * 0.012,
+        amp: 0.02 + r.nextDouble() * 0.03,
+        phase: r.nextDouble() * math.pi * 2,
+        opacity: 0.04 + r.nextDouble() * 0.025,
+      ));
+    }
+    // ближний слой: крупный, плотный, быстрый — стелется по низу
+    for (var i = 0; i < 7; i++) {
+      _blobs.add(_FogBlob(
+        x: r.nextDouble(), y: 0.55 + r.nextDouble() * 0.5,
+        radius: 0.38 + r.nextDouble() * 0.24,
+        speed: 0.035 + r.nextDouble() * 0.02,
+        amp: 0.025 + r.nextDouble() * 0.035,
+        phase: r.nextDouble() * math.pi * 2,
+        opacity: 0.055 + r.nextDouble() * 0.035,
+      ));
+    }
   }
 
   @override
@@ -41,70 +66,89 @@ class _AmbientBackgroundState extends State<AmbientBackground>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // глубокая ночь
-        const ColoredBox(color: Color(0xFF0E1220)),
-        // мягкое фиолетовое свечение сверху справа
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0.85, -0.75),
-              radius: 1.25,
-              colors: [Color(0x88403A6B), Color(0x000E1220)],
-            ),
-          ),
-        ),
-        // тёплый отблеск заката в нижнем левом углу
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-0.85, 0.85),
-              radius: 1.15,
-              colors: [Color(0x66C46A2B), Color(0x000E1220)],
-            ),
-          ),
-        ),
-        // парящая пыль
-        AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) => CustomPaint(
-            painter: _DustPainter(t: _c.value, dust: _dust, repaint: _c),
-          ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => CustomPaint(
+        size: Size.infinite,
+        painter: _FogScenePainter(t: _c.value, blobs: _blobs, repaint: _c),
+      ),
     );
   }
 }
 
-class _Dust {
-  final double x, y, radius, speed, drift, phase, opacity;
-  _Dust({
+class _FogBlob {
+  final double x, y, radius, speed, amp, phase, opacity;
+  _FogBlob({
     required this.x, required this.y, required this.radius,
-    required this.speed, required this.drift, required this.phase,
+    required this.speed, required this.amp, required this.phase,
     required this.opacity,
   });
 }
 
-class _DustPainter extends CustomPainter {
+/// _FogScenePainter — сцена: ночная база, лунный свет, параллакс-туман.
+class _FogScenePainter extends CustomPainter {
   final double t;
-  final List<_Dust> dust;
-  _DustPainter({required this.t, required this.dust, required Listenable repaint})
+  final List<_FogBlob> blobs;
+  _FogScenePainter({required this.t, required this.blobs, required Listenable repaint})
       : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white;
-    for (final d in dust) {
-      // медленное парение вверх + лёгкий дрейф по синусоиде
-      final yy = ((d.y - t * d.speed) % 1.0 + 1.0) % 1.0;
-      final xx = ((d.x + d.drift * math.sin(t * math.pi * 2 + d.phase)) % 1.0 + 1.0) % 1.0;
-      paint.color = Colors.white.withAlpha((d.opacity * 255).round());
-      canvas.drawCircle(Offset(xx * size.width, yy * size.height), d.radius, paint);
+    // ночная база: глубокий тёмно-нейтральный, чуть светлее кверху
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [const Color(0xFF14171D), const Color(0xFF0A0C10)],
+        ).createShader(Offset.zero & size),
+    );
+    // лунная подсветка из верхнего левого угла
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.75, -0.85),
+          radius: 1.3,
+          colors: [const Color(0x33AFC4D8), const Color(0x000A0C10)],
+        ).createShader(Offset.zero & size),
+    );
+    // луч света сквозь туман — косая светлая полоса
+    canvas.save();
+    canvas.translate(size.width * 0.32, -40);
+    canvas.rotate(0.42);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width * 0.16, size.height * 1.5),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [const Color(0x00AFC4D8), const Color(0x14AFC4D8), const Color(0x00AFC4D8)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width * 0.16, size.height * 1.5)),
+    );
+    canvas.restore();
+
+    // туман: клобы с мягким радиальным затуханием, три слоя глубины
+    for (final b in blobs) {
+      final xx = (((b.x + t * b.speed) % 1.5) + 1.5) % 1.5 - 0.25; // запас за краями
+      final yy = b.y + b.amp * math.sin(t * math.pi * 2 + b.phase);
+      final rect = Rect.fromCenter(
+        center: Offset(xx * size.width, yy * size.height),
+        width: b.radius * size.width * 2.2,
+        height: b.radius * size.width * 1.5,
+      );
+      final paint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFC9D4DE).withAlpha((b.opacity * 255).round()),
+            const Color(0xFFC9D4DE).withAlpha(0),
+          ],
+        ).createShader(rect);
+      canvas.drawRect(rect, paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DustPainter old) => old.t != t;
+  bool shouldRepaint(covariant _FogScenePainter old) => old.t != t;
 }
