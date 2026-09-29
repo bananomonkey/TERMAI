@@ -1,121 +1,66 @@
-// ambient.dart — кинематографичный живой туман: три параллакс-слоя туманных
-// банков (дальний — медленный и бледный, ближний — плотный и быстрый),
-// лунная подсветка из угла. Ничего тяжёлого: ~26 радиальных клобов на канве.
+// ambient.dart — кинематографичный туман, отрендеренный ОДИН РАЗ в статичную
+// картинку (как фото): нулевая нагрузка в кадре. Рендер в половинном
+// разрешении — туману мягкость только на пользу.
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// AmbientBackground — туманная сцена.
+/// AmbientBackground — туманная сцена-«фото».
 class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key});
   @override
   State<AmbientBackground> createState() => _AmbientBackgroundState();
 }
 
-class _AmbientBackgroundState extends State<AmbientBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 90))..repeat();
-  late final List<_FogBlob> _blobs;
-
-  @override
-  void initState() {
-    super.initState();
-    final r = math.Random(5);
-    _blobs = [];
-    // дальний слой: мелкий, бледный, медленный — живёт выше
-    for (var i = 0; i < 7; i++) {
-      _blobs.add(_FogBlob(
-        x: r.nextDouble(), y: 0.05 + r.nextDouble() * 0.55,
-        radius: 0.16 + r.nextDouble() * 0.14,
-        speed: 0.008 + r.nextDouble() * 0.008,
-        amp: 0.012 + r.nextDouble() * 0.02,
-        phase: r.nextDouble() * math.pi * 2,
-        opacity: 0.022 + r.nextDouble() * 0.02,
-      ));
-    }
-    // средний слой
-    for (var i = 0; i < 6; i++) {
-      _blobs.add(_FogBlob(
-        x: r.nextDouble(), y: 0.25 + r.nextDouble() * 0.6,
-        radius: 0.26 + r.nextDouble() * 0.18,
-        speed: 0.02 + r.nextDouble() * 0.012,
-        amp: 0.02 + r.nextDouble() * 0.03,
-        phase: r.nextDouble() * math.pi * 2,
-        opacity: 0.04 + r.nextDouble() * 0.025,
-      ));
-    }
-    // ближний слой: крупный, плотный, быстрый — стелется по низу
-    for (var i = 0; i < 5; i++) {
-      _blobs.add(_FogBlob(
-        x: r.nextDouble(), y: 0.55 + r.nextDouble() * 0.5,
-        radius: 0.38 + r.nextDouble() * 0.24,
-        speed: 0.035 + r.nextDouble() * 0.02,
-        amp: 0.025 + r.nextDouble() * 0.035,
-        phase: r.nextDouble() * math.pi * 2,
-        opacity: 0.055 + r.nextDouble() * 0.035,
-      ));
-    }
-  }
+class _AmbientBackgroundState extends State<AmbientBackground> {
+  ui.Image? _img;
+  Size _renderedFor = Size.zero;
+  int _renderToken = 0;
 
   @override
   void dispose() {
-    _c.dispose();
+    _img?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) => CustomPaint(
-        size: Size.infinite,
-        painter: _FogScenePainter(t: _c.value, blobs: _blobs, repaint: _c),
-      ),
-    );
-  }
-}
-
-class _FogBlob {
-  final double x, y, radius, speed, amp, phase, opacity;
-  _FogBlob({
-    required this.x, required this.y, required this.radius,
-    required this.speed, required this.amp, required this.phase,
-    required this.opacity,
-  });
-}
-
-/// _FogScenePainter — сцена: ночная база, лунный свет, параллакс-туман.
-class _FogScenePainter extends CustomPainter {
-  final double t;
-  final List<_FogBlob> blobs;
-  static const _spriteW = 256.0, _spriteH = 170.0;
-  static final Map<int, Paint> _paintCache = {};
-
-  _FogScenePainter({required this.t, required this.blobs, required Listenable repaint})
-      : super(repaint: repaint);
-
-  static Paint _paintFor(int alpha255) {
-    return _paintCache.putIfAbsent(alpha255, () => Paint()
-      ..shader = RadialGradient(colors: [
-        const Color(0xFFCBD5DF).withAlpha(alpha255),
-        const Color(0xFFCBD5DF).withAlpha(0),
-      ]).createShader(const Rect.fromLTWH(0, 0, _spriteW, _spriteH)));
+    return LayoutBuilder(builder: (context, box) {
+      final w = box.maxWidth, h = box.maxHeight;
+      if ((w - _renderedFor.width).abs() > 1 || (h - _renderedFor.height).abs() > 1) {
+        _renderedFor = Size(w, h);
+        _renderScene(w, h);
+      }
+      final img = _img;
+      if (img == null) return const ColoredBox(color: Color(0xFF0A0C10));
+      return SizedBox.expand(
+        child: RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.low),
+      );
+    });
   }
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    // плотная туманная масса у земли
-    canvas.drawRect(
-      Rect.fromLTWH(0, size.height * 0.55, size.width, size.height * 0.45),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [const Color(0x00C4CFDA), const Color(0x22C4CFDA)],
-        ).createShader(Rect.fromLTWH(0, size.height * 0.55, size.width, size.height * 0.45)),
-    );
-    // ночная база: глубокий тёмно-нейтральный, чуть светлее кверху
+  Future<void> _renderScene(double w, double h) async {
+    final token = ++_renderToken;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    _paintScene(canvas, ui.Size(w, h));
+    final picture = recorder.endRecording();
+    final scale = 0.5; // полразрешения: туману мягкость не вредит
+    final img = await picture.toImage(
+        math.max(1, (w * scale).round()), math.max(1, (h * scale).round()));
+    picture.dispose();
+    if (!mounted || token != _renderToken) {
+      img.dispose();
+      return;
+    }
+    setState(() => _img = img);
+  }
+
+  void _paintScene(ui.Canvas canvas, ui.Size size) {
+    final r = math.Random(5);
+
+    // ночная база: чуть светлее кверху
     canvas.drawRect(
       Offset.zero & size,
       Paint()
@@ -135,40 +80,51 @@ class _FogScenePainter extends CustomPainter {
           colors: [const Color(0x33AFC4D8), const Color(0x000A0C10)],
         ).createShader(Offset.zero & size),
     );
-    // луч света сквозь туман — косая светлая полоса
+    // косой луч света сквозь туман
     canvas.save();
     canvas.translate(size.width * 0.32, -40);
     canvas.rotate(0.42);
+    final shaft = Rect.fromLTWH(0, 0, size.width * 0.16, size.height * 1.5);
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width * 0.16, size.height * 1.5),
+      shaft,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [const Color(0x00AFC4D8), const Color(0x14AFC4D8), const Color(0x00AFC4D8)],
-        ).createShader(Rect.fromLTWH(0, 0, size.width * 0.16, size.height * 1.5)),
+          colors: [const Color(0x00AFC4D8), const Color(0x16AFC4D8), const Color(0x00AFC4D8)],
+        ).createShader(shaft),
     );
     canvas.restore();
 
-    // туман: клобы с мягким радиальным затуханием, три слоя глубины
-    for (final b in blobs) {
-      final xx = (((b.x + t * b.speed) % 1.5) + 1.5) % 1.5 - 0.25; // запас за краями
-      final yy = b.y + b.amp * math.sin(t * math.pi * 2 + b.phase);
-      final rect = Rect.fromCenter(
-        center: Offset(xx * size.width, yy * size.height),
-        width: b.radius * size.width * 2.2,
-        height: b.radius * size.width * 1.5,
-      );
-      canvas.save();
-      canvas.translate(rect.left, rect.top);
-      canvas.scale(rect.width / _spriteW, rect.height / _spriteH);
-      canvas.drawRect(
-          const Rect.fromLTWH(0, 0, _spriteW, _spriteH),
-          _paintFor((b.opacity * 255).round()));
-      canvas.restore();
+    // туман: три слоя глубины — дальний бледный, средний, ближний плотный у земли
+    final layers = <(int, double, double)>[
+      (10, 0.16, 0.03),  // count, radius, alpha
+      (9, 0.30, 0.05),
+      (7, 0.44, 0.075),
+    ];
+    var layerIdx = 0;
+    for (final (count, radius, alpha) in layers) {
+      final yBase = layerIdx == 0 ? 0.05 : (layerIdx == 1 ? 0.25 : 0.55);
+      for (var i = 0; i < count; i++) {
+        final x = r.nextDouble();
+        final y = yBase + r.nextDouble() * (layerIdx == 0 ? 0.55 : layerIdx == 1 ? 0.55 : 0.5);
+        final rad = radius + r.nextDouble() * radius * 0.8;
+        // «дыхание» — лёгкая вариация плотности внутри слоя
+        final a = (alpha * (0.75 + r.nextDouble() * 0.5) * 255).round().clamp(0, 255);
+        final rect = Rect.fromCenter(
+          center: Offset(x * size.width, y * size.height),
+          width: rad * size.width * 2.2,
+          height: rad * size.width * 1.5,
+        );
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..shader = RadialGradient(
+              colors: [const Color(0xFFC9D4DE).withAlpha(a), const Color(0xFFC9D4DE).withAlpha(0)],
+            ).createShader(rect),
+        );
+      }
+      layerIdx++;
     }
   }
-
-  @override
-  bool shouldRepaint(covariant _FogScenePainter old) => old.t != t;
 }
