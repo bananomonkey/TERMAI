@@ -26,6 +26,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/courses.json
+    - assets/noise.png
     - assets/icon/termai.png
     - assets/icon/clawd.png
 

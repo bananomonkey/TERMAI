@@ -46,6 +46,8 @@ class AppController extends ChangeNotifier {
   bool mentorBusy = false;
   bool solutionLoad = false;
   bool generating = false;
+  int fillTotal = 0, fillDone = 0;
+  String fillCurrent = '';
   bool ready = false;
   String lastFillError = '';
 
@@ -83,6 +85,12 @@ class AppController extends ChangeNotifier {
     C.p = presetById(config.theme);
     ai = config.apiKey.isEmpty ? null : AIClient(config);
 
+    if (!prog.genCleaned) {
+      // одноразовая чистка: задачи ранних версий могли смешивать предметы
+      prog.generated.clear();
+      prog.genCleaned = true;
+      await saveProgress();
+    }
     await _assembleCourses();
     for (final c in courses) {
       c.tasks.addAll(prog.generated[c.id] ?? []);
@@ -95,6 +103,7 @@ class AppController extends ChangeNotifier {
     resetCourseState();
     ready = true;
     notifyListeners();
+    autoFillAll();
   }
 
   /// _assembleCourses — собирает список курсов из актива + прогресса
@@ -137,7 +146,9 @@ class AppController extends ChangeNotifier {
     await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
     ai = config.apiKey.isEmpty ? null : AIClient(config);
     notifyListeners();
+    autoFillAll();
   }
+
 
   Future<void> saveProgress() async {
     final dir = await _dataDir();
@@ -161,7 +172,13 @@ class AppController extends ChangeNotifier {
     try {
       final p = Progress.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>);
       prog = p;
-      await _assembleCourses();
+      if (!prog.genCleaned) {
+      // одноразовая чистка: задачи ранних версий могли смешивать предметы
+      prog.generated.clear();
+      prog.genCleaned = true;
+      await saveProgress();
+    }
+    await _assembleCourses();
       states.clear();
       history.clear();
       stateTask.clear();
@@ -623,24 +640,27 @@ extension AppCourses on AppController {
 
   /// fillCourse — наполняет курс задачами: один запрос на тему программы,
   /// чтобы задачи одного предмета не смешивались с другим.
-  Future<String> fillCourse({int count = 8}) async {
-    if (generating || busy) return '';
+  Future<String> fillCourse(Course course, {int count = 8}) async {
+    if (generating) return '';
     if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    if (course.tasks.isNotEmpty) return '';
     generating = true;
     lastFillError = '';
+    if (fillTotal == 0) fillTotal = count;
     notifyListeners();
     var added = 0;
     try {
-      final topics = cur.syllabus.isEmpty
-          ? List.generate(count, (i) => 'повторение и углубление темы ' + (i + 1).toString() + ' курса «' + cur.title + '»')
-          : (cur.syllabus.length >= count ? cur.syllabus.take(count).toList() : cur.syllabus.toList());
+      final topics = course.syllabus.isEmpty
+          ? List.generate(count, (i) => 'повторение и углубление темы ' + (i + 1).toString() + ' курса «' + course.title + '»')
+          : (course.syllabus.length >= count ? course.syllabus.take(count).toList() : course.syllabus.toList());
       for (var i = 0; i < topics.length; i++) {
+        fillCurrent = course.title;
         try {
-          final t = await ai!.generateTask(cur.title, topics[i], _recentTitles(8), '');
-          cur.tasks.add(t);
-          (prog.generated[cur.id] ??= []).add(t);
+          final t = await ai!.generateTask(course.title, topics[i], _recentTitlesOf(course, 8), '');
+          course.tasks.add(t);
+          (prog.generated[course.id] ??= []).add(t);
           added++;
-          termLine('  + задача ' + added.toString() + '/' + count.toString() + ': ' + t.title);
+          fillDone++;
           notifyListeners();
         } catch (e) {
           // одна неудачная тема не рушит пакет
@@ -648,20 +668,36 @@ extension AppCourses on AppController {
       }
       if (added == 0) {
         lastFillError = 'ИИ не вернул ни одной задачи — попробуй ещё раз.';
-        notifyListeners();
         return lastFillError;
       }
       await saveProgress();
-      termLine('  + курс «' + cur.title + '» наполнен: ' + added.toString() + ' задач');
-      refreshTerminal();
-      final next = cur.tasks.indexWhere((t) => !isDone(t));
-      selectTask(next >= 0 ? next : 0);
       return '';
     } finally {
       generating = false;
       notifyListeners();
     }
   }
+
+  /// autoFillAll — заполняет задачами ВСЕ пустые курсы сразу (с прогрессом).
+  Future<void> autoFillAll() async {
+    if (generating || ai == null || !ai!.ready) return;
+    final empty = courses.where((c) => c.tasks.isEmpty && c.syllabus.isNotEmpty).toList();
+    if (empty.isEmpty) return;
+    fillTotal = empty.length * 8;
+    fillDone = 0;
+    notifyListeners();
+    for (final c in empty) {
+      if (c.tasks.isNotEmpty) continue;
+      await fillCourse(c);
+    }
+    fillTotal = 0;
+    fillDone = 0;
+    fillCurrent = '';
+    notifyListeners();
+  }
+
+    List<String> _recentTitlesOf(Course c, int n) =>
+      c.tasks.reversed.take(n).map((x) => x.title).toList();
 
   /// clearGeneratedTasks — убрать всю ИИ-генерацию из текущего курса
   /// (например, если старые задачи перепутали предметы).

@@ -238,9 +238,12 @@ class AIClient {
       '"start_state":{"workdir":"/workspace","files":{},"images":{},"containers":{},"volumes":{},"networks":["bridge","host","none"],"events":[]}}';
 
   Future<Task> generateTask(String courseTitle, String topic, List<String> recent, String style) async {
-    var user = topic.startsWith('повторение')
-        ? 'Курс: $courseTitle\nТема: свободная — повторение пройденного (выбери сам, можно cmd или quiz).\nНедавние задачи (не повторять): ${recent.join('; ')}\n'
-        : 'Курс: $courseTitle\nТема задачи: $topic\nНедавние задачи (не повторять): ${recent.join('; ')}\n';
+    final topicLine = topic.startsWith('повторение')
+        ? 'Тема: свободная — повторение пройденного ТОЛЬКО по предмету курса (выбери сам, можно cmd или quiz).'
+        : 'Тема задачи: $topic';
+    var user = 'ПРЕДМЕТ КУРСА: $courseTitle — вся задача, теория, примеры и команды ТОЛЬКО про этот предмет. '
+        'Запрещено использовать команды и темы других предметов.\n'
+        'Курс: $courseTitle\n$topicLine\nНедавние задачи (не повторять): ${recent.join('; ')}\n';
     if (style.trim().isNotEmpty) user += '\nОБЯЗАТЕЛЬНОЕ УКАЗАНИЕ К СТИЛЮ:\n$style\n';
     user += '\nСгенерируй задачу по схеме. Ответ — только JSON.';
     final j = await chatJSON(_sysTaskGen, user, 0.6);

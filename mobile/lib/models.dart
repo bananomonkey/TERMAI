@@ -279,6 +279,7 @@ class Progress {
   List<Course> extraCourses = [];
   Map<String, String> achieved = {};
   Map<String, Bookmark> bookmarks = {};
+  bool genCleaned = false;
   Map<String, String> courseTitles = {};
   List<String> courseOrder = [];
   List<String> hiddenCourses = [];
@@ -308,6 +309,7 @@ class Progress {
     p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
         MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
     p.courseTitles = (j['course_titles'] as Map?)?.cast<String, String>() ?? {};
+    p.genCleaned = j['gen_cleaned'] as bool? ?? false;
     p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
     p.hiddenCourses = (j['hidden_courses'] as List?)?.cast<String>() ?? [];
     return p;
@@ -322,6 +324,7 @@ class Progress {
         'achievements': achieved,
         'achievements': achieved,
         'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
+        'gen_cleaned': genCleaned,
         'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
       };
 

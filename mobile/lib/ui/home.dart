@@ -388,7 +388,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     // пустой курс — сразу просим ИИ наполнить его пакетом задач
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && controller.cur.tasks.isEmpty && !controller.generating) {
-        controller.fillCourse();
+        controller.fillCourse(controller.cur);
       }
     });
   }
@@ -439,7 +439,7 @@ class _TaskGroups extends StatelessWidget {
             if (!controller.generating && controller.ai != null) ...[
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: () => controller.fillCourse(),
+                onPressed: () => controller.fillCourse(controller.cur),
                 icon: const Icon(Icons.auto_awesome, size: 18),
                 label: const Text('Наполнить задачами от ИИ'),
               ),

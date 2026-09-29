@@ -243,9 +243,11 @@ void _showSettings(BuildContext context) {
     backgroundColor: C.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setSheet) => Padding(
+      builder: (ctx, setSheet) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -345,6 +347,7 @@ void _showSettings(BuildContext context) {
               child: const Text('Сохранить'),
             ),
           ],
+          ),
         ),
       ),
     ),

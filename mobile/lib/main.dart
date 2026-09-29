@@ -39,6 +39,29 @@ class TermaiApp extends StatelessWidget {
         title: 'TERMAI',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
+        builder: (context, child) {
+          // зерно поверх всего интерфейса — убирает «пластиковый» ИИ-вид
+          return Stack(
+            children: [
+              if (child != null) child,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.35,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: AssetImage('assets/noise.png'),
+                          repeat: ImageRepeat.repeat,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
         home: const BootScreen(),
       ),
     );
