@@ -51,13 +51,6 @@ class AppController extends ChangeNotifier {
   bool ready = false;
   String lastFillError = '';
 
-  // экзамен
-  bool examActive = false;
-  List<Task> examTasks = [];
-  int examIdx = 0;
-  final examResults = <bool>[];
-  String? examSummary;
-
   // режимы
   bool interviewMode = false;
   String? reviewKey;
@@ -183,10 +176,9 @@ class AppController extends ChangeNotifier {
       await saveProgress();
     }
     await _assembleCourses();
-      states.clear();
+    states.clear();
       history.clear();
       stateTask.clear();
-      examActive = false;
       reviewKey = null;
       await saveProgress();
       resetCourseState();
@@ -208,7 +200,7 @@ Future<String> Function() loadCoursesAsset = () async => '[]';
 extension AppCourses on AppController {
   Course get cur => courses[courseIdx];
 
-  String get stateKey => examActive ? '__exam' : cur.id;
+  String get stateKey => cur.id;
 
   void ensureStateForTask(Task t) {
     if (stateTask[stateKey] == t.id) return;
@@ -377,7 +369,6 @@ extension AppCourses on AppController {
   }
 
   Task? get currentTask {
-    if (examActive && examIdx < examTasks.length) return examTasks[examIdx];
     final tasks = cur.tasks;
     if (viewIdx < 0 || viewIdx >= tasks.length) return null;
     return tasks[viewIdx];
@@ -426,10 +417,8 @@ extension AppCourses on AppController {
     if (task == null) return 'Активной задачи нет.';
     if (busy) return '';
     if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
-    if (!examActive) {
-      if (task.isQuiz && !quizDone(task) && !isDone(task)) return 'Сначала пройди тест по теории.';
-      if (isDone(task)) return 'Эта задача уже решена.';
-    }
+    if (task.isQuiz && !quizDone(task) && !isDone(task)) return 'Сначала пройди тест по теории.';
+    if (isDone(task)) return 'Эта задача уже решена.';
     termBusy = true;
     termLine('  …проверяю выполнение по истории терминала');
     refreshTerminal();
@@ -437,22 +426,6 @@ extension AppCourses on AppController {
       final tail = termText.length > 1600 ? termText.substring(termText.length - 1600) : termText;
       final res = await ai!.verify(cur, task, state, _lastHist(20), termTail: tail);
       termBusy = false;
-      if (examActive) {
-        examResults.add(res.solved);
-        termLine(res.solved ? '  ✓ засчитано' : '  ✗ не засчитано: ' + res.comment);
-        refreshTerminal();
-        examIdx++;
-        if (examIdx >= examTasks.length) {
-          _finishExam();
-        } else {
-          states[stateKey] = examTasks[examIdx].start.clone();
-          history[stateKey] = [];
-          termLine('Вопрос ' + (examIdx + 1).toString() + '/' + examTasks.length.toString() + ': ' + examTasks[examIdx].title);
-          refreshTerminal();
-          notifyListeners();
-        }
-        return '';
-      }
       if (res.solved) {
         await _completeTask(task, res.comment, res.difficulty);
         return '';
@@ -633,6 +606,9 @@ extension AppCourses on AppController {
     notifyListeners();
     try {
       final news = await ai!.generateCourses(goal);
+      for (final c in news) {
+        await ai!.ensureCourseFilled(c); // минимум 5 задач в каждом новом курсе
+      }
       courses.addAll(news);
       prog.extraCourses.addAll(news);
       await saveProgress();
@@ -697,7 +673,7 @@ extension AppCourses on AppController {
     fillDone = 0;
     notifyListeners();
     for (final c in empty) {
-      if (c.tasks.isNotEmpty) continue;
+      if (c.tasks.isNotEmpty && c.tasks.length >= 5) continue;
       await fillCourse(c);
     }
     fillTotal = 0;
@@ -765,68 +741,13 @@ extension AppCourses on AppController {
     notifyListeners();
   }
 
-  // ---------- экзамен ----------
-
-  Future<String> startExam() async {
-    if (busy || generating || examActive) return '';
-    if (ai == null || !ai!.ready) return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
-    termBusy = true;
-    notifyListeners();
-    try {
-      final tasks = <Task>[];
-      for (var i = 0; i < 5; i++) {
-        final t = await ai!.generateTask(cur.title,
-            'повторение пройденного материала курса — выбери сам подходящую уже изученную тему (задача ' + (i + 1).toString() + ' из 5)',
-            tasks.map((x) => x.title).toList(), '');
-        tasks.add(t);
-      }
-      examTasks = tasks;
-      examIdx = 0;
-      examResults.clear();
-      examActive = true;
-      states['__exam'] = tasks[0].start.clone();
-      history['__exam'] = [];
-      termLine('');
-      termLine('── ЭКЗАМЕН: 5 задач по курсу «' + cur.title + '» ──');
-      refreshTerminal();
-      return '';
-    } catch (e) {
-      return _errMsg(e);
-    } finally {
-      termBusy = false;
-      notifyListeners();
-    }
-  }
-
-  void _finishExam() {
-    final score = examResults.where((r) => r).length;
-    final bonus = score * 10;
-    prog.xp += bonus;
-    examActive = false;
-    saveProgress();
-    _checkAchievements();
-    termLine('── Экзамен завершён: ' + score.toString() + '/5 · бонус +' + bonus.toString() + ' XP ──');
-    refreshTerminal();
-    if (score >= 4) grant('exam-good');
-    if (score == 5) grant('exam-perfect');
-    final grade = score == 5
-        ? '5 — отлично!'
-        : score == 4
-            ? '4 — хорошо'
-            : score == 3
-                ? '3 — удовлетворительно'
-                : '2 — нужно повторить тему';
-    examSummary = 'Оценка: ' + grade + '\nВерных задач: ' + score.toString() + ' из 5\nБонус: +' + bonus.toString() + ' XP';
-    selectFirstUndone();
-  }
-
   // ---------- закладки и повторение ----------
 
   bool isBookmarked(Task t) => prog.bookmarks.containsKey(cur.id + '|' + t.id);
 
   void toggleBookmark() {
     final t = currentTask;
-    if (t == null || examActive) return;
+    if (t == null) return;
     final key = cur.id + '|' + t.id;
     if (prog.bookmarks.containsKey(key)) {
       prog.bookmarks.remove(key);

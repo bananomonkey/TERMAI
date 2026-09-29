@@ -9,7 +9,9 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'ambient.dart';
+import 'chat.dart';
 import 'lesson.dart';
+import 'review.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -379,7 +381,7 @@ class _TaskGroups extends StatelessWidget {
       }
       groups.add(const SizedBox(height: 14));
     }
-    groups.add(_AddTaskTile());
+    groups.add(_EndActions());
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
       children: groups,
@@ -447,16 +449,18 @@ class _TaskRow extends StatelessWidget {
 }
 
 
-/// _AddTaskTile — «Задача от ИИ» в конце списка задач курса.
-class _AddTaskTile extends StatelessWidget {
+/// _EndActions — действия в конце списка задач: создать задачу,
+/// повторение закладок, собеседование.
+class _EndActions extends StatelessWidget {
+  const _EndActions();
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) {
-        final busy = controller.generating || controller.busy;
-        return GestureDetector(
-          onTap: busy
+      builder: (context, _) => Column(children: [
+        GestureDetector(
+          onTap: (controller.generating || controller.busy)
               ? null
               : () async {
                   final topic = await askText(context, 'Новая задача от ИИ',
@@ -479,12 +483,30 @@ class _AddTaskTile extends StatelessWidget {
               else
                 Icon(Icons.add, color: C.accent, size: 20),
               const SizedBox(width: 8),
-              Text(controller.generating ? 'ИИ пишет задачу…' : 'Задача от ИИ',
+              Text(controller.generating ? 'ИИ пишет задачу…' : 'Создать задачу от ИИ',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: C.accent)),
             ]),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(pageRoute(const ReviewScreen())),
+              icon: Icon(Icons.refresh, size: 17, color: C.secondary),
+              label: Text('Повторение', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen(interview: true))),
+              icon: Icon(Icons.work_history_outlined, size: 17, color: C.warn),
+              label: Text('Собеседование', style: TextStyle(fontSize: 12.5, color: C.warn)),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 }

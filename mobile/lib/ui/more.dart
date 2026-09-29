@@ -22,20 +22,6 @@ void showMoreSheet(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            _SheetButton(
-              icon: Icons.fact_check_outlined,
-              title: 'Экзамен',
-              subtitle: '5 задач по пройденному · оценка и бонус XP',
-              onTap: () async {
-                Navigator.pop(ctx);
-                final err = await controller.startExam();
-                if (err.isNotEmpty && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-                  return;
-                }
-                if (context.mounted) Navigator.of(context).push(pageRoute(const LessonScreen()));
-              },
-            ),
             const SizedBox(height: 8),
             _SheetButton(
               icon: Icons.refresh,

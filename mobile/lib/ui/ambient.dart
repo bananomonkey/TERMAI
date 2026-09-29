@@ -67,7 +67,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [const Color(0xFF14171D), const Color(0xFF0A0C10)],
+          colors: [const Color(0xFF07080B), const Color(0xFF040507)],
         ).createShader(Offset.zero & size),
     );
     // лунная подсветка из верхнего левого угла
@@ -77,7 +77,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = RadialGradient(
           center: const Alignment(-0.75, -0.85),
           radius: 1.3,
-          colors: [const Color(0x33AFC4D8), const Color(0x000A0C10)],
+          colors: [const Color(0x1EAFC4D8), const Color(0x00040507)],
         ).createShader(Offset.zero & size),
     );
     // косой луч света сквозь туман
@@ -91,16 +91,16 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [const Color(0x00AFC4D8), const Color(0x16AFC4D8), const Color(0x00AFC4D8)],
+          colors: [const Color(0x00AFC4D8), const Color(0x0FAFC4D8), const Color(0x00AFC4D8)],
         ).createShader(shaft),
     );
     canvas.restore();
 
     // туман: три слоя глубины — дальний бледный, средний, ближний плотный у земли
     final layers = <(int, double, double)>[
-      (10, 0.16, 0.03),  // count, radius, alpha
-      (9, 0.30, 0.05),
-      (7, 0.44, 0.075),
+      (10, 0.16, 0.020),  // count, radius, alpha
+      (9, 0.30, 0.032),
+      (7, 0.44, 0.050),
     ];
     var layerIdx = 0;
     for (final (count, radius, alpha) in layers) {
@@ -120,7 +120,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
           rect,
           Paint()
             ..shader = RadialGradient(
-              colors: [const Color(0xFFC9D4DE).withAlpha(a), const Color(0xFFC9D4DE).withAlpha(0)],
+              colors: [const Color(0xFF8B98A8).withAlpha(a), const Color(0xFF8B98A8).withAlpha(0)],
             ).createShader(rect),
         );
       }

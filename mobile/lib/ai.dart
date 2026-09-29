@@ -315,6 +315,20 @@ class AIClient {
     if (courses.isEmpty) throw Exception('модель не вернула ни одного курса');
     return courses;
   }
+
+  /// minimumCourseTasks — при создании курса проверяем, что задач не меньше 5;
+  /// если модель сгенерировала меньше — добираем по одной на тему программы.
+  Future<List<Task>> ensureCourseFilled(Course course) async {
+    while (course.tasks.length < 5) {
+      final i = course.tasks.length;
+      final topic = course.syllabus.isEmpty
+          ? 'практика по предмету курса, часть ' + (i + 1).toString()
+          : course.syllabus[i % course.syllabus.length];
+      final t = await generateTask(course.title, topic, course.tasks.map((x) => x.title).toList(), '');
+      course.tasks.add(t);
+    }
+    return course.tasks;
+  }
 }
 
 class SimResult {

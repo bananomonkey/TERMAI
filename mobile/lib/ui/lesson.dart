@@ -152,27 +152,9 @@ class _LessonScreenState extends State<LessonScreen>
     });
   }
 
-  void _maybeExamDialog() {
-    final summary = controller.examSummary;
-    if (summary == null) return;
-    controller.examSummary = null;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: C.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Экзамен завершён'),
-          content: Text(summary, style: const TextStyle(height: 1.45)),
-          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Понятно'))],
-        ),
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    final kbInset = _tabC.index == 2 ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     final t = controller.currentTask;
     return Scaffold(
       resizeToAvoidBottomInset: _tabC.index != 2,
@@ -205,7 +187,6 @@ class _LessonScreenState extends State<LessonScreen>
           if (t == null) {
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
-          _maybeExamDialog();
           _maybeCompletionDialog();
           return TabBarView(
             controller: _tabC,
@@ -218,7 +199,7 @@ class _LessonScreenState extends State<LessonScreen>
                 onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
                 onSnack: _snack,
               ),
-              _TermSlide(onSnack: _snack),
+              _TermSlide(onSnack: _snack, kbInset: kbInset),
               _SolutionSlide(t: t, onSnack: _snack),
             ],
           );
@@ -305,22 +286,7 @@ class _TaskSlide extends StatelessWidget {
       children: [
         Text(t.title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
         const SizedBox(height: 8),
-        if (controller.examActive)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              color: C.warn.withAlpha(30),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: C.warn),
-            ),
-            child: Text(
-              'ЭКЗАМЕН · вопрос ' + (controller.examIdx + 1).toString() + '/' + controller.examTasks.length.toString()
-                  + ' · верных: ' + controller.examResults.where((r) => r).length.toString(),
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: C.warn),
-            ),
-          )
-        else if (controller.reviewKey != null)
+        if (controller.reviewKey != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             margin: const EdgeInsets.only(bottom: 10),
@@ -360,15 +326,13 @@ class _TaskSlide extends StatelessWidget {
               label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
             ),
           ),
-          if (!controller.examActive) ...[
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: controller.toggleBookmark,
-              style: OutlinedButton.styleFrom(minimumSize: const Size(52, 48), padding: const EdgeInsets.symmetric(horizontal: 12)),
-              child: Text(controller.isBookmarked(t) ? '★' : '☆',
-                  style: TextStyle(fontSize: 17, color: controller.isBookmarked(t) ? C.warn : C.muted)),
-            ),
-          ],
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: controller.toggleBookmark,
+            style: OutlinedButton.styleFrom(minimumSize: const Size(52, 48), padding: const EdgeInsets.symmetric(horizontal: 12)),
+            child: Text(controller.isBookmarked(t) ? '★' : '☆',
+                style: TextStyle(fontSize: 17, color: controller.isBookmarked(t) ? C.warn : C.muted)),
+          ),
         ]),
         const SizedBox(height: 18),
         if (needQuiz) ...[
@@ -477,7 +441,8 @@ class _HintTile extends StatelessWidget {
 
 class _TermSlide extends StatefulWidget {
   final void Function(String) onSnack;
-  const _TermSlide({required this.onSnack});
+  final double kbInset;
+  const _TermSlide({required this.onSnack, required this.kbInset});
   @override
   State<_TermSlide> createState() => _TermSlideState();
 }
@@ -516,7 +481,7 @@ class _TermSlideState extends State<_TermSlide> {
       _autoScroll();
     }
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -578,56 +543,61 @@ class _TermSlideState extends State<_TermSlide> {
               ]),
             ),
           ),
-          // строка ввода
-          const SizedBox(height: 8),
+          // низ: поле ввода и кнопки — целиком приподнимаются над клавиатурой
           Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _input,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
-                onSubmitted: (_) => _run(),
-                decoration: const InputDecoration(hintText: 'введите команду…'),
-              ),
+            padding: EdgeInsets.only(bottom: widget.kbInset),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
+                      onSubmitted: (_) => _run(),
+                      decoration: const InputDecoration(hintText: 'введите команду…'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: controller.termBusy ? null : _run,
+                    icon: controller.termBusy
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.play_arrow),
+                    style: IconButton.styleFrom(backgroundColor: C.accentDark),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+                    icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                    label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _showFiles(context),
+                    icon: const Icon(Icons.folder_outlined, size: 18),
+                    label: const Text('Файлы'),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: controller.busy
+                          ? null
+                          : () async {
+                              final err = await controller.submitTask();
+                              if (err.isNotEmpty) widget.onSnack(err);
+                            },
+                      icon: const Icon(Icons.send, size: 17),
+                      label: const Text('Отправить на проверку'),
+                    ),
+                  ),
+                ]),
+              ],
             ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: controller.termBusy ? null : _run,
-              icon: controller.termBusy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.play_arrow),
-              style: IconButton.styleFrom(backgroundColor: C.accentDark),
-            ),
-          ]),
           ),
-          const SizedBox(height: 8),
-          Row(children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-              icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-              label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _showFiles(context),
-              icon: const Icon(Icons.folder_outlined, size: 18),
-              label: const Text('Файлы'),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: controller.busy
-                    ? null
-                    : () async {
-                        final err = await controller.submitTask();
-                        if (err.isNotEmpty) widget.onSnack(err);
-                      },
-                icon: const Icon(Icons.send, size: 17),
-                label: const Text('Отправить на проверку'),
-              ),
-            ),
-          ]),
         ],
       ),
     );
