@@ -24,7 +24,7 @@ class _AmbientBackgroundState extends State<AmbientBackground>
     final r = math.Random(5);
     _blobs = [];
     // дальний слой: мелкий, бледный, медленный — живёт выше
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 7; i++) {
       _blobs.add(_FogBlob(
         x: r.nextDouble(), y: 0.05 + r.nextDouble() * 0.55,
         radius: 0.16 + r.nextDouble() * 0.14,
@@ -35,7 +35,7 @@ class _AmbientBackgroundState extends State<AmbientBackground>
       ));
     }
     // средний слой
-    for (var i = 0; i < 9; i++) {
+    for (var i = 0; i < 6; i++) {
       _blobs.add(_FogBlob(
         x: r.nextDouble(), y: 0.25 + r.nextDouble() * 0.6,
         radius: 0.26 + r.nextDouble() * 0.18,
@@ -46,7 +46,7 @@ class _AmbientBackgroundState extends State<AmbientBackground>
       ));
     }
     // ближний слой: крупный, плотный, быстрый — стелется по низу
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < 5; i++) {
       _blobs.add(_FogBlob(
         x: r.nextDouble(), y: 0.55 + r.nextDouble() * 0.5,
         radius: 0.38 + r.nextDouble() * 0.24,
@@ -89,8 +89,24 @@ class _FogBlob {
 class _FogScenePainter extends CustomPainter {
   final double t;
   final List<_FogBlob> blobs;
+  static const _spriteW = 256.0, _spriteH = 170.0;
+  static final Paint _shaderPaint = Paint()
+    ..shader = RadialGradient(colors: [
+      const Color(0xFFC9D4DE),
+      const Color(0xFFC9D4DE).withAlpha(0),
+    ]).createShader(const Rect.fromLTWH(0, 0, _spriteW, _spriteH));
+  static final Map<int, Paint> _paintCache = {};
+
   _FogScenePainter({required this.t, required this.blobs, required Listenable repaint})
       : super(repaint: repaint);
+
+  Paint _paintFor(double opacity) {
+    final bucket = (opacity * 40).round(); // 10 уровней прозрачности
+    return _paintCache.putIfAbsent(bucket, () => Paint()
+      ..shader = _shaderPaint.shader
+      ..color = Colors.white.withAlpha((bucket / 40 * 255).round())
+      ..blendMode = BlendMode.modulate);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -138,14 +154,11 @@ class _FogScenePainter extends CustomPainter {
         width: b.radius * size.width * 2.2,
         height: b.radius * size.width * 1.5,
       );
-      final paint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            const Color(0xFFC9D4DE).withAlpha((b.opacity * 255).round()),
-            const Color(0xFFC9D4DE).withAlpha(0),
-          ],
-        ).createShader(rect);
-      canvas.drawRect(rect, paint);
+      canvas.save();
+      canvas.translate(rect.left, rect.top);
+      canvas.scale(rect.width / _spriteW, rect.height / _spriteH);
+      canvas.drawRect(const Rect.fromLTWH(0, 0, _spriteW, _spriteH), _paintFor(b.opacity));
+      canvas.restore();
     }
   }
 

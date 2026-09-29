@@ -379,6 +379,7 @@ class _TaskGroups extends StatelessWidget {
       }
       groups.add(const SizedBox(height: 14));
     }
+    groups.add(_AddTaskTile());
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
       children: groups,
@@ -441,6 +442,49 @@ class _TaskRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// _AddTaskTile — «Задача от ИИ» в конце списка задач курса.
+class _AddTaskTile extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final busy = controller.generating || controller.busy;
+        return GestureDetector(
+          onTap: busy
+              ? null
+              : () async {
+                  final topic = await askText(context, 'Новая задача от ИИ',
+                      'тема: например «проброс портов» или «права доступа»');
+                  if (topic == null || topic.isEmpty) return;
+                  final err = await controller.generateTask(topic);
+                  if (err.isNotEmpty && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                  }
+                },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: C.accent.withAlpha(90)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (controller.generating)
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: C.accent))
+              else
+                Icon(Icons.add, color: C.accent, size: 20),
+              const SizedBox(width: 8),
+              Text(controller.generating ? 'ИИ пишет задачу…' : 'Задача от ИИ',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: C.accent)),
+            ]),
+          ),
+        );
+      },
     );
   }
 }

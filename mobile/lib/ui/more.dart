@@ -21,21 +21,6 @@ void showMoreSheet(BuildContext context) {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _SheetButton(
-              icon: Icons.auto_awesome,
-              title: 'Задача от ИИ',
-              subtitle: 'Опиши тему — добавлю задачу в текущий курс',
-              onTap: () async {
-                Navigator.pop(ctx);
-                final topic = await askText(context, 'Новая задача от ИИ', 'тема: например «проброс портов»');
-                if (topic != null && topic.isNotEmpty) {
-                  final err = await controller.generateTask(topic);
-                  if (err.isNotEmpty && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-                  }
-                }
-              },
-            ),
             const SizedBox(height: 8),
             _SheetButton(
               icon: Icons.fact_check_outlined,

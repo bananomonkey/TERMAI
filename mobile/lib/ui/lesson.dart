@@ -17,14 +17,25 @@ class LessonScreen extends StatefulWidget {
   State<LessonScreen> createState() => _LessonScreenState();
 }
 
-class _LessonScreenState extends State<LessonScreen> {
+class _LessonScreenState extends State<LessonScreen>
+    with SingleTickerProviderStateMixin {
   String _search = '';
   List<int> _answers = const [];
+  late final TabController _tabC = TabController(length: 4, vsync: this);
 
   @override
   void initState() {
     super.initState();
+    _tabC.addListener(() {
+      if (mounted) setState(() {});
+    });
     _syncAnswers();
+  }
+
+  @override
+  void dispose() {
+    _tabC.dispose();
+    super.dispose();
   }
 
   void _syncAnswers() {
@@ -163,9 +174,8 @@ class _LessonScreenState extends State<LessonScreen> {
   @override
   Widget build(BuildContext context) {
     final t = controller.currentTask;
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
+    return Scaffold(
+      resizeToAvoidBottomInset: _tabC.index != 2,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -198,6 +208,7 @@ class _LessonScreenState extends State<LessonScreen> {
           _maybeExamDialog();
           _maybeCompletionDialog();
           return TabBarView(
+            controller: _tabC,
             physics: const BouncingScrollPhysics(),
             children: [
               _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
@@ -212,7 +223,6 @@ class _LessonScreenState extends State<LessonScreen> {
             ],
           );
         },
-      ),
       ),
     );
   }
@@ -535,12 +545,6 @@ class _TermSlideState extends State<_TermSlide> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
                   child: Row(children: [
                     Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Чат с ментором',
-                      onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-                      icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-                    ),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: controller.undoCommand,
@@ -576,7 +580,9 @@ class _TermSlideState extends State<_TermSlide> {
           ),
           // строка ввода
           const SizedBox(height: 8),
-          Row(children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Row(children: [
             Expanded(
               child: TextField(
                 controller: _input,
@@ -594,8 +600,15 @@ class _TermSlideState extends State<_TermSlide> {
               style: IconButton.styleFrom(backgroundColor: C.accentDark),
             ),
           ]),
+          ),
           const SizedBox(height: 8),
           Row(children: [
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+              icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+              label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+            ),
+            const SizedBox(width: 8),
             OutlinedButton.icon(
               onPressed: () => _showFiles(context),
               icon: const Icon(Icons.folder_outlined, size: 18),

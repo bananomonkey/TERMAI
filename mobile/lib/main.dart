@@ -255,8 +255,31 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Text('TERMAI',
-            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3, color: C.accent, fontSize: 19)),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: C.card,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: C.accent, width: 1.4),
+            ),
+            child: Center(
+              child: Text('>_', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: C.accent, height: 1)),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: 'TERM',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: C.text)),
+              TextSpan(
+                  text: 'AI',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: C.accent)),
+            ]),
+          ),
+        ]),
         actions: [
           ListenableBuilder(
             listenable: controller,
