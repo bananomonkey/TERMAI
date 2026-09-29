@@ -16,7 +16,7 @@ void showMoreSheet(BuildContext context) {
     backgroundColor: C.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
