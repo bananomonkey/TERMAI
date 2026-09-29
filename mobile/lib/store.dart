@@ -82,6 +82,7 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
+    if (config.theme == 'sage') config.theme = 'cocoa';
     C.p = presetById(config.theme);
     ai = config.apiKey.isEmpty ? null : AIClient(config);
 
@@ -141,6 +142,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveConfig() async {
+    if (config.theme == 'sage') config.theme = 'cocoa';
     C.p = presetById(config.theme);
     final dir = await _dataDir();
     await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));

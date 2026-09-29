@@ -12,7 +12,8 @@ import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// CourseGraphView — тропинка курсов зигзагом (как в Duolingo).
+/// CourseGraphView — чистые плитки курсов: название, зелёный прогресс-бар,
+/// процент выполнения. Плитки подстраиваются под цвета темы.
 class CourseGraphView extends StatelessWidget {
   const CourseGraphView({super.key});
 
@@ -31,199 +32,109 @@ class CourseGraphView extends StatelessWidget {
             ),
           );
         }
-        // геометрия тропинки: узлы-курсы + баннеры модулей каждые 5
-        const nodeH = 168.0, bannerH = 88.0, topPad = 24.0, bottomPad = 36.0;
-        const d = 96.0; // диаметр кружка
-        final dxs = [-70.0, 0.0, 70.0, 0.0]; // зигзаг: влево, центр, вправо, центр
-
-        final nodes = <_Node>[];
-        var y = topPad;
-        for (var i = 0; i < courses.length; i++) {
-          nodes.add(_Node(
-            type: _NodeType.course,
-            y: y,
-            dx: dxs[i % dxs.length],
-            courseIdx: i,
-          ));
-          y += nodeH;
-          if ((i + 1) % 5 == 0 && i != courses.length - 1) {
-            nodes.add(_Node(type: _NodeType.module, y: y, moduleNum: (i + 1) ~/ 5));
-            y += bannerH;
-          }
-        }
-        final totalH = y - nodeH + d + 64 + bottomPad;
-
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: LayoutBuilder(builder: (context, box) {
-            final w = box.maxWidth;
-            return SizedBox(
-              height: totalH,
-              width: w,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // соединительные линии под кружками
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _TrailPainter(
-                        nodes: nodes.where((n) => n.type == _NodeType.course).toList(),
-                        center: w / 2,
-                        d: d,
+        return Column(
+          children: [
+            if (controller.generating && controller.fillTotal > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: cardBox(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(Icons.auto_awesome, size: 15, color: C.accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Наполняю курсы задачами: ${controller.fillDone}/${controller.fillTotal} · ${controller.fillCurrent}',
+                          style: TextStyle(fontSize: 12, color: C.text),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                    ]),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: controller.fillDone / controller.fillTotal,
+                      minHeight: 5,
+                      borderRadius: BorderRadius.circular(3),
+                      backgroundColor: C.card2,
+                      color: C.accent,
                     ),
-                  ),
-                  // кружки-курсы
-                  for (final n in nodes.where((n) => n.type == _NodeType.course))
-                    _CourseCircle(node: n, d: d, centerX: w / 2),
-                  // баннеры модулей
-                  for (final n in nodes.where((n) => n.type == _NodeType.module))
-                    Positioned(
-                      left: 28,
-                      right: 28,
-                      top: n.y,
-                      child: _ModuleBanner(number: n.moduleNum),
-                    ),
-                ],
+                  ]),
+                ),
               ),
-            );
-          }),
+            Expanded(
+              child: ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                itemCount: courses.length,
+                itemBuilder: (context, i) => _CourseTile(index: i),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 }
 
-enum _NodeType { course, module }
-
-class _Node {
-  final _NodeType type;
-  final double y;
-  final double dx;
-  final int courseIdx;
-  final int moduleNum;
-  const _Node({
-    required this.type,
-    required this.y,
-    this.dx = 0,
-    this.courseIdx = -1,
-    this.moduleNum = 0,
-  });
-}
-
-/// _TrailPainter — толстые линии между кружками: пройденный путь яркий,
-/// впереди — серый пунктир.
-class _TrailPainter extends CustomPainter {
-  final List<_Node> nodes;
-  final double center, d;
-  _TrailPainter({required this.nodes, required this.center, required this.d});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final dxs = [-70.0, 0.0, 70.0, 0.0];
-    Offset nodeCenter(int i) {
-      final n = nodes[i];
-      return Offset(center + dxs[i % dxs.length], n.y + d / 2);
-    }
-
-    for (var i = 0; i + 1 < nodes.length; i++) {
-      final a = nodeCenter(i), b = nodeCenter(i + 1);
-      final done = controller.isCourseDone(nodes[i].courseIdx);
-      final from = a + Offset(0, d / 2 - 6);
-      final to = b - Offset(0, d / 2 - 6);
-      if (done) {
-        canvas.drawLine(from, to, Paint()
-          ..strokeWidth = 9
-          ..strokeCap = StrokeCap.round
-          ..color = C.good);
-        canvas.drawLine(from, to, Paint()
-          ..strokeWidth = 4
-          ..strokeCap = StrokeCap.round
-          ..color = Colors.white.withAlpha(70));
-      } else {
-        // серый пунктир
-        const dash = 9.0, gap = 7.0;
-        final dir = to - from;
-        final len = dir.distance;
-        if (len == 0) continue;
-        final step = dir / len;
-        for (var t = 0.0; t < len; t += dash + gap) {
-          final segEnd = (t + dash) < len ? t + dash : len;
-          canvas.drawLine(from + step * t, from + step * segEnd,
-              Paint()..strokeWidth = 7 ..strokeCap = StrokeCap.round ..color = C.border);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _TrailPainter old) => old.nodes != nodes;
-}
-
-/// _CourseCircle — кружок курса: пройден (зелёный ✓), текущий (акцент, свечение),
-/// впереди (серый). Под кружком — название.
-class _CourseCircle extends StatelessWidget {
-  final _Node node;
-  final double d;
-  final double centerX;
-  const _CourseCircle({required this.node, required this.d, required this.centerX});
+/// _CourseTile — плитка курса: имя, зелёный прогресс-бар, процент.
+class _CourseTile extends StatelessWidget {
+  final int index;
+  const _CourseTile({required this.index});
 
   @override
   Widget build(BuildContext context) {
-    final i = node.courseIdx;
-    final c = controller.courses[i];
-    final done = controller.isCourseDone(i);
-    final current = !done && i == _currentIdx();
+    final c = controller.courses[index];
+    final done = controller.isCourseDone(index);
+    final total = c.tasks.length;
+    final completedMap = controller.prog.completed[c.id] ?? {};
+    final solved = total == 0 ? 0 : c.tasks.where((t) => completedMap[t.id] ?? false).length;
+    final pct = total == 0 ? 0 : ((solved / total) * 100).round();
+    final current = !done && index == _currentIdx();
 
-    return Positioned(
-      left: centerX + node.dx - 90,
-      top: node.y,
-      width: 180,
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: i))),
-            onDoubleTap: () => _showCourseActions(context, i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: d,
-              height: d,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: done ? C.good : current ? C.accent : C.card,
-                border: Border.all(
-                  color: done ? C.good : current ? C.accent : C.border,
-                  width: current ? 3 : 2,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
+        onDoubleTap: () => _showCourseActions(context, index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: C.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: current ? C.accent : C.border, width: current ? 1.6 : 1),
+          ),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(c.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
+                const SizedBox(height: 9),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: total == 0 ? 0 : solved / total,
+                    minHeight: 7,
+                    backgroundColor: C.card2,
+                    color: C.good,
+                  ),
                 ),
-                boxShadow: current
-                    ? [BoxShadow(color: C.accent.withAlpha(70), blurRadius: 22, spreadRadius: 2)]
-                    : const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4))],
-              ),
-              child: Center(
-                child: done
-                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 42)
-                    : Text(
-                        String.fromCharCodes(c.title.runes.take(2)).toUpperCase(),
-                        style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: current ? Colors.white : C.muted),
-                      ),
-              ),
+              ]),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            c.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: current ? C.accent : done ? C.text : C.muted),
-          ),
-        ],
+            const SizedBox(width: 14),
+            Text('$pct%',
+                style: TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
+            const SizedBox(width: 6),
+            if (done)
+              Icon(Icons.check_circle_rounded, color: C.good, size: 22)
+            else
+              Icon(Icons.chevron_right, color: C.muted, size: 22),
+          ]),
+        ),
       ),
     );
   }
@@ -236,48 +147,7 @@ class _CourseCircle extends StatelessWidget {
   }
 }
 
-/// _ModuleBanner — баннер между блоками тропинки.
-class _ModuleBanner extends StatelessWidget {
-  final int number;
-  const _ModuleBanner({required this.number});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [C.accentDark, C.accent],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4))],
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        child: Row(children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-              child: Icon(Icons.emoji_events, color: Colors.white, size: 24),
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text('Модуль пройден — впереди новые темы!',
-                style: TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-/// Двойной тап по кружку: размытие фона + окно (открыть/переименовать/удалить).
+/// Двойной тап по плитке: размытие фона + окно (открыть/переименовать/удалить).
 void _showCourseActions(BuildContext context, int courseIdx) {
   final cid = controller.courses[courseIdx].id;
   showGeneralDialog(
@@ -336,7 +206,7 @@ void _showCourseActions(BuildContext context, int courseIdx) {
                             backgroundColor: C.surface,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             title: const Text('Удалить курс?'),
-                            content: Text('«' + c.title + '» исчезнет с тропинки. Прогресс сохранится.'),
+                            content: Text('«' + c.title + '» исчезнет из списка. Прогресс сохранится.'),
                             actions: [
                               OutlinedButton(
                                 onPressed: () => Navigator.pop(dctx),

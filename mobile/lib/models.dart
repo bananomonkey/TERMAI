@@ -255,7 +255,7 @@ class Bookmark {
 
 class Config {
   String apiKey, provider, model, baseUrl, theme;
-  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'sage'});
+  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'cocoa'});
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
