@@ -9,47 +9,6 @@ permissions:
   contents: write
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "stable"
-      - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
-      - name: Build
-        run: go build -ldflags "-s -w" -o termai-linux-amd64 .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: termai-linux-amd64
-          path: termai-linux-amd64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: termai-icon
-          path: termai-256.png
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "stable"
-      - uses: msys2/setup-msys2@v2
-        with:
-          update: false
-          install: mingw-w64-x86_64-gcc
-          path-type: inherit
-      # иконка exe встроена через resource.syso (в репо, собран rsrc -ico termai.ico)
-      - name: Build
-        shell: msys2 {0}
-        run: go build -ldflags "-s -w" -o termai-windows-amd64.exe .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: termai-windows-amd64.exe
-          path: termai-windows-amd64.exe
-
   android:
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +24,7 @@ jobs:
       - name: Pub get
         run: flutter pub get
         working-directory: mobile
-      - name: Build APK (Flutter)
+      - name: Build APK
         run: flutter build apk --release
         working-directory: mobile
       - name: Rename APK
@@ -76,15 +35,15 @@ jobs:
           path: TERMAI.apk
 
   release:
-    needs: [linux, windows, android]
+    needs: [android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          merge-multiple: true
           path: dist
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist/TERMAI.apk
           generate_release_notes: true
