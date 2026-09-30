@@ -566,66 +566,74 @@ class _TermSlideState extends State<_TermSlide> {
               ]),
             ),
           ),
-          // низ: сдвигается ВИЗУАЛЬНО над клавиатурой (Transform не меняет
-        // раскладку — вывод терминала не сжимается ни на пиксель)
-          Transform.translate(
-            offset: Offset(0, -widget.kbInset),
+          // низ: поле и кнопки — отдельным слоем ПОВЕРХ вывода; при клавиатуре
+          // поднимается на kbInset, вывод не сжимается ни на пиксель
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: widget.kbInset,
             child: Container(
-              color: C.termBg,
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
-                      onSubmitted: (_) => _run(),
-                      decoration: const InputDecoration(hintText: 'введите команду…'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: controller.termBusy ? null : _run,
-                    icon: controller.termBusy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.play_arrow),
-                    style: IconButton.styleFrom(backgroundColor: C.accentDark),
-                  ),
-                ]),
-                const SizedBox(height: 8),
-                Row(children: [
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-                    icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-                    label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _showFiles(context),
-                    icon: const Icon(Icons.folder_outlined, size: 18),
-                    label: const Text('Файлы'),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: controller.busy
-                          ? null
-                          : () async {
-                              final err = await controller.submitTask();
-                              if (err.isNotEmpty) widget.onSnack(err);
-                            },
-                      icon: const Icon(Icons.send, size: 17),
-                      label: const Text('Отправить на проверку'),
-                    ),
-                  ),
-                ]),
-              ],
+              decoration: BoxDecoration(
+                color: C.termBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                border: Border(top: BorderSide(color: C.border)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
+                          onSubmitted: (_) => _run(),
+                          decoration: const InputDecoration(hintText: 'введите команду…'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        onPressed: controller.termBusy ? null : _run,
+                        icon: controller.termBusy
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.play_arrow),
+                        style: IconButton.styleFrom(backgroundColor: C.accentDark),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+                        icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                        label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _showFiles(context),
+                        icon: const Icon(Icons.folder_outlined, size: 18),
+                        label: const Text('Файлы'),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: controller.busy
+                              ? null
+                              : () async {
+                                  final err = await controller.submitTask();
+                                  if (err.isNotEmpty) widget.onSnack(err);
+                                },
+                          icon: const Icon(Icons.send, size: 17),
+                          label: const Text('Отправить на проверку'),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }

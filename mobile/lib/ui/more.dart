@@ -203,18 +203,6 @@ void _showSettings(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            caption('Тема оформления', color: C.accent),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: presetById(controller.config.theme).title,
-              decoration: const InputDecoration(labelText: 'Палитра (применяется сразу)'),
-              items: themePresets.map((p) => DropdownMenuItem(value: p.title, child: Text(p.title))).toList(),
-              onChanged: (title) {
-                final p = themePresets.firstWhere((x) => x.title == title);
-                controller.config.theme = p.id;
-                controller.saveConfig();
-              },
-            ),
             const SizedBox(height: 14),
             caption('Настройки ИИ-провайдера', color: C.accent),
             const SizedBox(height: 14),
