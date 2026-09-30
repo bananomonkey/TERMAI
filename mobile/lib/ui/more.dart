@@ -23,25 +23,6 @@ void showMoreSheet(BuildContext context) {
           children: [
             const SizedBox(height: 8),
             const SizedBox(height: 8),
-            _SheetButton(
-              icon: Icons.refresh,
-              title: 'Повторение',
-              subtitle: 'Закладки, которые пора освежить',
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.of(context).push(pageRoute(const ReviewScreen()));
-              },
-            ),
-            const SizedBox(height: 8),
-            _SheetButton(
-              icon: Icons.work_history_outlined,
-              title: 'Собеседование',
-              subtitle: 'ИИ-техлид прогонит тебя по материалу курса',
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.of(context).push(pageRoute(const ChatScreen(interview: true)));
-              },
-            ),
             const SizedBox(height: 8),
             _SheetButton(
               icon: Icons.cleaning_services_outlined,

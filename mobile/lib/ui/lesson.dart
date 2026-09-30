@@ -543,10 +543,13 @@ class _TermSlideState extends State<_TermSlide> {
               ]),
             ),
           ),
-          // низ: поле ввода и кнопки — целиком приподнимаются над клавиатурой
-          Padding(
-            padding: EdgeInsets.only(bottom: widget.kbInset),
-            child: Column(
+          // низ: сдвигается ВИЗУАЛЬНО над клавиатурой (Transform не меняет
+        // раскладку — вывод терминала не сжимается ни на пиксель)
+          Transform.translate(
+            offset: Offset(0, -widget.kbInset),
+            child: Container(
+              color: C.termBg,
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),
@@ -598,7 +601,8 @@ class _TermSlideState extends State<_TermSlide> {
               ],
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }
