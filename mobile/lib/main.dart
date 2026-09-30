@@ -1,4 +1,5 @@
 // main.dart — TERMAI mobile (Flutter). Сплэш → плашка ключа → карта курсов.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -31,8 +32,12 @@ class TermaiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // слушаем контроллер: смена темы в настройках перекрашивает всё приложение
+    // диагностика: TERMAI_FORCE_ANDROID=1 — мобильная раскладка на десктопе
+    if (const bool.fromEnvironment('TERMAI_FORCE_ANDROID')) {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    }
     return ListenableBuilder(
+      // слушаем контроллер: смена темы в настройках перекрашивает всё приложение
       listenable: controller,
       builder: (context, _) => MaterialApp(
         key: ValueKey('theme-${C.p.id}'),

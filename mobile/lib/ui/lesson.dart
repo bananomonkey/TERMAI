@@ -21,21 +21,12 @@ class _LessonScreenState extends State<LessonScreen>
     with SingleTickerProviderStateMixin {
   String _search = '';
   List<int> _answers = const [];
-  late final TabController _tabC = TabController(length: 4, vsync: this);
+  int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
 
   @override
   void initState() {
     super.initState();
-    _tabC.addListener(() {
-      if (mounted) setState(() {});
-    });
     _syncAnswers();
-  }
-
-  @override
-  void dispose() {
-    _tabC.dispose();
-    super.dispose();
   }
 
   void _syncAnswers() {
@@ -154,30 +145,14 @@ class _LessonScreenState extends State<LessonScreen>
 
   @override
   Widget build(BuildContext context) {
-    final kbInset = _tabC.index == 2 ? MediaQuery.of(context).viewInsets.bottom : 0.0;
+    final kbInset = _tabIdx == 2 ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     final t = controller.currentTask;
     return Scaffold(
-      resizeToAvoidBottomInset: _tabC.index != 2,
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: TabBar(
-          isScrollable: false,
-          labelColor: C.accent,
-          unselectedLabelColor: C.muted,
-          labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-          unselectedLabelStyle: TextStyle(fontSize: 13),
-          indicatorColor: C.accent,
-          indicatorSize: TabBarIndicatorSize.tab,
-          tabs: [
-            Tab(text: 'Справка'),
-            Tab(text: 'Задача'),
-            Tab(text: 'Терминал'),
-            Tab(text: 'Решение'),
-          ],
         ),
         titleSpacing: 0,
       ),
@@ -188,23 +163,71 @@ class _LessonScreenState extends State<LessonScreen>
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
           _maybeCompletionDialog();
-          return TabBarView(
-            controller: _tabC,
-            physics: const BouncingScrollPhysics(),
+          // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку
+          final slideNames = ['Справка', 'Задача', 'Терминал', 'Решение'];
+          return Column(
             children: [
-              _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
-              _TaskSlide(
-                t: t,
-                answers: _answers,
-                onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
-                onSnack: _snack,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                child: Row(children: [
+                  for (var i = 0; i < slideNames.length; i++)
+                    Expanded(child: _SlideTab(
+                      title: slideNames[i],
+                      active: _tabIdx == i,
+                      onTap: () => setState(() => _tabIdx = i),
+                    )),
+                ]),
               ),
-              _TermSlide(onSnack: _snack, kbInset: kbInset),
-              _SolutionSlide(t: t, onSnack: _snack),
+              const Divider(height: 1),
+              Expanded(
+                child: IndexedStack(
+                  index: _tabIdx,
+                  children: [
+                    _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
+                    _TaskSlide(
+                      t: t,
+                      answers: _answers,
+                      onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
+                      onSnack: _snack,
+                    ),
+                    _TermSlide(onSnack: _snack, kbInset: kbInset),
+                    _SolutionSlide(t: t, onSnack: _snack),
+                  ],
+                ),
+              ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// _SlideTab — вкладка в строке слайдов урока.
+class _SlideTab extends StatelessWidget {
+  final String title;
+  final bool active;
+  final VoidCallback onTap;
+  const _SlideTab({required this.title, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w600,
+                  color: active ? C.accent : C.muted)),
+        ),
+        Container(height: 3, color: active ? C.accent : Colors.transparent),
+      ]),
     );
   }
 }
