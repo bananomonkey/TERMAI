@@ -475,13 +475,14 @@ class _TermSlide extends StatefulWidget {
 class _TermSlideState extends State<_TermSlide> {
   final _input = TextEditingController();
   final _pageScroll = ScrollController();
-  final GlobalKey _consoleEndKey = GlobalKey();
+  final _consoleScroll = ScrollController();
   String _lastTerm = '';
 
   @override
   void dispose() {
     _input.dispose();
     _pageScroll.dispose();
+    _consoleScroll.dispose();
     super.dispose();
   }
 
@@ -493,10 +494,8 @@ class _TermSlideState extends State<_TermSlide> {
 
   void _scrollToConsoleEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _consoleEndKey.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(ctx,
-            duration: const Duration(milliseconds: 250), alignment: 1.0);
+      if (_consoleScroll.hasClients) {
+        _consoleScroll.jumpTo(_consoleScroll.position.maxScrollExtent);
       }
     });
   }
@@ -526,9 +525,10 @@ class _TermSlideState extends State<_TermSlide> {
             ),
             const SizedBox(height: 12),
           ],
-          // консоль
+          // консоль: полэкрана, вывод прокручивается внутри
           Container(
             width: double.infinity,
+            height: MediaQuery.of(context).size.height * 0.5,
             decoration: BoxDecoration(
               color: C.termBg,
               borderRadius: BorderRadius.circular(16),
@@ -562,13 +562,16 @@ class _TermSlideState extends State<_TermSlide> {
                   ),
                 ]),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    controller.termText,
-                    style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _consoleScroll,
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      controller.termText,
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
+                    ),
                   ),
                 ),
               ),

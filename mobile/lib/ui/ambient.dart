@@ -33,7 +33,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         _renderScene(w, h);
       }
       final img = _img;
-      if (img == null) return const ColoredBox(color: Color(0xFF0A0C10));
+      if (img == null) return const ColoredBox(color: Color(0xFF120D0A));
       return SizedBox.expand(
         child: RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.low),
       );
@@ -67,7 +67,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [const Color(0xFF07080B), const Color(0xFF040507)],
+          colors: [const Color(0xFF1A120D), const Color(0xFF0E0906)],
         ).createShader(Offset.zero & size),
     );
     // лунная подсветка из верхнего левого угла
@@ -77,7 +77,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = RadialGradient(
           center: const Alignment(-0.75, -0.85),
           radius: 1.3,
-          colors: [const Color(0x1EAFC4D8), const Color(0x00040507)],
+          colors: [const Color(0x38C97E3C), const Color(0x000E0906)],
         ).createShader(Offset.zero & size),
     );
     // косой луч света сквозь туман
@@ -91,16 +91,16 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [const Color(0x00AFC4D8), const Color(0x0FAFC4D8), const Color(0x00AFC4D8)],
+          colors: [const Color(0x00D08C3C), const Color(0x20D08C3C), const Color(0x00D08C3C)],
         ).createShader(shaft),
     );
     canvas.restore();
 
     // туман: три слоя глубины — дальний бледный, средний, ближний плотный у земли
     final layers = <(int, double, double)>[
-      (10, 0.16, 0.020),  // count, radius, alpha
-      (9, 0.30, 0.032),
-      (7, 0.44, 0.050),
+      (10, 0.16, 0.028),  // count, radius, alpha
+      (9, 0.30, 0.048),
+      (7, 0.44, 0.075),
     ];
     var layerIdx = 0;
     for (final (count, radius, alpha) in layers) {
@@ -120,7 +120,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
           rect,
           Paint()
             ..shader = RadialGradient(
-              colors: [const Color(0xFF8B98A8).withAlpha(a), const Color(0xFF8B98A8).withAlpha(0)],
+              colors: [const Color(0xFFD9B48C).withAlpha(a), const Color(0xFFD9B48C).withAlpha(0)],
             ).createShader(rect),
         );
       }
