@@ -42,6 +42,7 @@ class AppController extends ChangeNotifier {
   List<String> cmdHist = [];
   int cmdHistIdx = 0;
   final List<UndoEntry> undoBuf = [];
+  final List<UndoEntry> redoBuf = [];
 
   List<ChatMsg> chatMsgs = [];
   List<String> chatLog = [];
@@ -246,8 +247,6 @@ extension AppCourses on AppController {
     prog.lastCourse = cur.id;
     saveProgress();
     resetCourseState();
-    termLine('');
-    termLine('── Курс: ${cur.title} ──');
     refreshTerminal();
     notifyListeners();
   }
@@ -285,6 +284,7 @@ extension AppCourses on AppController {
     termText += prompt + cmd + '\n';
     undoBuf.add(UndoEntry(stateKey, state.clone(), _termBefore(cmd)));
     if (undoBuf.length > 20) undoBuf.removeAt(0);
+    redoBuf.clear();
 
     if (cmd.toLowerCase() == 'clear') {
       termText = '';
@@ -423,7 +423,6 @@ extension AppCourses on AppController {
     if (task.isQuiz && !quizDone(task) && !isDone(task)) return 'Сначала пройди тест по теории.';
     if (isDone(task)) return 'Эта задача уже решена.';
     termBusy = true;
-    termLine('  …проверяю выполнение по истории терминала');
     refreshTerminal();
     try {
       final tail = termText.length > 1600 ? termText.substring(termText.length - 1600) : termText;
@@ -503,7 +502,6 @@ extension AppCourses on AppController {
     final a = achievementList.firstWhere((x) => x.id == id, orElse: () => const Achievement('', '', ''));
     if (a.id.isEmpty) return;
     prog.achieved[id] = DateTime.now().toIso8601String().substring(0, 10);
-    termLine('  ★ достижение: «${a.title}» — ${a.desc}');
     lastAchievement = '${a.title}: ${a.desc}';
     saveProgress();
   }

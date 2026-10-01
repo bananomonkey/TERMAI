@@ -103,6 +103,8 @@ ThemeData buildTheme() {
       backgroundColor: C.bg,
       foregroundColor: C.text,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
       centerTitle: false,
       systemOverlayStyle: SystemUiOverlayStyle.light,
     ),

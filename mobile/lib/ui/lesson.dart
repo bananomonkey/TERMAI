@@ -22,6 +22,7 @@ class _LessonScreenState extends State<LessonScreen>
   String _search = '';
   List<int> _answers = const [];
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
+  Offset _swipeStart = Offset.zero;
 
 
   @override
@@ -183,8 +184,18 @@ class _LessonScreenState extends State<LessonScreen>
               ),
               const Divider(height: 1),
               Expanded(
-                child: IndexedStack(
-                  index: _tabIdx,
+                child: Listener(
+                  onPointerDown: (e) => _swipeStart = e.position,
+                  onPointerUp: (e) {
+                    final dx = e.position.dx - _swipeStart.dx;
+                    final dy = (e.position.dy - _swipeStart.dy).abs();
+                    if (dx.abs() > 90 && dx.abs() > dy * 2) {
+                      if (dx < 0 && _tabIdx < 3) setState(() => _tabIdx++);
+                      if (dx > 0 && _tabIdx > 0) setState(() => _tabIdx--);
+                    }
+                  },
+                  child: IndexedStack(
+                    index: _tabIdx,
                   children: [
                     _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
                     _TaskSlide(
@@ -196,6 +207,7 @@ class _LessonScreenState extends State<LessonScreen>
                     _TermSlide(onSnack: _snack),
                     _SolutionSlide(t: t, onSnack: _snack),
                   ],
+                  ),
                 ),
               ),
             ],
@@ -596,32 +608,34 @@ class _TermSlideState extends State<_TermSlide> {
                   : const Icon(Icons.play_arrow),
               style: IconButton.styleFrom(backgroundColor: C.accentDark),
             ),
+            const SizedBox(width: 6),
+            IconButton.filled(
+              onPressed: controller.busy
+                  ? null
+                  : () async {
+                      final err = await controller.submitTask();
+                      if (err.isNotEmpty && context.mounted) widget.onSnack(err);
+                    },
+              icon: const Icon(Icons.send, size: 19),
+              style: IconButton.styleFrom(backgroundColor: C.good),
+            ),
           ]),
           const SizedBox(height: 10),
-          // кнопки: ментор · файлы · отправить
+          // кнопки: ментор · файлы
           Row(children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-              icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-              label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+                icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+              ),
             ),
             const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _showFiles(context),
-              icon: const Icon(Icons.folder_outlined, size: 18),
-              label: const Text('Файлы'),
-            ),
-            const SizedBox(width: 10),
             Expanded(
-              child: FilledButton.icon(
-                onPressed: controller.busy
-                    ? null
-                    : () async {
-                        final err = await controller.submitTask();
-                        if (err.isNotEmpty) widget.onSnack(err);
-                      },
-                icon: const Icon(Icons.send, size: 17),
-                label: const Text('Отправить на проверку'),
+              child: OutlinedButton.icon(
+                onPressed: () => _showFiles(context),
+                icon: const Icon(Icons.folder_outlined, size: 18),
+                label: const Text('Файлы'),
               ),
             ),
           ]),
