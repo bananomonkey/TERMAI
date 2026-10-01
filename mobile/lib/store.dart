@@ -9,6 +9,9 @@ import 'models.dart';
 import 'sandbox.dart';
 import 'ui/theme.dart';
 
+/// diagLog — глобальный журнал ошибок для экрана «Диагностика».
+final StringBuffer diagLog = StringBuffer();
+
 class ChatMsg {
   final String role; // user | mentor | system
   final String text;

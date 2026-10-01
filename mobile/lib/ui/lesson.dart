@@ -23,9 +23,12 @@ class _LessonScreenState extends State<LessonScreen>
   List<int> _answers = const [];
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
 
+
   @override
   void initState() {
     super.initState();
+    if (diagAutoLesson) _tabIdx = 2;
+    debugPrint('DIAG: lesson initState, tab=$_tabIdx');
     _syncAnswers();
   }
 

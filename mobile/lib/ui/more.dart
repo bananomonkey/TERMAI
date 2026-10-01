@@ -25,6 +25,33 @@ void showMoreSheet(BuildContext context) {
             const SizedBox(height: 8),
             const SizedBox(height: 8),
             _SheetButton(
+              icon: Icons.bug_report_outlined,
+              title: 'Диагностика',
+              subtitle: 'Показать ошибки, если что-то работает не так',
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    backgroundColor: C.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Диагностика'),
+                    content: SizedBox(
+                      width: 320,
+                      child: SelectableText(
+                        diagLog.isEmpty
+                            ? 'Ошибок не зафиксировано.'
+                            : diagLog.toString(),
+                        style: TextStyle(fontSize: 12, color: C.text, height: 1.4),
+                      ),
+                    ),
+                    actions: [FilledButton(onPressed: () => Navigator.pop(dctx), child: const Text('Закрыть'))],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
               icon: Icons.cleaning_services_outlined,
               title: 'Очистить генерацию курса',
               subtitle: 'Убрать задачи от ИИ из текущего курса (если перепутались предметы)',

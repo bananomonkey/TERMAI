@@ -13,13 +13,42 @@ import 'store.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
+import 'ui/lesson.dart';
 import 'ui/chat.dart';
 import 'ui/more.dart';
 
 final AppController controller = AppController();
+bool diagAutoLesson = false;
+
+void _appendDiag(String entry) {
+  final ts = DateTime.now().toIso8601String().substring(11, 19);
+  diagLog.writeln('[$ts] $entry');
+  if (diagLog.length > 20000) {
+    final s = diagLog.toString();
+    diagLog.clear();
+    diagLog.write(s.substring(s.length - 15000));
+  }
+}
+
+void _installErrorHandlers() {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _appendDiag('ОШИБКА: ' + details.exception.toString());
+    if (details.stack != null) {
+      final lines = details.stack.toString().split('\n').take(6).join('\n');
+      diagLog.writeln(lines);
+    }
+  };
+  PlatformDispatcher.instance.onError = (e, st) {
+    _appendDiag('СБОЙ: ' + e.toString());
+    diagLog.writeln(st.toString().split('\n').take(6).join('\n'));
+    return true;
+  };
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installErrorHandlers();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
   runApp(const TermaiApp());
 }
@@ -33,9 +62,12 @@ class TermaiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // диагностика: TERMAI_FORCE_ANDROID=1 — мобильная раскладка на десктопе
-    if (const bool.fromEnvironment('TERMAI_FORCE_ANDROID')) {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    }
+    assert(() {
+      if (const bool.fromEnvironment('TERMAI_FORCE_ANDROID')) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      }
+      return true;
+    }());
     return ListenableBuilder(
       // слушаем контроллер: смена темы в настройках перекрашивает всё приложение
       listenable: controller,
@@ -96,9 +128,12 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
     await controller.init();
     C.p = presetById(controller.config.theme);
     _scheduleReminder();
+    // диагностика: авто-открытие урока на слайде терминала
+    if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) diagAutoLesson = true;
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
+
     if (controller.config.apiKey.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) showOnboardingSheet(context);
@@ -252,8 +287,22 @@ void showOnboardingSheet(BuildContext context) {
 }
 
 /// HomeScreen — апбар (логотип, XP, «Ещё») + карта курсов.
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (diagAutoLesson) {
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (mounted) Navigator.of(context).push(pageRoute(const LessonScreen()));
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
