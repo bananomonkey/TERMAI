@@ -193,7 +193,7 @@ class _LessonScreenState extends State<LessonScreen>
                       onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
                       onSnack: _snack,
                     ),
-                    _TermSlide(onSnack: _snack, kbInset: kbInset),
+                    _TermSlide(onSnack: _snack),
                     _SolutionSlide(t: t, onSnack: _snack),
                   ],
                 ),
@@ -467,30 +467,22 @@ class _HintTile extends StatelessWidget {
 
 class _TermSlide extends StatefulWidget {
   final void Function(String) onSnack;
-  final double kbInset;
-  const _TermSlide({required this.onSnack, required this.kbInset});
+  const _TermSlide({required this.onSnack});
   @override
   State<_TermSlide> createState() => _TermSlideState();
 }
 
 class _TermSlideState extends State<_TermSlide> {
   final _input = TextEditingController();
-  final _scroll = ScrollController();
+  final _pageScroll = ScrollController();
+  final GlobalKey _consoleEndKey = GlobalKey();
   String _lastTerm = '';
 
   @override
   void dispose() {
     _input.dispose();
-    _scroll.dispose();
+    _pageScroll.dispose();
     super.dispose();
-  }
-
-  void _autoScroll() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-      }
-    });
   }
 
   void _run() {
@@ -499,143 +491,138 @@ class _TermSlideState extends State<_TermSlide> {
     controller.runCommand(cmd);
   }
 
+  void _scrollToConsoleEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _consoleEndKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx,
+            duration: const Duration(milliseconds: 250), alignment: 1.0);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = controller.currentTask;
     if (controller.termText != _lastTerm) {
       _lastTerm = controller.termText;
-      _autoScroll();
+      _scrollToConsoleEnd();
     }
-    return Padding(
+    final t = controller.currentTask;
+    // слайд скроллится ЦЕЛИКОМ: консоль фиксированной высоты не сжимается
+    // ни клавиатурой, ни чем-либо ещё — страница просто прокручивается
+    return SingleChildScrollView(
+      controller: _pageScroll,
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if ((t?.expected ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: cardBox(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  caption('Ожидаемый вывод'),
-                  const SizedBox(height: 6),
-                  MarkdownBody(data: t!.expected, styleSheet: mdStyle()),
-                ]),
-              ),
-            ),
-          // вывод терминала
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: C.termBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: C.border),
-              ),
-              child: Column(children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
-                  child: Row(children: [
-                    Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: controller.undoCommand,
-                      icon: Icon(Icons.undo, size: 16, color: C.muted),
-                      label: Text('Отменить', style: TextStyle(fontSize: 12, color: C.muted)),
-                    ),
-                    TextButton.icon(
-                      onPressed: () {
-                        controller.termText = '';
-                        controller.termLine('  (вывод терминала очищен)');
-                        controller.refreshTerminal();
-                      },
-                      icon: Icon(Icons.refresh, size: 16, color: C.muted),
-                      label: Text('Сбросить', style: TextStyle(fontSize: 12, color: C.muted)),
-                    ),
-                  ]),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        controller.termText,
-                        style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
-                      ),
-                    ),
-                  ),
-                ),
+          if ((t?.expected ?? '').isNotEmpty) ...[
+            cardBox(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                caption('Ожидаемый вывод'),
+                const SizedBox(height: 6),
+                MarkdownBody(data: t!.expected, styleSheet: mdStyle()),
               ]),
             ),
-          ),
-          // низ: поле и кнопки — отдельным слоем ПОВЕРХ вывода; при клавиатуре
-          // поднимается на kbInset, вывод не сжимается ни на пиксель
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: widget.kbInset,
-            child: Container(
-              decoration: BoxDecoration(
-                color: C.termBg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                border: Border(top: BorderSide(color: C.border)),
+            const SizedBox(height: 12),
+          ],
+          // консоль
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: C.termBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: C.border),
+            ),
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+                child: Row(children: [
+                  Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Чат с ментором',
+                    onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+                    icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: controller.undoCommand,
+                    icon: Icon(Icons.undo, size: 16, color: C.muted),
+                    label: Text('Отменить', style: TextStyle(fontSize: 12, color: C.muted)),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      controller.termText = '';
+                      controller.termLine('  (вывод терминала очищен)');
+                      controller.refreshTerminal();
+                    },
+                    icon: Icon(Icons.refresh, size: 16, color: C.muted),
+                    label: Text('Сбросить', style: TextStyle(fontSize: 12, color: C.muted)),
+                  ),
+                ]),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _input,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
-                          onSubmitted: (_) => _run(),
-                          decoration: const InputDecoration(hintText: 'введите команду…'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        onPressed: controller.termBusy ? null : _run,
-                        icon: controller.termBusy
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.play_arrow),
-                        style: IconButton.styleFrom(backgroundColor: C.accentDark),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-                        icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-                        label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => _showFiles(context),
-                        icon: const Icon(Icons.folder_outlined, size: 18),
-                        label: const Text('Файлы'),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: controller.busy
-                              ? null
-                              : () async {
-                                  final err = await controller.submitTask();
-                                  if (err.isNotEmpty) widget.onSnack(err);
-                                },
-                          icon: const Icon(Icons.send, size: 17),
-                          label: const Text('Отправить на проверку'),
-                        ),
-                      ),
-                    ]),
-                  ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    controller.termText,
+                    style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
+                  ),
                 ),
               ),
-            ),
+            ]),
           ),
+          const SizedBox(height: 12),
+          // поле ввода + запуск
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5),
+                onSubmitted: (_) => _run(),
+                decoration: const InputDecoration(hintText: 'введите команду…'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: controller.termBusy ? null : _run,
+              icon: controller.termBusy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.play_arrow),
+              style: IconButton.styleFrom(backgroundColor: C.accentDark),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          // кнопки: ментор · файлы · отправить
+          Row(children: [
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
+              icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+              label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => _showFiles(context),
+              icon: const Icon(Icons.folder_outlined, size: 18),
+              label: const Text('Файлы'),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: controller.busy
+                    ? null
+                    : () async {
+                        final err = await controller.submitTask();
+                        if (err.isNotEmpty) widget.onSnack(err);
+                      },
+                icon: const Icon(Icons.send, size: 17),
+                label: const Text('Отправить на проверку'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -650,7 +637,7 @@ class _TermSlideState extends State<_TermSlide> {
       builder: (ctx) => SafeArea(
         child: st.files.isEmpty
             ? Padding(
-                padding: EdgeInsets.all(28),
+                padding: const EdgeInsets.all(28),
                 child: Center(child: Text('Файлов в песочнице нет.', style: TextStyle(color: C.muted))),
               )
             : ListView(
