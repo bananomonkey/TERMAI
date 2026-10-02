@@ -214,11 +214,12 @@ class AIClient {
       '- Отвечай по-русски, кратко, без markdown-заголовков.';
 
   Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question,
-      {bool interview = false}) {
+      {bool interview = false, String solvedContext = ''}) {
     final b = StringBuffer('Курс: ${c.title}\n');
     if (task != null) b.write('Текущая задача: ${task.title} — ${task.goal}\n');
     b.write(stateSummary(st));
     b.write('\nНедавние команды:\n${formatHist(hist, 160)}');
+    if (solvedContext.isNotEmpty) b.write('\n' + solvedContext + '\n');
     if (chatLog.isNotEmpty) b.write('\nНедавний диалог:\n${chatLog.join('\n')}\n');
     b.write('\nВопрос студента: $question');
     return chatText(interview ? _sysInterviewer : _sysMentor, b.toString(), 0.7);

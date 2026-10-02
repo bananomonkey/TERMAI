@@ -1,8 +1,10 @@
-// lesson.dart — экран задачи со слайдами как в Coddy:
-// Справка (поиск по теории) · Задача · Терминал · Решение (блюр + удержание).
+// lesson.dart — экран задачи: строка слайдов (Справка/Задача/Терминал/Решение),
+// свайп пальцем, плавающий низ терминала над клавиатурой.
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
@@ -24,12 +26,10 @@ class _LessonScreenState extends State<LessonScreen>
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
   Offset _swipeStart = Offset.zero;
 
-
   @override
   void initState() {
     super.initState();
     if (diagAutoLesson) _tabIdx = 2;
-    debugPrint('DIAG: lesson initState, tab=$_tabIdx');
     _syncAnswers();
   }
 
@@ -43,6 +43,8 @@ class _LessonScreenState extends State<LessonScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  /// Окно «Задача выполнена»: анимация, XP, комментарий проверяющего,
+  /// достижения. Закрытие — переход к списку задач курса.
   void _maybeCompletionDialog() {
     final lc = controller.lastCompletion;
     if (lc == null) return;
@@ -52,7 +54,7 @@ class _LessonScreenState extends State<LessonScreen>
       if (!mounted) return;
       showDialog(
         context: context,
-        barrierDismissible: true,
+        barrierDismissible: false,
         builder: (ctx) => Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
@@ -74,8 +76,11 @@ class _LessonScreenState extends State<LessonScreen>
                     child: Container(
                       width: 72,
                       height: 72,
-                      decoration: BoxDecoration(color: C.good, shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: C.good.withAlpha(90), blurRadius: 26, spreadRadius: 3)]),
+                      decoration: BoxDecoration(
+                        color: C.good,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: C.good.withAlpha(90), blurRadius: 26, spreadRadius: 3)],
+                      ),
                       child: const Icon(Icons.check_rounded, color: Colors.white, size: 42),
                     ),
                   ),
@@ -84,8 +89,7 @@ class _LessonScreenState extends State<LessonScreen>
                 Text('Задача выполнена!',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
                 const SizedBox(height: 6),
-                Text(lc['title'] as String,
-                    style: TextStyle(fontSize: 13, color: C.muted)),
+                Text(lc['title'] as String, style: TextStyle(fontSize: 13, color: C.muted)),
                 const SizedBox(height: 10),
                 if ((lc['xp'] as int) > 0)
                   Container(
@@ -139,6 +143,15 @@ class _LessonScreenState extends State<LessonScreen>
                       ),
                     ),
                 ],
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);            // закрыть окно
+                    Navigator.of(context).pop();   // урок → список задач курса
+                  },
+                  icon: const Icon(Icons.list_alt, size: 18),
+                  label: const Text('К списку задач'),
+                ),
               ],
             ),
           ),
@@ -149,7 +162,6 @@ class _LessonScreenState extends State<LessonScreen>
 
   @override
   Widget build(BuildContext context) {
-    final kbInset = _tabIdx == 2 ? MediaQuery.of(context).viewInsets.bottom : 0.0;
     final t = controller.currentTask;
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -196,17 +208,17 @@ class _LessonScreenState extends State<LessonScreen>
                   },
                   child: IndexedStack(
                     index: _tabIdx,
-                  children: [
-                    _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
-                    _TaskSlide(
-                      t: t,
-                      answers: _answers,
-                      onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
-                      onSnack: _snack,
-                    ),
-                    _TermSlide(onSnack: _snack),
-                    _SolutionSlide(t: t, onSnack: _snack),
-                  ],
+                    children: [
+                      _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
+                      _TaskSlide(
+                        t: t,
+                        answers: _answers,
+                        onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
+                        onSnack: _snack,
+                      ),
+                      _TermSlide(onSnack: _snack),
+                      _SolutionSlide(t: t, onSnack: _snack),
+                    ],
                   ),
                 ),
               ),

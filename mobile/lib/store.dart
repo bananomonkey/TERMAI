@@ -61,7 +61,10 @@ class AppController extends ChangeNotifier {
 
   String? lastAchievement; // для всплывашки
   final pendingAchievements = <String>[];
-  Map<String, dynamic>? lastCompletion; // данные окна «Задача выполнена»
+  Map<String, dynamic>? lastCompletion;
+  // контекст только что решённой задачи — отдаётся ментору один раз
+  String lastSolvedTitle = '';
+  String lastSolvedHist = ''; // данные окна «Задача выполнена»
 
   // ---------- инициализация ----------
 
@@ -471,6 +474,13 @@ extension AppCourses on AppController {
     await saveProgress();
 
     // результат — в окно, не в терминал
+    // архив: чтобы ментор видел, ЧТО и КАК студент делал (история стирается
+    // при переходе к следующей задаче — сохраняем снимок заранее)
+    lastSolvedTitle = t.title;
+    lastSolvedHist = (history[cur.id] ?? const <HistEntry>[])
+        .map((h) => '\$ ' + h.cmd + '\n' + (h.out.length > 200 ? h.out.substring(0, 200) + '…' : h.out))
+        .join('\n');
+    if (lastSolvedHist.length > 1600) lastSolvedHist = lastSolvedHist.substring(0, 1600);
     final achs = List<String>.from(pendingAchievements);
     pendingAchievements.clear();
     lastCompletion = {
