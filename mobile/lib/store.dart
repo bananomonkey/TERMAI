@@ -539,8 +539,15 @@ extension AppCourses on AppController {
     mentorBusy = true;
     notifyListeners();
     try {
-      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), chatLog, question,
+      final solvedCtx = lastSolvedTitle.isNotEmpty
+          ? 'ТОЛЬКО ЧТО ВЫПОЛНЕНО СТУДЕНТОМ: задача «' + lastSolvedTitle + '».\nИстория его терминала:\n' + lastSolvedHist + '\n'
+          : '';
+      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), chatLog, solvedCtx + question,
           interview: interviewMode);
+      if (lastSolvedTitle.isNotEmpty) {
+        lastSolvedTitle = '';
+        lastSolvedHist = '';
+      }
       chatMsgs.add(ChatMsg('mentor', answer));
       chatLog = _trim(chatLog, 'Наставник: $answer', 8);
     } catch (e) {
