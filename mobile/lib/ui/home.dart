@@ -372,9 +372,12 @@ class _TaskGroups extends StatelessWidget {
           difficulty: t.difficulty,
           done: controller.isDone(t),
           current: i == _frontier(),
-          onTap: () {
+          onTap: () async {
             controller.selectTask(i);
-            Navigator.of(context).push(pageRoute(const LessonScreen()));
+            await Navigator.of(context).push(pageRoute(const LessonScreen()));
+            // возврат из урока: гарантируем перестройку списка (состояние могло
+            // измениться, пока урок был поверх)
+            if (context.mounted) controller.notifyListeners();
           },
         ));
         groups.add(const SizedBox(height: 8));
