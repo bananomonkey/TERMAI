@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
 import 'ai.dart';
 import 'models.dart';
 import 'sandbox.dart';
@@ -160,38 +162,42 @@ class AppController extends ChangeNotifier {
   }
   // ---------- экспорт / импорт ----------
 
+  /// exportProgress — системное меню «Поделиться»: файл сохраняется куда
+  /// угодно (Загрузки, Telegram и т.д.), а не в приватную папку приложения.
   Future<String> exportProgress() async {
-    final dir = await _dataDir();
-    final f = io.File(dir + '/termai-progress-export.json');
-    await f.writeAsString(const JsonEncoder.withIndent('  ').convert(prog.toJson()));
-    return f.path;
+    try {
+      final dir = await getTemporaryDirectory();
+      final f = io.File('${dir.path}/TERMAI-progress.json');
+      await f.writeAsString(const JsonEncoder.withIndent('  ').convert(prog.toJson()));
+      await Share.shareXFiles(
+        [XFile(f.path, mimeType: 'application/json')],
+        subject: 'Экспорт прогресса TERMAI',
+      );
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    }
   }
 
+  /// importProgress — выбор файла прогресса через системный пикер.
   Future<String> importProgress() async {
-    final dir = await _dataDir();
-    final f = io.File(dir + '/termai-progress-export.json');
-    if (!await f.exists()) {
-      return 'Файл не найден: ' + f.path + ' — сначала сделай экспорт.';
-    }
     try {
-      final p = Progress.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>);
+      final res = await FilePicker.platform.pickFiles(
+          type: FileType.custom, allowedExtensions: ['json']);
+      final path = res?.files.single.path;
+      if (path == null) return '';
+      final p = Progress.fromJson(
+          jsonDecode(await io.File(path).readAsString()) as Map<String, dynamic>);
       prog = p;
-      if (!prog.genCleaned) {
-      // одноразовая чистка: задачи ранних версий могли смешивать предметы
-      prog.generated.clear();
-      prog.genCleaned = true;
-      await saveProgress();
-    }
-    await _assembleCourses();
-    states.clear();
+      await _assembleCourses();
+      states.clear();
       history.clear();
       stateTask.clear();
       reviewKey = null;
       await saveProgress();
       resetCourseState();
       selectFirstUndone();
-      termLine('  ✓ прогресс импортирован: ' + prog.xp.toString() + ' XP, серия ' + prog.streak.toString() + ' дн.');
-      refreshTerminal();
+      notifyListeners();
       return '';
     } catch (e) {
       return _errMsg(e);
