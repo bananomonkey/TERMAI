@@ -4,8 +4,6 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
 import 'ai.dart';
 import 'models.dart';
 import 'sandbox.dart';
@@ -161,40 +159,24 @@ class AppController extends ChangeNotifier {
     await io.File('$dir/termai-progress.json').writeAsString(jsonEncode(prog.toJson()));
   }
   // ---------- экспорт / импорт ----------
+  // Без плагинов: экспорт возвращает JSON для копирования,
+  // импорт принимает вставленный JSON (приватные папки Android
+  // недоступны файловому менеджеру, а плагины шаринга конфликтуют по SDK).
 
-  /// exportProgress — системное меню «Поделиться»: файл сохраняется куда
-  /// угодно (Загрузки, Telegram и т.д.), а не в приватную папку приложения.
-  Future<String> exportProgress() async {
-    try {
-      final dir = await getTemporaryDirectory();
-      final f = io.File('${dir.path}/TERMAI-progress.json');
-      await f.writeAsString(const JsonEncoder.withIndent('  ').convert(prog.toJson()));
-      await Share.shareXFiles(
-        [XFile(f.path, mimeType: 'application/json')],
-        subject: 'Экспорт прогресса TERMAI',
-      );
-      return '';
-    } catch (e) {
-      return _errMsg(e);
-    }
+  String exportProgress() {
+    return const JsonEncoder.withIndent('  ').convert(prog.toJson());
   }
 
-  /// importProgress — выбор файла прогресса через системный пикер.
-  Future<String> importProgress() async {
+  String importProgress(String json) {
     try {
-      final res = await FilePicker.platform.pickFiles(
-          type: FileType.custom, allowedExtensions: ['json']);
-      final path = res?.files.single.path;
-      if (path == null) return '';
-      final p = Progress.fromJson(
-          jsonDecode(await io.File(path).readAsString()) as Map<String, dynamic>);
+      final p = Progress.fromJson(jsonDecode(json) as Map<String, dynamic>);
       prog = p;
-      await _assembleCourses();
+      _assembleCourses();
       states.clear();
       history.clear();
       stateTask.clear();
       reviewKey = null;
-      await saveProgress();
+      saveProgress();
       resetCourseState();
       selectFirstUndone();
       notifyListeners();
@@ -205,7 +187,7 @@ class AppController extends ChangeNotifier {
   }
 }
 
-// мост к корневому ассету объявлен в main.dart (rootBundle)
+// мост к корневому ассету объявлен в main.dart (rootBundle)// мост к корневому ассету объявлен в main.dart (rootBundle)
 Future<String> Function() loadCoursesAsset = () async => '[]';
 
 // ---------- курсы и задачи ----------

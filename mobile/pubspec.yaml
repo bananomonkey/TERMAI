@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — терминальный тренажёр с ИИ-наставником (Docker/Linux/Git)"
 publish_to: "none"
-version: 1.5.0+16
+version: 1.12.5+24
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -13,8 +13,6 @@ dependencies:
   flutter_markdown: ^0.7.4
   crypto: ^3.0.5
   path_provider: ^2.1.4
-  share_plus: ^10.1.2
-  file_picker: ^8.1.6
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
   sensors_plus: ^6.1.1

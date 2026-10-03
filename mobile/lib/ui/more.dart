@@ -266,20 +266,24 @@ void _showSettings(BuildContext context) {
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final path = await controller.exportProgress();
-                    if (ctx.mounted) {
-                      showDialog(
-                        context: ctx,
-                        builder: (d) => AlertDialog(
-                          backgroundColor: C.surface,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: const Text('Экспорт готов'),
-                          content: Text('Файл сохранён:\n' + path, style: const TextStyle(fontSize: 12.5)),
-                          actions: [FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Понятно'))],
-                        ),
-                      );
-                    }
+                  onPressed: () {
+                    final json = controller.exportProgress();
+                    showDialog(
+                      context: context,
+                      builder: (d) => AlertDialog(
+                        backgroundColor: C.surface,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        title: const Text('Экспорт прогресса'),
+                        content: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('Скопируй текст ниже и сохрани (например, в «Избранное» Telegram).',
+                              style: TextStyle(fontSize: 12.5, color: C.muted, height: 1.4)),
+                          const SizedBox(height: 10),
+                          SelectableText(json,
+                              style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: C.text)),
+                        ]),
+                        actions: [FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Готово'))],
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.upload_outlined, size: 17),
                   label: const Text('Экспорт', style: TextStyle(fontSize: 13)),
@@ -288,13 +292,42 @@ void _showSettings(BuildContext context) {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final err = await controller.importProgress();
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(err.isEmpty ? 'Прогресс импортирован' : err)));
-                    }
+                  onPressed: () {
+                    final ctrl = TextEditingController();
+                    showDialog(
+                      context: context,
+                      builder: (dctx) => AlertDialog(
+                        backgroundColor: C.surface,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        title: const Text('Импорт прогресса'),
+                        content: SizedBox(
+                          width: 320,
+                          child: TextField(
+                            controller: ctrl,
+                            maxLines: 6,
+                            style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: C.text),
+                            decoration: const InputDecoration(
+                                hintText: 'вставь JSON экспорта…'),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(dctx), child: Text('Отмена', style: TextStyle(color: C.muted))),
+                          FilledButton(
+                            onPressed: () async {
+                              final json = ctrl.text.trim();
+                              if (json.isEmpty) return;
+                              Navigator.pop(dctx);
+                              final err = controller.importProgress(json);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(err.isEmpty ? 'Прогресс импортирован' : err)));
+                              }
+                            },
+                            child: const Text('Импортировать'),
+                          ),
+                        ],
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.download_outlined, size: 17),
                   label: const Text('Импорт', style: TextStyle(fontSize: 13)),
