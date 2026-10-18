@@ -29,3 +29,12 @@ release/
 mobile/android/.gradle/
 mobile/.dart_tool/
 mobile/build/
+
+# Firebase: платформенные конфиги не коммитим
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+
+# ключи подписи Android
+mobile/android/key.properties
+*.jks
+*.keystore

@@ -233,6 +233,60 @@ class HistEntry {
       HistEntry(cmd: j['cmd'] as String? ?? '', out: j['out'] as String? ?? '');
 }
 
+// ---------- чат с ментором ----------
+
+class ChatMsg {
+  final String role; // user | mentor | system
+  final String text;
+  ChatMsg(this.role, this.text);
+
+  Map<String, dynamic> toJson() => {'role': role, 'text': text};
+  factory ChatMsg.fromJson(Map<String, dynamic> j) =>
+      ChatMsg(j['role'] as String? ?? 'mentor', j['text'] as String? ?? '');
+}
+
+/// MentorChat — отдельная беседа с ментором, привязанная к задаче.
+/// taskId == '__interview__' — беседа в режиме собеседования.
+class MentorChat {
+  String id, courseId, taskId, taskTitle, title, createdAt, updatedAt;
+  List<ChatMsg> messages;
+
+  MentorChat({
+    required this.id,
+    required this.courseId,
+    required this.taskId,
+    this.taskTitle = '',
+    required this.title,
+    required this.createdAt,
+    required this.updatedAt,
+    List<ChatMsg>? messages,
+  }) : messages = messages ?? [];
+
+  factory MentorChat.fromJson(Map<String, dynamic> j) => MentorChat(
+        id: j['id'] as String? ?? '',
+        courseId: j['course_id'] as String? ?? '',
+        taskId: j['task_id'] as String? ?? '',
+        taskTitle: j['task_title'] as String? ?? '',
+        title: j['title'] as String? ?? 'Чат',
+        createdAt: j['created_at'] as String? ?? '',
+        updatedAt: j['updated_at'] as String? ?? '',
+        messages: ((j['messages'] as List?) ?? [])
+            .map((m) => ChatMsg.fromJson(m as Map<String, dynamic>))
+            .toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'course_id': courseId,
+        'task_id': taskId,
+        'task_title': taskTitle,
+        'title': title,
+        'created_at': createdAt,
+        'updated_at': updatedAt,
+        'messages': messages.map((m) => m.toJson()).toList(),
+      };
+}
+
 // ---------- закладки ----------
 
 class Bookmark {
@@ -280,6 +334,8 @@ class Progress {
   List<Course> extraCourses = [];
   Map<String, String> achieved = {};
   Map<String, Bookmark> bookmarks = {};
+  List<MentorChat> mentorChats = [];
+  String activeChatId = '';
   bool genCleaned = false;
   Map<String, String> courseTitles = {};
   List<String> courseOrder = [];
@@ -303,12 +359,16 @@ class Progress {
     p.hints = ((j['hints'] as Map?) ?? {})
         .map((k, v) => MapEntry(k as String, (v as Map).cast<String, int>()));
     p.generated = ((j['generated'] as Map?) ?? {})
-        .map((k, v) => MapEntry(k as String, ((v as List) as List).map((t) => Task.fromJson(t as Map<String, dynamic>)).toList()));
+        .map((k, v) => MapEntry(k as String, (v as List).map((t) => Task.fromJson(t as Map<String, dynamic>)).toList()));
     p.extraCourses = ((j['extra_courses'] as List?) ?? [])
         .map((c) => Course.fromJson(c as Map<String, dynamic>)).toList();
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
     p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
         MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
+    p.mentorChats = ((j['mentor_chats'] as List?) ?? [])
+        .map((c) => MentorChat.fromJson(c as Map<String, dynamic>))
+        .toList();
+    p.activeChatId = j['active_chat'] as String? ?? '';
     p.courseTitles = (j['course_titles'] as Map?)?.cast<String, String>() ?? {};
     p.genCleaned = j['gen_cleaned'] as bool? ?? false;
     p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
@@ -323,8 +383,9 @@ class Progress {
         'hints': hints, 'generated': generated.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'extra_courses': extraCourses.map((c) => c.toJson()).toList(),
         'achievements': achieved,
-        'achievements': achieved,
         'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
+        'mentor_chats': mentorChats.map((c) => c.toJson()).toList(),
+        'active_chat': activeChatId,
         'gen_cleaned': genCleaned,
         'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
       };

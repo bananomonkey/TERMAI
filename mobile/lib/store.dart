@@ -1,22 +1,19 @@
 // store.dart — контроллер приложения: настройки, прогресс, песочница,
 // поток команды (fast-path → ИИ), проверка задач, XP и достижения.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
 import 'models.dart';
 import 'sandbox.dart';
+import 'sync_service.dart';
 import 'ui/theme.dart';
 
 /// diagLog — глобальный журнал ошибок для экрана «Диагностика».
 final StringBuffer diagLog = StringBuffer();
-
-class ChatMsg {
-  final String role; // user | mentor | system
-  final String text;
-  ChatMsg(this.role, this.text);
-}
 
 class UndoEntry {
   final String key;
@@ -29,6 +26,7 @@ class AppController extends ChangeNotifier {
   Config config = Config();
   Progress prog = Progress();
   AIClient? ai;
+  final SyncService sync = SyncService.instance;
 
   List<Course> courses = [];
   int courseIdx = 0;
@@ -45,7 +43,6 @@ class AppController extends ChangeNotifier {
   final List<UndoEntry> redoBuf = [];
 
   List<ChatMsg> chatMsgs = [];
-  List<String> chatLog = [];
   bool termBusy = false;
   bool mentorBusy = false;
   bool solutionLoad = false;
@@ -106,8 +103,38 @@ class AppController extends ChangeNotifier {
     resetCourseState();
     ready = true;
     notifyListeners();
-    autoFillAll();
+    unawaited(() async {
+      try {
+        await _initSync();
+      } catch (_) {}
+      await autoFillAll();
+    }());
   }
+
+  /// _initSync — тихо поднимает Firebase и подтягивает облачный прогресс,
+  /// если пользователь уже входил через Google. Ошибки не блокируют запуск.
+  Future<void> _initSync() async {
+    await sync.init();
+    if (!sync.signedIn) return;
+    final cloud = await sync.pull();
+    if (cloud == null) {
+      await sync.push(jsonEncode(prog.toJson()));
+      return;
+    }
+    try {
+      final remote = Progress.fromJson(
+          jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+      if (_cloudIsBetter(remote)) {
+        await _applyProgress(remote);
+      }
+    } catch (_) {}
+  }
+
+  /// _cloudIsBetter — облако полезнее локальной копии (больше решено/чатов).
+  bool _cloudIsBetter(Progress remote) =>
+      remote.solvedTotal > prog.solvedTotal ||
+      (remote.solvedTotal == prog.solvedTotal &&
+          remote.mentorChats.length > prog.mentorChats.length);
 
   /// _assembleCourses — собирает список курсов из актива + прогресса
   /// (используется при старте и после импорта).
@@ -155,36 +182,106 @@ class AppController extends ChangeNotifier {
 
 
   Future<void> saveProgress() async {
+    final json = jsonEncode(prog.toJson());
     final dir = await _dataDir();
-    await io.File('$dir/termai-progress.json').writeAsString(jsonEncode(prog.toJson()));
+    await io.File('$dir/termai-progress.json').writeAsString(json);
+    sync.schedulePush(json);
   }
   // ---------- экспорт / импорт ----------
-  // Без плагинов: экспорт возвращает JSON для копирования,
-  // импорт принимает вставленный JSON (приватные папки Android
-  // недоступны файловому менеджеру, а плагины шаринга конфликтуют по SDK).
+  // Файл пишем в доступную папку приложения (Android/data/…/files):
+  // JSON не показываем, пользователь просто получает готовый файл.
 
   String exportProgress() {
     return const JsonEncoder.withIndent('  ').convert(prog.toJson());
   }
 
-  String importProgress(String json) {
+  /// exportProgressToFile — сохраняет прогресс в файл и возвращает путь.
+  /// Пустая строка — сохранить не удалось.
+  Future<String> exportProgressToFile() async {
+    try {
+      final dir = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('.', '-')
+          .substring(0, 19);
+      final json = const JsonEncoder.withIndent('  ').convert(prog.toJson());
+      final f = io.File('${dir.path}/TERMAI-progress-$stamp.json');
+      await f.writeAsString(json);
+      // дублируем в буфер: так файл можно сразу вставить в «Импорт»
+      try {
+        await Clipboard.setData(ClipboardData(text: json));
+      } catch (_) {}
+      return f.path;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// _applyProgress — заменить прогресс (импорт или облако) и пересобрать состояние.
+  Future<void> _applyProgress(Progress p) async {
+    prog = p;
+    await _assembleCourses();
+    states.clear();
+    history.clear();
+    stateTask.clear();
+    chatMsgs = [];
+    reviewKey = null;
+    await saveProgress();
+    resetCourseState();
+    selectFirstUndone();
+    notifyListeners();
+  }
+
+  Future<String> importProgress(String json) async {
     try {
       final p = Progress.fromJson(jsonDecode(json) as Map<String, dynamic>);
-      prog = p;
-      _assembleCourses();
-      states.clear();
-      history.clear();
-      stateTask.clear();
-      reviewKey = null;
-      saveProgress();
-      resetCourseState();
-      selectFirstUndone();
-      notifyListeners();
+      await _applyProgress(p);
       return '';
     } catch (e) {
       return _errMsg(e);
     }
   }
+
+  // ---------- Google-синхронизация ----------
+
+  Future<String> signInSync() async {
+    final err = await sync.signIn();
+    if (err.isNotEmpty) return err;
+    final cloud = await sync.pull();
+    if (cloud != null) {
+      try {
+        final remote = Progress.fromJson(
+            jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+        if (_cloudIsBetter(remote)) {
+          await _applyProgress(remote);
+          return 'Загружено из облака: ${prog.solvedTotal} задач';
+        }
+      } catch (_) {}
+    }
+    final pushErr = await sync.push(jsonEncode(prog.toJson()));
+    return pushErr.isEmpty ? 'Вход выполнен — прогресс сохранён в облако' : pushErr;
+  }
+
+  Future<String> syncNow() async {
+    if (!sync.signedIn) return 'Сначала войди через Google.';
+    final cloud = await sync.pull();
+    if (cloud != null) {
+      try {
+        final remote = Progress.fromJson(
+            jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+        if (_cloudIsBetter(remote)) {
+          await _applyProgress(remote);
+          return 'Загружено из облака: ${prog.solvedTotal} задач';
+        }
+      } catch (_) {}
+    }
+    final err = await sync.push(jsonEncode(prog.toJson()));
+    return err.isEmpty ? 'Прогресс сохранён в облако' : err;
+  }
+
+  Future<void> signOutSync() => sync.signOut();
 }
 
 // мост к корневому ассету объявлен в main.dart (rootBundle)// мост к корневому ассету объявлен в main.dart (rootBundle)
@@ -229,6 +326,7 @@ extension AppCourses on AppController {
   void selectTask(int i) {
     viewIdx = i;
     if (i >= 0 && i < cur.tasks.length) ensureStateForTask(cur.tasks[i]);
+    bindChatForCurrentTask();
     notifyListeners();
   }
 
@@ -238,6 +336,7 @@ extension AppCourses on AppController {
     prog.lastCourse = cur.id;
     saveProgress();
     resetCourseState();
+    bindChatForCurrentTask();
     refreshTerminal();
     notifyListeners();
   }
@@ -250,6 +349,7 @@ extension AppCourses on AppController {
     prog.lastCourse = cur.id;
     saveProgress();
     resetCourseState();
+    bindChatForCurrentTask();
     notifyListeners();
   }
 
@@ -516,12 +616,14 @@ extension AppCourses on AppController {
 
   Future<String> sendChat(String question) async {
     if (mentorBusy) return '';
+    final chat = this.activeChat ?? this.createChatForCurrentTask();
     final echo = question.trim().isEmpty ? '(вложение)' : question;
-    chatMsgs.add(ChatMsg('user', echo));
-    chatLog = _trim(chatLog, 'Студент: $echo', 8);
+    chat.messages.add(ChatMsg('user', echo));
+    chatMsgs = chat.messages;
+    chat.updatedAt = DateTime.now().toIso8601String();
+    await saveProgress();
     if (ai == null || !ai!.ready) {
-      chatMsgs.add(ChatMsg('system', 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.'));
-      notifyListeners();
+      this.addChatMessage('system', 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.');
       return '';
     }
     mentorBusy = true;
@@ -530,25 +632,19 @@ extension AppCourses on AppController {
       final solvedCtx = lastSolvedTitle.isNotEmpty
           ? 'ТОЛЬКО ЧТО ВЫПОЛНЕНО СТУДЕНТОМ: задача «' + lastSolvedTitle + '».\nИстория его терминала:\n' + lastSolvedHist + '\n'
           : '';
-      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), chatLog, solvedCtx + question,
+      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8), this.chatLogForAI, solvedCtx + question,
           interview: interviewMode);
       if (lastSolvedTitle.isNotEmpty) {
         lastSolvedTitle = '';
         lastSolvedHist = '';
       }
-      chatMsgs.add(ChatMsg('mentor', answer));
-      chatLog = _trim(chatLog, 'Наставник: $answer', 8);
+      this.addChatMessage('mentor', answer);
     } catch (e) {
-      chatMsgs.add(ChatMsg('system', 'Наставник недоступен: ${_errMsg(e)}'));
+      this.addChatMessage('system', 'Наставник недоступен: ${_errMsg(e)}');
     }
     mentorBusy = false;
     notifyListeners();
     return '';
-  }
-
-  List<String> _trim(List<String> list, String item, int n) {
-    final l = [...list, item];
-    return l.length <= n ? l : l.sublist(l.length - n);
   }
 
   // ---------- решение ----------
@@ -556,8 +652,7 @@ extension AppCourses on AppController {
   Future<void> loadSolution(Task task) async {
     if (solutionLoad) return;
     if (ai == null || !ai!.ready) {
-      chatMsgs.add(ChatMsg('system', 'Нет API-ключа — решение готовит ИИ.'));
-      notifyListeners();
+      addChatMessage('system', 'Нет API-ключа — решение готовит ИИ.');
       return;
     }
     solutionLoad = true;
@@ -571,7 +666,7 @@ extension AppCourses on AppController {
         await saveProgress();
       }
     } catch (e) {
-      chatMsgs.add(ChatMsg('system', 'Не удалось получить решение: ${_errMsg(e)}'));
+      addChatMessage('system', 'Не удалось получить решение: ${_errMsg(e)}');
     }
     solutionLoad = false;
     notifyListeners();
@@ -619,7 +714,7 @@ extension AppCourses on AppController {
       prog.extraCourses.addAll(news);
       await saveProgress();
       grant('architect');
-      chatMsgs.add(ChatMsg('mentor', 'Собрал программу: ${news.map((c) => c.title).join(' → ')}. Начинаем с первого.'));
+      addChatMessage('mentor', 'Собрал программу: ${news.map((c) => c.title).join(' → ')}. Начинаем с первого.');
       switchCourse(courses.length - news.length);
       return '';
     } catch (e) {
@@ -814,5 +909,168 @@ extension AppCourses on AppController {
 
   void _autosave() {
     saveProgress();
+  }
+}
+
+// ---------- чаты с ментором ----------
+
+extension AppMentorChats on AppController {
+  MentorChat? chatById(String id) {
+    for (final c in prog.mentorChats) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  MentorChat? get activeChat => chatById(prog.activeChatId);
+
+  List<MentorChat> chatsForTask(String courseId, String taskId) {
+    final out = prog.mentorChats
+        .where((c) => c.courseId == courseId && c.taskId == taskId)
+        .toList();
+    out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return out;
+  }
+
+  /// bindChatForCurrentTask — выбирает последний чат текущей задачи.
+  /// create=false: новый чат не создаётся, активный просто очищается.
+  void bindChatForCurrentTask({bool create = false, bool notify = false}) {
+    final taskId = currentTask?.id ?? '';
+    final found = chatsForTask(cur.id, taskId);
+    if (found.isNotEmpty) {
+      _activateChat(found.first, save: false, notify: notify);
+    } else if (create) {
+      createChatForCurrentTask();
+    } else {
+      prog.activeChatId = '';
+      chatMsgs = [];
+      if (notify) notifyListeners();
+    }
+  }
+
+  /// ensureChatForCurrentTask — открыть существующий чат задачи или создать новый.
+  MentorChat ensureChatForCurrentTask() {
+    interviewMode = false;
+    bindChatForCurrentTask();
+    return activeChat ?? createChatForCurrentTask();
+  }
+
+  MentorChat createChatForCurrentTask({String? title}) {
+    final now = DateTime.now().toIso8601String();
+    final task = currentTask;
+    final t = (title ?? '').trim();
+    final c = MentorChat(
+      id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
+      courseId: cur.id,
+      taskId: task?.id ?? '',
+      taskTitle: task?.title ?? '',
+      title: t.isNotEmpty ? t : ((task?.title ?? '').isNotEmpty ? task!.title : 'Новый чат'),
+      createdAt: now,
+      updatedAt: now,
+    );
+    prog.mentorChats.add(c);
+    _activateChat(c, save: true);
+    return c;
+  }
+
+  /// createInterviewChat — новая беседа для собеседования.
+  void createInterviewChat() {
+    final a = activeChat;
+    if (a != null && a.taskId == '__interview__' && a.messages.isEmpty) return;
+    final now = DateTime.now().toIso8601String();
+    final c = MentorChat(
+      id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
+      courseId: '',
+      taskId: '__interview__',
+      taskTitle: 'Собеседование',
+      title: 'Собеседование',
+      createdAt: now,
+      updatedAt: now,
+    );
+    prog.mentorChats.add(c);
+    _activateChat(c, save: true);
+  }
+
+  /// openChat — открыть беседу и перейти к её задаче (если она не про собеседование).
+  void openChat(String id) {
+    final c = chatById(id);
+    if (c == null) return;
+    if (c.taskId == '__interview__') {
+      interviewMode = true;
+    } else {
+      final ci = courses.indexWhere((x) => x.id == c.courseId);
+      if (ci >= 0) {
+        if (ci != courseIdx) {
+          courseIdx = ci;
+          prog.lastCourse = cur.id;
+        }
+        final ti = cur.tasks.indexWhere((t) => t.id == c.taskId);
+        if (ti >= 0) {
+          viewIdx = ti;
+          ensureStateForTask(cur.tasks[ti]);
+        }
+      }
+      interviewMode = false;
+    }
+    _activateChat(c);
+    saveProgress();
+  }
+
+  void selectChat(String id) {
+    final c = chatById(id);
+    if (c == null) return;
+    _activateChat(c);
+  }
+
+  void renameChat(String id, String title) {
+    final c = chatById(id);
+    final t = title.trim();
+    if (c == null || t.isEmpty) return;
+    c.title = t;
+    c.updatedAt = DateTime.now().toIso8601String();
+    saveProgress();
+    notifyListeners();
+  }
+
+  void deleteChat(String id) {
+    prog.mentorChats.removeWhere((c) => c.id == id);
+    if (prog.activeChatId == id) {
+      prog.activeChatId = '';
+      chatMsgs = [];
+      final left = chatsForTask(cur.id, currentTask?.id ?? '');
+      if (left.isNotEmpty) {
+        prog.activeChatId = left.first.id;
+        chatMsgs = left.first.messages;
+      }
+    }
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// addChatMessage — добавить сообщение в активную беседу (создав её при необходимости).
+  void addChatMessage(String role, String text) {
+    final c = activeChat ?? createChatForCurrentTask();
+    c.messages.add(ChatMsg(role, text));
+    chatMsgs = c.messages;
+    c.updatedAt = DateTime.now().toIso8601String();
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// chatLogForAI — последние реплики для контекста ментора.
+  List<String> get chatLogForAI {
+    final msgs = activeChat?.messages ?? chatMsgs;
+    final tail = msgs.length <= 8 ? msgs : msgs.sublist(msgs.length - 8);
+    return tail
+        .where((m) => m.role != 'system')
+        .map((m) => (m.role == 'user' ? 'Студент: ' : 'Наставник: ') + m.text)
+        .toList();
+  }
+
+  void _activateChat(MentorChat c, {bool save = true, bool notify = true}) {
+    prog.activeChatId = c.id;
+    chatMsgs = c.messages;
+    if (save) saveProgress();
+    if (notify) notifyListeners();
   }
 }
