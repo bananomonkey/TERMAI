@@ -45,10 +45,17 @@ jobs:
         working-directory: mobile
       - name: Rename APK
         run: cp mobile/build/app/outputs/flutter-apk/app-release.apk TERMAI.apk
+      - name: Build AAB for Google Play
+        run: flutter build appbundle --release
+        working-directory: mobile
+      - name: Rename AAB
+        run: cp mobile/build/app/outputs/bundle/release/app-release.aab TERMAI.aab
       - uses: actions/upload-artifact@v4
         with:
-          name: termai-android.apk
-          path: TERMAI.apk
+          name: termai-android-artifacts
+          path: |
+            TERMAI.apk
+            TERMAI.aab
 
   release:
     needs: [android]
@@ -63,5 +70,5 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/TERMAI.apk
+          files: dist/*
           generate_release_notes: true

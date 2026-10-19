@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
@@ -23,6 +22,7 @@ class _LessonScreenState extends State<LessonScreen>
     with SingleTickerProviderStateMixin {
   String _search = '';
   List<int> _answers = const [];
+  String _answersFor = '';
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
   Offset _swipeStart = Offset.zero;
 
@@ -35,6 +35,7 @@ class _LessonScreenState extends State<LessonScreen>
 
   void _syncAnswers() {
     final t = controller.currentTask;
+    _answersFor = t?.id ?? '';
     setState(() => _answers = List.filled(t?.quiz.length ?? 0, -1, growable: false));
   }
 
@@ -178,9 +179,21 @@ class _LessonScreenState extends State<LessonScreen>
           if (t == null) {
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
+          // после завершения задачи контроллер сразу открывает следующую —
+          // ответы теста нужно пересоздать под её вопросы
+          if (_answersFor != t.id) {
+            _answersFor = t.id;
+            _answers = List.filled(t.quiz.length, -1);
+          }
           _maybeCompletionDialog();
-          // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку
-          final slideNames = ['Справка', 'Задача', 'Терминал', 'Решение'];
+          // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку.
+          // В курсах-теориях терминал не нужен — остаются справка, задача и решение.
+          final theory = controller.cur.isTheory;
+          final slideNames = theory
+              ? ['Справка', 'Задача', 'Решение']
+              : ['Справка', 'Задача', 'Терминал', 'Решение'];
+          final last = slideNames.length - 1;
+          final current = _tabIdx.clamp(0, last);
           return Column(
             children: [
               Padding(
@@ -189,7 +202,7 @@ class _LessonScreenState extends State<LessonScreen>
                   for (var i = 0; i < slideNames.length; i++)
                     Expanded(child: _SlideTab(
                       title: slideNames[i],
-                      active: _tabIdx == i,
+                      active: current == i,
                       onTap: () => setState(() => _tabIdx = i),
                     )),
                 ]),
@@ -202,22 +215,34 @@ class _LessonScreenState extends State<LessonScreen>
                     final dx = e.position.dx - _swipeStart.dx;
                     final dy = (e.position.dy - _swipeStart.dy).abs();
                     if (dx.abs() > 90 && dx.abs() > dy * 2) {
-                      if (dx < 0 && _tabIdx < 3) setState(() => _tabIdx++);
-                      if (dx > 0 && _tabIdx > 0) setState(() => _tabIdx--);
+                      if (dx < 0 && current < last) setState(() => _tabIdx = current + 1);
+                      if (dx > 0 && current > 0) setState(() => _tabIdx = current - 1);
                     }
                   },
                   child: IndexedStack(
-                    index: _tabIdx,
+                    index: current,
                     children: [
                       _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
                       _TaskSlide(
                         t: t,
                         answers: _answers,
-                        onAnswer: (qi, oi) => setState(() => _answers[qi] = oi),
+                        onAnswer: (qi, oi) => setState(() {
+                          if (qi >= _answers.length) {
+                            _answers = [
+                              ..._answers,
+                              ...List.filled(qi - _answers.length + 1, -1),
+                            ];
+                          }
+                          _answers[qi] = oi;
+                        }),
                         onSnack: _snack,
                       ),
-                      _TermSlide(onSnack: _snack),
-                      _SolutionSlide(t: t, onSnack: _snack),
+                      if (theory)
+                        _SolutionSlide(t: t, onSnack: _snack)
+                      else ...[
+                        _TermSlide(onSnack: _snack),
+                        _SolutionSlide(t: t, onSnack: _snack),
+                      ],
                     ],
                   ),
                 ),
@@ -349,7 +374,8 @@ class _TaskSlide extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, color: C.text)),
           ),
         Row(children: [
-          Text(t.isQuiz ? 'тест' : 'практика', style: TextStyle(fontSize: 12, color: C.muted)),
+          Text(controller.cur.isTheory ? 'урок' : (t.isQuiz ? 'тест' : 'практика'),
+              style: TextStyle(fontSize: 12, color: C.muted)),
           const SizedBox(width: 10),
           difficultyDots(t.difficulty),
           const SizedBox(width: 10),
@@ -369,8 +395,10 @@ class _TaskSlide extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion:
-                    'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.')));
+                final q = controller.cur.isTheory
+                    ? 'Объясни тему «${t.title}»: главную идею, примеры и на что обратить внимание. Не давай сразу готовый ответ — сначала подсказку.'
+                    : 'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.';
+                Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion: q)));
               },
               icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
               label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
@@ -389,6 +417,16 @@ class _TaskSlide extends StatelessWidget {
           caption('Тест по теории', color: C.accent),
           const SizedBox(height: 10),
           _QuizBlock(t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
+        ],
+        if (controller.cur.isTheory && controller.quizDone(t) && !controller.isDone(t)) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => controller.completeTheoryTask(t),
+              child: const Text('Завершить задачу'),
+            ),
+          ),
         ],
         if (t.hints.isNotEmpty) ...[
           caption('Подсказки'),
@@ -441,9 +479,14 @@ class _QuizBlock extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         FilledButton(
-          onPressed: () {
-            final err = controller.checkQuiz(t, answers);
-            onSnack(err.isEmpty ? '✓ Тест пройден — практика открыта' : err);
+          onPressed: () async {
+            final err = await controller.checkQuiz(t, answers);
+            if (!context.mounted) return;
+            onSnack(err.isEmpty
+                ? (controller.cur.isTheory
+                    ? '✓ Тест пройден — задача завершена'
+                    : '✓ Тест пройден — практика открыта')
+                : err);
           },
           child: const Text('Проверить тест'),
         ),

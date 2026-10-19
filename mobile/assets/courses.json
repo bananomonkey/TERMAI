@@ -970,5 +970,180 @@
    "cmd: git hooks: pre-commit",
    "cmd: gitignore-стратегии для разных стеков"
   ]
+ },
+ {
+  "id": "english-a1",
+  "title": "Английский: первые шаги",
+  "desc": "To be, Present Simple, артикли и базовая лексика. Теория, тесты и ментор — без терминала.",
+  "mode": "theory",
+  "syllabus": [
+   "quiz: to be: am / is / are",
+   "quiz: Present Simple: привычки и факты",
+   "quiz: артикли a / an и множественное число"
+  ],
+  "tasks": [
+   {
+    "id": "en-to-be",
+    "title": "To be: am / is / are",
+    "kind": "quiz",
+    "difficulty": 1,
+    "theory": [
+     "**To be** переводится как «быть», но в русском мы его часто опускаем: «Я студент» — *I am a student*.",
+     "Формы зависят от подлежащего:\n- `I` → `am`\n- `he / she / it` → `is`\n- `you / we / they` → `are`",
+     "Сокращения: *I'm, he's, she's, it's, you're, we're, they're*.",
+     "Вопрос: *Are you ready?* — форма `to be` выходит вперёд. Отрицание: *I am not ready* / *I'm not ready*."
+    ],
+    "quiz": [
+     {
+      "question": "Выбери правильную форму: She ___ a doctor.",
+      "options": [
+       "is",
+       "are",
+       "am"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как сказать «Они не дома»?",
+      "options": [
+       "They aren't at home.",
+       "They doesn't at home.",
+       "They not at home."
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Собери правило am / is / are и потренируйся на примерах.",
+    "hints": [
+     "Смотри на подлежащее: I → am, he/she/it → is, you/we/they → are.",
+     "В отрицании к to be добавляется not: is not = isn't, are not = aren't."
+    ],
+    "check": "Уверенно выбираешь am / is / are и строишь отрицания.",
+    "expected_output": "",
+    "solution": "**Коротко:** `I am`, `he/she/it is`, `you/we/they are`. Отрицание — `am/is/are + not`, вопрос — форма `to be` перед подлежащим: *Is she a doctor?*",
+    "peeked": false,
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ],
+     "events": []
+    }
+   },
+   {
+    "id": "en-present-simple",
+    "title": "Present Simple: привычки и факты",
+    "kind": "quiz",
+    "difficulty": 2,
+    "theory": [
+     "**Present Simple** — для привычек, фактов и расписаний: *I work every day.*",
+     "Утверждение: подлежащее + глагол. Для `he / she / it` добавляем **-s**: *He works.*",
+     "Отрицание и вопрос строятся через **do / does**: *I don't work.* / *Does he work?*",
+     "Маркеры времени: *every day, usually, often, sometimes, never*."
+    ],
+    "quiz": [
+     {
+      "question": "Выбери правильную форму: He ___ to school every day.",
+      "options": [
+       "goes",
+       "go",
+       "going"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Как построить вопрос «Ты говоришь по-английски?»",
+      "options": [
+       "Do you speak English?",
+       "You speak English?",
+       "Are you speak English?"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Научись говорить о привычках и фактах в Present Simple.",
+    "hints": [
+     "Для he/she/it не забывай -s: work → works, go → goes.",
+     "Вопрос начинается с Do или Does, после них — начальная форма глагола."
+    ],
+    "check": "Правильно добавляешь -s и строишь вопросы с do/does.",
+    "expected_output": "",
+    "solution": "**Схема:** `I/you/we/they + verb`, `he/she/it + verb-s`. Вопрос: `Do/Does + subject + verb?` Отрицание: `don't/doesn't + verb`.",
+    "peeked": false,
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ],
+     "events": []
+    }
+   },
+   {
+    "id": "en-articles-plural",
+    "title": "Артикли a / an и множественное число",
+    "kind": "quiz",
+    "difficulty": 2,
+    "theory": [
+     "**a / an** — «один из многих», когда упоминаем предмет впервые: *a book*, *an apple*. `an` ставим перед гласным звуком.",
+     "**the** — конкретный предмет, уже известный собеседнику: *the book on the table*.",
+     "Множественное число: обычно +`s` (*books*), после `-s/-sh/-ch/-x` +`es` (*boxes*).",
+     "Исключения нужно запомнить: *man → men, woman → women, child → children*."
+    ],
+    "quiz": [
+     {
+      "question": "Выбери правильный артикль: I have ___ apple.",
+      "options": [
+       "an",
+       "a",
+       "the"
+      ],
+      "correct": 0
+     },
+     {
+      "question": "Какое множественное число у слова child?",
+      "options": [
+       "children",
+       "childs",
+       "childes"
+      ],
+      "correct": 0
+     }
+    ],
+    "goal": "Разберись, когда ставить a, an или the, и образуй множественное число.",
+    "hints": [
+     "Смотри на первый звук слова: an apple, an hour, но a university.",
+     "Для большинства слов хватает -s; исключения учи наизусть."
+    ],
+    "check": "Правильно выбираешь артикль и образуешь множественное число.",
+    "expected_output": "",
+    "solution": "**Артикли:** `a/an` — впервые или один из многих, `the` — конкретный. **Множественное:** +s, после шипящих +es, исключения: men, women, children.",
+    "peeked": false,
+    "start_state": {
+     "workdir": "/workspace",
+     "files": {},
+     "images": {},
+     "containers": {},
+     "volumes": {},
+     "networks": [
+      "bridge",
+      "host",
+      "none"
+     ],
+     "events": []
+    }
+   }
+  ]
  }
 ]

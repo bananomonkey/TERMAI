@@ -477,7 +477,15 @@ extension AppCourses on AppController {
     saveProgress();
   }
 
-  String checkQuiz(Task t, List<int> answers) {
+  /// completeTheoryTask — страховка, если тест уже пройден, а задача не закрыта.
+  Future<void> completeTheoryTask(Task t) async {
+    if (cur.isTheory && !isDone(t)) {
+      await _completeTask(t, 'Тест по теории пройден', t.difficulty);
+    }
+  }
+
+  Future<String> checkQuiz(Task t, List<int> answers) async {
+    if (answers.length != t.quiz.length) return 'Ответь на все вопросы.';
     for (var i = 0; i < answers.length; i++) {
       if (answers[i] == -1) return 'Ответь на все вопросы.';
     }
@@ -491,6 +499,11 @@ extension AppCourses on AppController {
     if (right == t.quiz.length) {
       if (tries[t.id] == 1) grant('quiz-perfect');
       _markQuizDone(t);
+      // В курсах без терминала тест — это и есть завершение задачи.
+      if (cur.isTheory && !isDone(t)) {
+        await _completeTask(t, 'Тест по теории пройден', t.difficulty);
+        return '';
+      }
       termLine('  ✓ тест пройден: ${t.title} — практика открыта');
       refreshTerminal();
       saveProgress();
@@ -658,8 +671,10 @@ extension AppCourses on AppController {
     solutionLoad = true;
     notifyListeners();
     try {
-      final ans = await ai!.mentor(cur, task, state, _lastHist(4), const [],
-          'Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.');
+      final ask = cur.isTheory
+          ? 'Дай разбор этой темы: главные идеи, примеры и типичные ошибки. Без команд терминала.'
+          : 'Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.';
+      final ans = await ai!.mentor(cur, task, state, _lastHist(4), const [], ask);
       if (ans.trim().isNotEmpty) {
         task.solution = ans;
         task.peeked = true;
@@ -681,7 +696,7 @@ extension AppCourses on AppController {
     termLine('  …ИИ пишет задачу по теме: $topic');
     refreshTerminal();
     try {
-      final t = await ai!.generateTask(cur.title, topic, _recentTitles(10), '');
+      final t = await ai!.generateTask(cur.title, topic, _recentTitles(10), '', mode: cur.mode);
       cur.tasks.add(t);
       (prog.generated[cur.id] ??= []).add(t);
       await saveProgress();
@@ -743,7 +758,8 @@ extension AppCourses on AppController {
       for (var i = 0; i < topics.length; i++) {
         fillCurrent = course.title;
         try {
-          final t = await ai!.generateTask(course.title, topics[i], _recentTitlesOf(course, 8), '');
+          final t = await ai!.generateTask(course.title, topics[i], _recentTitlesOf(course, 8), '',
+              mode: course.mode);
           course.tasks.add(t);
           (prog.generated[course.id] ??= []).add(t);
           added++;

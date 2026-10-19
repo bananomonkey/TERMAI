@@ -186,6 +186,21 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// deleteCloudData — удалить облачную копию прогресса текущего пользователя.
+  Future<String> deleteCloudData() async {
+    final u = _user;
+    if (!_ready || u == null) return 'Сначала войди через Google.';
+    try {
+      await FirebaseFirestore.instance
+          .collection('users_progress')
+          .doc(u.uid)
+          .delete();
+      return '';
+    } catch (e) {
+      return _msg(e);
+    }
+  }
+
   /// schedulePush — отложенная отправка, чтобы не дёргать сеть на каждую команду.
   void schedulePush(String json) {
     if (!_ready || _user == null) return;

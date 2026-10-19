@@ -199,6 +199,8 @@ class Task {
 
 class Course {
   String id, title, desc;
+  /// terminal — практика командами в песочнице; theory — теория, тесты и ментор.
+  String mode;
   List<String> syllabus;
   List<Task> tasks;
 
@@ -206,6 +208,7 @@ class Course {
     required this.id,
     required this.title,
     this.desc = '',
+    this.mode = 'terminal',
     List<String>? syllabus,
     List<Task>? tasks,
   })  : syllabus = syllabus ?? [],
@@ -215,14 +218,17 @@ class Course {
         id: j['id'] as String? ?? '',
         title: j['title'] as String? ?? '',
         desc: j['desc'] as String? ?? '',
+        mode: (j['mode'] as String?)?.toLowerCase() == 'theory' ? 'theory' : 'terminal',
         syllabus: (j['syllabus'] as List?)?.cast<String>() ?? [],
         tasks: ((j['tasks'] as List?) ?? []).map((t) => Task.fromJson(t as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'title': title, 'desc': desc, 'syllabus': syllabus,
+        'id': id, 'title': title, 'desc': desc, 'mode': mode, 'syllabus': syllabus,
         'tasks': tasks.map((t) => t.toJson()).toList(),
       };
+
+  bool get isTheory => mode == 'theory';
 }
 
 class HistEntry {
@@ -310,7 +316,16 @@ class Bookmark {
 class Config {
   String apiKey, provider, model, baseUrl, theme;
   bool ambient;
-  Config({this.apiKey = '', this.provider = 'deepseek', this.model = '', this.baseUrl = '', this.theme = 'cocoa', this.ambient = true});
+  bool onboarded;
+  Config({
+    this.apiKey = '',
+    this.provider = 'deepseek',
+    this.model = '',
+    this.baseUrl = '',
+    this.theme = 'cocoa',
+    this.ambient = true,
+    this.onboarded = false,
+  });
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -318,9 +333,19 @@ class Config {
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
         theme: j['theme'] as String? ?? 'sage',
+        ambient: j['ambient'] as bool? ?? true,
+        onboarded: j['onboarded'] as bool? ?? false,
       );
 
-  Map<String, dynamic> toJson() => {'api_key': apiKey, 'provider': provider, 'model': model, 'base_url': baseUrl, 'theme': theme, 'ambient': ambient};
+  Map<String, dynamic> toJson() => {
+        'api_key': apiKey,
+        'provider': provider,
+        'model': model,
+        'base_url': baseUrl,
+        'theme': theme,
+        'ambient': ambient,
+        'onboarded': onboarded,
+      };
 }
 
 class Progress {

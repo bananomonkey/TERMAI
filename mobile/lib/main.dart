@@ -14,8 +14,8 @@ import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
 import 'ui/lesson.dart';
-import 'ui/chat.dart';
 import 'ui/more.dart';
+import 'ui/onboarding.dart';
 
 final AppController controller = AppController();
 bool diagAutoLesson = false;
@@ -132,13 +132,9 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
     if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) diagAutoLesson = true;
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
-
-    if (controller.config.apiKey.isEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) showOnboardingSheet(context);
-      });
-    }
+    Navigator.of(context).pushReplacement(pageRoute(
+      controller.config.onboarded ? const HomeScreen() : const OnboardingScreen(),
+    ));
   }
 
   @override
@@ -221,69 +217,6 @@ Future<void> _scheduleReminder() async {
   } catch (_) {
     // уведомления не критичны
   }
-}
-
-/// showOnboardingSheet — закруглённая нижняя плашка с вводом ключа.
-void showOnboardingSheet(BuildContext context) {
-  final keyCtrl = TextEditingController();
-  showModalBottomSheet(
-    context: context,
-    isDismissible: false,
-    enableDrag: false,
-    backgroundColor: C.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    isScrollControlled: true,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(
-        left: 20, right: 20, top: 24,
-        bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(width: 4, height: 18, decoration: BoxDecoration(color: C.accent, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(width: 10),
-            Text('ДОБРО ПОЖАЛОВАТЬ В TERMAI',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1, color: C.accent)),
-          ]),
-          const SizedBox(height: 14),
-          const Text('Вставь свой DeepSeek API-ключ — он нужен ИИ-симулятору и ментору.',
-              style: TextStyle(fontSize: 15, height: 1.35)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: keyCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(hintText: 'sk-…'),
-          ),
-          const SizedBox(height: 8),
-          Text('Ключ хранится только на этом устройстве.',
-              style: TextStyle(color: C.muted, fontSize: 12)),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: () async {
-              final k = keyCtrl.text.trim();
-              if (k.isEmpty) return;
-              controller.config.apiKey = k;
-              await controller.saveConfig();
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: const Text('Сохранить и начать'),
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text('Позже', style: TextStyle(color: C.muted)),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 /// HomeScreen — апбар (логотип, XP, «Ещё») + карта курсов.

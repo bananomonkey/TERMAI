@@ -5,8 +5,6 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'chat.dart';
-import 'lesson.dart';
-import 'review.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -69,7 +67,8 @@ void showMoreSheet(BuildContext context) {
               subtitle: 'Опиши цель — соберу программу из курсов',
               onTap: () async {
                 Navigator.pop(ctx);
-                final goal = await askText(context, 'Новый курс от ИИ', 'например: хочу стать девопс-инженером');
+                final goal = await askText(context, 'Новый курс от ИИ',
+                    'например: английский с нуля или хочу стать DevOps-инженером');
                 if (goal != null && goal.isNotEmpty) {
                   final err = await controller.generateCourses(goal);
                   if (err.isNotEmpty && context.mounted) {
@@ -409,6 +408,48 @@ void _showSettings(BuildContext context) {
                     Text(s.error,
                         style: TextStyle(fontSize: 11.5, color: C.danger, height: 1.35)),
                   ],
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (dctx) => AlertDialog(
+                            backgroundColor: C.surface,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            title: const Text('Удалить облачные данные?'),
+                            content: const Text(
+                                'Из Firestore будет удалён прогресс, чаты и email. '
+                                'Локальная копия останется.'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(dctx, false),
+                                  child: Text('Отмена',
+                                      style: TextStyle(color: C.muted))),
+                              FilledButton(
+                                style: FilledButton.styleFrom(backgroundColor: C.danger),
+                                onPressed: () => Navigator.pop(dctx, true),
+                                child: const Text('Удалить'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok != true) return;
+                        final err = await controller.sync.deleteCloudData();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(err.isEmpty
+                                  ? 'Облачные данные удалены'
+                                  : err)));
+                        }
+                      },
+                      icon: Icon(Icons.delete_outline, size: 16, color: C.danger),
+                      label: Text('Удалить облачные данные',
+                          style: TextStyle(fontSize: 12, color: C.danger)),
+                    ),
+                  ),
                 ]);
               },
             ),

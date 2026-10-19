@@ -199,16 +199,24 @@ class AIClient {
 
   // ---------- роль 3: ментор ----------
 
-  static const _sysMentor =
-      'Ты — ИИ-наставник в тренажёре (Docker/Linux/Git и смежное). Стиль: тепло, по-человечески, кратко.\n'
+  static const _sysMentorTerminal =
+      'Ты — ИИ-наставник в тренажёре по терминалу и инфраструктуре (Docker/Linux/Git и смежное). Стиль: тепло, по-человечески, кратко.\n'
       '- Отвечай по-русски, обычно до 120 слов. Без эмодзи.\n'
       '- Видишь задачу, состояние песочницы и историю команд студента — отвечай в этом контексте.\n'
       '- Сначала подтолкни к решению: идея, наводящий вопрос. Полное решение — только по прямой просьбе («дай решение»). Просто «покажи решение» — тоже просьба показать решение.\n'
       '- Используй markdown умеренно: **жирный**, `код`, списки.\n'
       '- Не выдумывай несуществующие команды и флаги.';
 
+  static const _sysMentorTheory =
+      'Ты — ИИ-наставник в учебном тренажёре по разным навыкам: языки, школьные и вузовские предметы, профессии, soft skills.\n'
+      '- Отвечай по-русски, обычно до 120 слов, тепло и по делу. Без эмодзи.\n'
+      '- Опирайся на материал курса и текущую задачу. Приводи примеры, аналогии и маленькие упражнения.\n'
+      '- Сначала подтолкни к ответу: идея, наводящий вопрос. Готовый ответ — только по прямой просьбе.\n'
+      '- Не говори про терминал, команды и песочницу, если студент сам не спросил.\n'
+      '- Используй markdown умеренно: **жирный**, `код`, списки.';
+
   static const _sysInterviewer =
-      'Ты — техлид, проводящий собеседование DevOps-инженера по материалу курса и смежным темам.\n'
+      'Ты — интервьюер по материалу курса и смежным темам. Неважно, какой это навык: язык, профессия или технология.\n'
       '- По одному вопросу за раз; после ответа студента — коротко оцени его и задай следующий, чуть сложнее.\n'
       '- В конце (после 6–8 вопросов) дай разбор: что отвечено хорошо, что подтянуть, и вердикт.\n'
       '- Отвечай по-русски, кратко, без markdown-заголовков.';
@@ -216,18 +224,22 @@ class AIClient {
   Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question,
       {bool interview = false, String solvedContext = ''}) {
     final b = StringBuffer('Курс: ${c.title}\n');
+    b.write('Режим курса: ${c.isTheory ? 'теория, тесты и наставник (без терминала)' : 'практика в терминале'}\n');
     if (task != null) b.write('Текущая задача: ${task.title} — ${task.goal}\n');
-    b.write(stateSummary(st));
-    b.write('\nНедавние команды:\n${formatHist(hist, 160)}');
+    if (!c.isTheory) {
+      b.write(stateSummary(st));
+      b.write('\nНедавние команды:\n${formatHist(hist, 160)}');
+    }
     if (solvedContext.isNotEmpty) b.write('\n' + solvedContext + '\n');
     if (chatLog.isNotEmpty) b.write('\nНедавний диалог:\n${chatLog.join('\n')}\n');
     b.write('\nВопрос студента: $question');
-    return chatText(interview ? _sysInterviewer : _sysMentor, b.toString(), 0.7);
+    final sys = interview ? _sysInterviewer : (c.isTheory ? _sysMentorTheory : _sysMentorTerminal);
+    return chatText(sys, b.toString(), 0.7);
   }
 
   // ---------- роль 4: генератор задач ----------
 
-  static const _sysTaskGen = 'Ты — генератор учебных задач для тренажёра (Docker/Linux/Git и смежные темы). Тебе дают курс, тему (префикс cmd: практика в терминале, quiz: вопрос-тест) и названия недавних задач — не повторяй их.\n'
+  static const _sysTaskGenTerminal = 'Ты — генератор учебных задач для тренажёра по терминалу и инфраструктуре (Docker/Linux/Git и смежные темы). Тебе дают курс, тему (префикс cmd: практика в терминале, quiz: вопрос-тест) и названия недавних задач — не повторяй их.\n'
       'Формат задачи: ТЕОРИЯ → ТЕСТ (2 вопроса по теории) → ПРАКТИКА.\n'
       'Теория: markdown, каждый элемент массива theory — один блок, 3-5 блоков, с примерами команд в `коде` и ```блоках```.\n'
       'Для kind=cmd добавь quiz — РОВНО 2 вопроса с 3 вариантами (correct — индекс с 0). Для kind=quiz массив quiz пуст.\n'
@@ -238,20 +250,42 @@ class AIClient {
       '"check":"критерий успеха по state",'
       '"start_state":{"workdir":"/workspace","files":{},"images":{},"containers":{},"volumes":{},"networks":["bridge","host","none"],"events":[]}}';
 
-  Future<Task> generateTask(String courseTitle, String topic, List<String> recent, String style) async {
+  static const _sysTaskGenTheory = 'Ты — генератор учебных задач для тренажёра по разным навыкам: языки, школьные и вузовские предметы, профессии, soft skills, дизайн, музыка и т.п.\n'
+      'Тебе дают курс, тему и названия недавних задач — не повторяй их.\n'
+      'Формат задачи: ТЕОРИЯ (3-5 markdown-блоков с примерами, переводом или разбором) → ТЕСТ РОВНО из 2 вопросов по 3 варианта (correct — индекс с 0).\n'
+      'НИКАКОГО терминала, команд, Docker и песочницы. kind всегда "quiz", start_state — пустое состояние.\n'
+      'goal — что студент должен понять или уметь после урока. check — короткий критерий самопроверки.\n'
+      'Сложность 1-5. Ответ — только JSON строго по схеме:\n'
+      '{"id":"short-english-id","title":"Название по-русски","kind":"quiz","difficulty":3,'
+      '"theory":["абзац markdown"],"quiz":[{"question":"вопрос","options":["в1","в2","в3"],"correct":0}],'
+      '"goal":"чему научиться","hints":["подсказка 1","подсказка 2"],'
+      '"check":"критерий самопроверки",'
+      '"start_state":{"workdir":"/workspace","files":{},"images":{},"containers":{},"volumes":{},"networks":["bridge","host","none"],"events":[]}}';
+
+  Future<Task> generateTask(String courseTitle, String topic, List<String> recent, String style,
+      {String mode = 'terminal'}) async {
+    final theory = mode == 'theory';
     final topicLine = topic.startsWith('повторение')
-        ? 'Тема: свободная — повторение пройденного ТОЛЬКО по предмету курса (выбери сам, можно cmd или quiz).'
+        ? 'Тема: свободная — повторение пройденного ТОЛЬКО по предмету курса.'
         : 'Тема задачи: $topic';
-    var user = 'ПРЕДМЕТ КУРСА: $courseTitle — вся задача, теория, примеры и команды ТОЛЬКО про этот предмет. '
-        'Запрещено использовать команды и темы других предметов.\n'
+    var user = 'ПРЕДМЕТ КУРСА: $courseTitle — вся задача, теория и примеры ТОЛЬКО про этот предмет. '
+        'Запрещено смешивать другие предметы.\n'
         'Курс: $courseTitle\n$topicLine\nНедавние задачи (не повторять): ${recent.join('; ')}\n';
+    if (theory) {
+      user += '\nРЕЖИМ КУРСА: теория и тесты (без терминала). kind="quiz", ровно 2 вопроса. '
+          'Примеры — из языка/предмета курса, без команд и Docker.\n';
+    } else {
+      user += '\nРЕЖИМ КУРСА: практика в терминале. kind="cmd" или "quiz".\n';
+    }
     if (style.trim().isNotEmpty) user += '\nОБЯЗАТЕЛЬНОЕ УКАЗАНИЕ К СТИЛЮ:\n$style\n';
     user += '\nСгенерируй задачу по схеме. Ответ — только JSON.';
-    final j = await chatJSON(_sysTaskGen, user, 0.6);
+    final j = await chatJSON(theory ? _sysTaskGenTheory : _sysTaskGenTerminal, user, 0.6);
     final t = Task.fromJson(j);
     if (t.title.trim().isEmpty || t.goal.trim().isEmpty) throw Exception('модель вернула задачу без названия или условия');
     t.id = t.id.isEmpty ? 'ai-${DateTime.now().millisecondsSinceEpoch % 100000}' : t.id;
+    t.kind = theory ? 'quiz' : (t.isQuiz ? 'quiz' : 'cmd');
     t.difficulty = t.difficulty < 1 || t.difficulty > 5 ? 3 : t.difficulty;
+    if (theory && t.quiz.isEmpty) throw Exception('модель вернула теорию без теста');
     if (t.hints.isEmpty) t.hints = ['Перечитай условие и теорию.', 'Спроси ментора в чате.'];
     if (t.check.isEmpty) t.check = t.goal;
     return t;
@@ -259,17 +293,20 @@ class AIClient {
 
   /// generateTaskBatch — сразу много задач по курсу (по темам программы).
   Future<List<Task>> generateTaskBatch(Course course, int count) async {
+    final theory = course.isTheory;
     final syllabus = course.syllabus.isEmpty
-        ? ['cmd: базовая практика по теме курса']
+        ? [theory ? 'quiz: вводный урок по теме курса' : 'cmd: базовая практика по теме курса']
         : course.syllabus;
     final user = 'Курс: ' + course.title
+        + '\nРЕЖИМ: ' + (theory ? 'теория и тесты, без терминала' : 'практика в терминале')
         + '\nТемы программы (по одной на задачу, по порядку или группами):\n'
         + syllabus.take(count).join('\n')
         + '\n\nСгенерируй РОВНО ' + count.toString() + ' задач по этим темам. Если тем меньше — добавь задачи на углубление и повторение.'
         + '\nНедавние задачи курса (не повторять): ' + course.tasks.map((t) => t.title).take(10).join('; ')
-        + '\n\nВАЖНО: все задачи строго по предмету курса «' + course.title + '» и только по перечисленным темам. Никаких других предметов (например, для курса Linux — только Linux, без Git/Docker).'
+        + '\n\nВАЖНО: все задачи строго по предмету курса «' + course.title + '» и только по перечисленным темам. Никаких других предметов.'
+        + (theory ? '\nТолько теория и тесты. kind="quiz", ровно 2 вопроса. Никаких команд и Docker.' : '')
         + '\n\nОтвет — только JSON: {"tasks": [ {задача по схеме}, … ]}';
-    final j = await chatJSON(_sysTaskGen, user, 0.55);
+    final j = await chatJSON(theory ? _sysTaskGenTheory : _sysTaskGenTerminal, user, 0.55);
     // модель иногда шлёт одну задачу без обёртки — принимаем оба варианта
     final raw = j['tasks'];
     final List list;
@@ -286,7 +323,8 @@ class AIClient {
       final t = Task.fromJson(list[i] as Map<String, dynamic>);
       if (t.title.trim().isEmpty || t.goal.trim().isEmpty) continue;
       t.id = t.id.isEmpty ? 'ai-${now % 100000}-$i' : t.id;
-      t.kind = t.isQuiz ? 'quiz' : 'cmd';
+      t.kind = theory ? 'quiz' : (t.isQuiz ? 'quiz' : 'cmd');
+      if (theory && t.quiz.isEmpty) continue;
       t.difficulty = t.difficulty < 1 || t.difficulty > 5 ? 3 : t.difficulty;
       if (t.hints.isEmpty) t.hints = ['Перечитай условие и теорию.', 'Спроси ментора в чате.'];
       if (t.check.isEmpty) t.check = t.goal;
@@ -298,9 +336,13 @@ class AIClient {
 
   // ---------- роль 5: генератор курсов ----------
 
-  static const _sysCourseGen = 'Ты — методист, собирающий учебную программу для тренажёра (Docker/Linux/Git/сети/CI-CD). Пользователь описывает цель.\n'
-      'Составь от 3 до 5 ПОСЛЕДОВАТЕЛЬНЫХ курсов от базы к цели. В каждом курсе syllabus — список тем (10-20): формат "cmd: ..." для практики или "quiz: ..." для теста.\n'
-      'Ответ — только JSON: {"courses":[{"id":"linux-basics","title":"Название","desc":"одно предложение","syllabus":["cmd: ...","quiz: ..."]}]}';
+  static const _sysCourseGen = 'Ты — методист, собирающий учебную программу для тренажёра по ЛЮБЫМ навыкам: языки, школьные и вузовские предметы, профессии, DevOps, дизайн, soft skills и т.п. Пользователь описывает цель.\n'
+      'Составь от 3 до 5 ПОСЛЕДОВАТЕЛЬНЫХ курсов от базы к цели.\n'
+      'Для каждого курса выбери mode:\n'
+      '- "terminal" — если навык проверяется командами в терминале (Linux, Docker, Git, сети, CI/CD);\n'
+      '- "theory" — если практика не в терминале (языки, теория, профессии, soft skills).\n'
+      'syllabus — список тем (10-20). Для terminal: "cmd: ..." или "quiz: ...". Для theory: "quiz: ..." (тема урока).\n'
+      'Ответ — только JSON: {"courses":[{"id":"english-a1","title":"Название","desc":"одно предложение","mode":"theory","syllabus":["quiz: ..."]}]}';
 
   Future<List<Course>> generateCourses(String goal) async {
     final j = await chatJSON(_sysCourseGen, 'Цель студента: $goal\n\nСобери программу. Ответ — только JSON.', 0.5);
@@ -311,7 +353,13 @@ class AIClient {
       final c = courses[i];
       c.id = c.id.isEmpty ? 'ai-${now % 100000}-$i' : 'ai-${c.id}';
       if (c.title.isEmpty) c.title = 'Курс ${i + 1}';
-      if (c.syllabus.isEmpty) c.syllabus = ['cmd: вводная практика по теме курса'];
+      // если модель не прислала mode, выводим его из префиксов тем
+      if (!c.isTheory && c.syllabus.isNotEmpty && c.syllabus.every((t) => t.trimLeft().startsWith('quiz:'))) {
+        c.mode = 'theory';
+      }
+      if (c.syllabus.isEmpty) {
+        c.syllabus = [c.isTheory ? 'quiz: вводный урок по теме курса' : 'cmd: вводная практика по теме курса'];
+      }
     }
     if (courses.isEmpty) throw Exception('модель не вернула ни одного курса');
     return courses;
@@ -325,7 +373,8 @@ class AIClient {
       final topic = course.syllabus.isEmpty
           ? 'практика по предмету курса, часть ' + (i + 1).toString()
           : course.syllabus[i % course.syllabus.length];
-      final t = await generateTask(course.title, topic, course.tasks.map((x) => x.title).toList(), '');
+      final t = await generateTask(course.title, topic, course.tasks.map((x) => x.title).toList(), '',
+          mode: course.mode);
       course.tasks.add(t);
     }
     return course.tasks;

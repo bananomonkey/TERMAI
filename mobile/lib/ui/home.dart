@@ -6,7 +6,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
-import '../models.dart';
 import '../store.dart';
 import 'ambient.dart';
 import 'chat.dart';
@@ -71,7 +70,7 @@ class CourseGraphView extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
                 itemCount: courses.length,
-                itemBuilder: (context, i) => _CourseTile(index: i, ambient: ambient),
+                itemBuilder: (context, i) => _CourseTile(index: i),
               ),
             ),
           ],
@@ -91,8 +90,7 @@ class CourseGraphView extends StatelessWidget {
 /// _CourseTile — плитка курса: имя, зелёный прогресс-бар, процент.
 class _CourseTile extends StatelessWidget {
   final int index;
-  final bool ambient;
-  const _CourseTile({required this.index, required this.ambient});
+  const _CourseTile({required this.index});
 
   @override
   Widget build(BuildContext context) {
@@ -103,74 +101,89 @@ class _CourseTile extends StatelessWidget {
     final solved = total == 0 ? 0 : c.tasks.where((t) => completedMap[t.id] ?? false).length;
     final pct = total == 0 ? 0 : ((solved / total) * 100).round();
     final current = !done && index == _currentIdx();
+    final accent = c.isTheory ? C.secondary : C.accent;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
         onDoubleTap: () => _showCourseActions(context, index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(15),
-          foregroundDecoration: ambient
-              ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              if (current)
+                BoxShadow(color: accent.withAlpha(30), blurRadius: 26, spreadRadius: 1),
+              BoxShadow(
+                color: Colors.black.withAlpha(45),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.white.withAlpha(50),
-                      Colors.white.withAlpha(8),
-                      Colors.black.withAlpha(20),
+                      Colors.white.withAlpha(current ? 34 : 22),
+                      Colors.white.withAlpha(6),
+                      Colors.black.withAlpha(12),
                     ],
-                    stops: const [0.0, 0.45, 1.0],
-                  ),
-                )
-              : null,
-          decoration: BoxDecoration(
-            color: ambient ? C.surface.withAlpha(110) : C.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: current ? C.accent : (ambient ? Colors.white.withAlpha(40) : C.border),
-              width: current ? 1.6 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(60),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(c.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
-                const SizedBox(height: 9),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: total == 0 ? 0 : solved / total,
-                    minHeight: 7,
-                    backgroundColor: C.card2,
-                    color: C.good,
+                    stops: const [0.0, 0.55, 1.0],
                   ),
                 ),
-              ]),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
+                            size: 15, color: accent),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(c.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
+                        ),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(c.isTheory ? 'теория · тесты · ментор' : 'практика в терминале',
+                          style: TextStyle(fontSize: 11, color: C.muted)),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: LinearProgressIndicator(
+                          value: total == 0 ? 0 : solved / total,
+                          minHeight: 6,
+                          backgroundColor: Colors.white.withAlpha(18),
+                          color: done ? C.good : accent,
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(width: 14),
+                  Text('$pct%',
+                      style: TextStyle(
+                          fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
+                  const SizedBox(width: 6),
+                  if (done)
+                    Icon(Icons.check_circle_rounded, color: C.good, size: 22)
+                  else
+                    Icon(Icons.chevron_right, color: C.muted, size: 22),
+                ]),
+              ),
             ),
-            const SizedBox(width: 14),
-            Text('$pct%',
-                style: TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
-            const SizedBox(width: 6),
-            if (done)
-              Icon(Icons.check_circle_rounded, color: C.good, size: 22)
-            else
-              Icon(Icons.chevron_right, color: C.muted, size: 22),
-          ]),
+          ),
         ),
       ),
     );
@@ -368,7 +381,7 @@ class _TaskGroups extends StatelessWidget {
         groups.add(_TaskRow(
           index: i,
           title: t.title,
-          kind: t.isQuiz ? 'тест' : 'практика',
+          kind: c.isTheory ? 'урок' : (t.isQuiz ? 'тест' : 'практика'),
           difficulty: t.difficulty,
           done: controller.isDone(t),
           current: i == _frontier(),
@@ -467,7 +480,7 @@ class _EndActions extends StatelessWidget {
               ? null
               : () async {
                   final topic = await askText(context, 'Новая задача от ИИ',
-                      'тема: например «проброс портов» или «права доступа»');
+                      'тема: например «времена в английском» или «проброс портов»');
                   if (topic == null || topic.isEmpty) return;
                   final err = await controller.generateTask(topic);
                   if (err.isNotEmpty && context.mounted) {
