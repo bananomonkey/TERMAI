@@ -1,6 +1,70 @@
 // widgets.dart — общие элементы UI: карточки-«окна», подписи, плашки.
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'theme.dart';
+
+/// glass — «жидкое стекло»: размытие фона + градиентная линза + мягкая тень.
+/// [glow] рисует свечение под элементом (у активного курса — зелёное).
+/// [glowColor] переопределяет цвет свечения, [radius] — скругление.
+Widget glass({
+  required Widget child,
+  double radius = 20,
+  double blur = 36,
+  EdgeInsets padding = const EdgeInsets.all(0),
+  Color? glow,
+  Color? tint,
+  bool lens = true,
+}) {
+  return Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: [
+        if (glow != null)
+          BoxShadow(
+            color: glow,
+            blurRadius: 38,
+            spreadRadius: -2,
+            offset: const Offset(0, 10),
+          ),
+        BoxShadow(
+          color: Colors.black.withAlpha(70),
+          blurRadius: 24,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: tint != null && !lens
+                  ? [tint.withAlpha(40), tint.withAlpha(14)]
+                  : C.glassGradient,
+              stops: const [0.0, 0.45, 0.78, 1.0],
+            ),
+            border: Border.all(color: Colors.white.withAlpha(26), width: 1),
+          ),
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
+/// chevron — единый выразительный шеврон «›» для строк и плиток.
+Widget chevron({double size = 26, Color? color}) => Icon(
+      Icons.chevron_right_rounded,
+      size: size,
+      color: color ?? C.muted,
+    );
 
 /// cardBox — «окно»: скруглённая карточка с рамкой; [accent] подсвечивает активную.
 Widget cardBox({required Widget child, Color? accent, EdgeInsets padding = const EdgeInsets.all(14)}) {

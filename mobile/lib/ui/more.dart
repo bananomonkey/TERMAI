@@ -4,6 +4,8 @@ import '../ai.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'ai_fallbacks.dart';
+import 'background_settings.dart';
 import 'chat.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -117,6 +119,28 @@ void showMoreSheet(BuildContext context) {
               onTap: () {
                 Navigator.pop(ctx);
                 _showSettings(context);
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.swap_horiz_outlined,
+              title: 'Резервные модели',
+              subtitle: controller.config.fallbacks.isEmpty
+                  ? 'Если основной провайдер откажет — подстрахует резервный'
+                  : 'Подключено резервных: ${controller.config.fallbacks.length}',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(pageRoute(const AiFallbacksScreen()));
+              },
+            ),
+            const SizedBox(height: 8),
+            _SheetButton(
+              icon: Icons.wallpaper_outlined,
+              title: 'Фон приложения',
+              subtitle: 'Своё фото, размытие и затемнение',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(pageRoute(const BackgroundSettingsScreen()));
               },
             ),
             const SizedBox(height: 8),
@@ -272,6 +296,18 @@ void _showSettings(BuildContext context) {
             TextField(
               controller: baseCtrl,
               decoration: const InputDecoration(labelText: 'Base URL (пусто — из пресета)'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(pageRoute(const AiFallbacksScreen()));
+              },
+              icon: const Icon(Icons.swap_horiz_outlined, size: 18),
+              label: Text(
+                'Резервные модели (${controller.config.fallbacks.length})',
+                style: const TextStyle(fontSize: 13),
+              ),
             ),
             const SizedBox(height: 12),
             Row(children: [

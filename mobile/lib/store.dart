@@ -29,6 +29,8 @@ class AppController extends ChangeNotifier {
   final SyncService sync = SyncService.instance;
 
   List<Course> courses = [];
+  /// allCourses — все курсы, включая архивные (для экрана архива).
+  List<Course> allCourses = [];
   int courseIdx = 0;
   int viewIdx = 0;
 
@@ -62,6 +64,8 @@ class AppController extends ChangeNotifier {
   // контекст только что решённой задачи — отдаётся ментору один раз
   String lastSolvedTitle = '';
   String lastSolvedHist = ''; // данные окна «Задача выполнена»
+  /// Сообщение о том, что сработала резервная модель (показывается один раз).
+  String lastAiFallback = '';
 
   // ---------- инициализация ----------
 
@@ -81,9 +85,9 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
-    if (config.theme == 'sage') config.theme = 'cocoa';
+    if (config.theme == 'sage' || config.theme == 'cocoa') config.theme = 'navy';
     C.p = presetById(config.theme);
-    ai = config.apiKey.isEmpty ? null : AIClient(config);
+    _initAI();
 
     if (!prog.genCleaned) {
       // одноразовая чистка: задачи ранних версий могли смешивать предметы
@@ -92,13 +96,6 @@ class AppController extends ChangeNotifier {
       await saveProgress();
     }
     await _assembleCourses();
-    for (final c in courses) {
-      c.tasks.addAll(prog.generated[c.id] ?? []);
-    }
-    if (prog.lastCourse.isNotEmpty) {
-      final i = courses.indexWhere((c) => c.id == prog.lastCourse);
-      if (i >= 0) courseIdx = i;
-    }
     _bumpStreak();
     resetCourseState();
     ready = true;
@@ -140,12 +137,27 @@ class AppController extends ChangeNotifier {
   /// (используется при старте и после импорта).
   Future<void> _assembleCourses() async {
     final raw = await rootAssetCourses();
-    courses = raw.where((c) => !prog.hiddenCourses.contains(c.id)).toList();
-    courses.addAll(prog.extraCourses.where((c) => !prog.hiddenCourses.contains(c.id)));
-    for (final c in courses) {
+    allCourses = raw;
+    final extra = List<Course>.from(prog.extraCourses);
+    for (final c in extra) {
+      if (!allCourses.any((x) => x.id == c.id)) allCourses.add(c);
+    }
+    for (final c in allCourses) {
       final t = prog.courseTitles[c.id];
       if (t != null && t.isNotEmpty) c.title = t;
+      // задачи, сгенерированные ИИ, живут в прогрессе — подмешиваем без дублей
+      for (final t2 in prog.generated[c.id] ?? <Task>[]) {
+        if (!c.tasks.any((x) => x.id == t2.id)) c.tasks.add(t2);
+      }
     }
+    _applyCourseFilter();
+  }
+
+  /// _applyCourseFilter — видимый список: без удалённых и архивных курсов.
+  void _applyCourseFilter() {
+    courses = allCourses
+        .where((c) => !prog.hiddenCourses.contains(c.id) && !prog.archived.contains(c.id))
+        .toList();
     if (prog.courseOrder.isNotEmpty) {
       courses.sort((a, b) {
         final ia = prog.courseOrder.indexOf(a.id), ib = prog.courseOrder.indexOf(b.id);
@@ -170,14 +182,84 @@ class AppController extends ChangeNotifier {
     return list.map((c) => Course.fromJson(c)).toList();
   }
 
-  Future<void> saveConfig() async {
-    if (config.theme == 'sage') config.theme = 'cocoa';
+  /// _initAI — собирает клиент из основного и резервных подключений.
+  /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
+  void _initAI() {
+    final client = AIClient(config);
+    client.onUsage = recordUsage;
+    client.onRetry = (msg) {
+      if (lastAiFallback == msg) return;
+      lastAiFallback = msg;
+      notifyListeners();
+    };
+    ai = client.ready ? client : null;
+  }
+
+  /// recordUsage — копим токены по моделям; экран «Расход» считает доллары.
+  void recordUsage(String model, int prompt, int completion) {
+    if (model.trim().isEmpty || (prompt <= 0 && completion <= 0)) return;
+    final cur0 = prog.aiUsage[model] ?? [0, 0];
+    prog.aiUsage[model] = [cur0[0] + prompt, cur0[1] + completion];
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// resetUsage — обнулить счётчик расхода.
+  void resetUsage() {
+    prog.aiUsage.clear();
+    saveProgress();
+    notifyListeners();
+  }
+
+  Future<void> saveConfig({bool autofill = true}) async {
+    if (config.theme == 'sage' || config.theme == 'cocoa') config.theme = 'navy';
     C.p = presetById(config.theme);
     final dir = await _dataDir();
     await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
-    ai = config.apiKey.isEmpty ? null : AIClient(config);
+    _initAI();
     notifyListeners();
-    autoFillAll();
+    if (autofill) autoFillAll();
+  }
+
+  // ---------- фоновое фото ----------
+
+  /// setBackgroundPhoto — копирует выбранное изображение в папку приложения
+  /// и запоминает путь: фон живёт, даже если оригинал удалить.
+  Future<String> setBackgroundPhoto(String sourcePath) async {
+    try {
+      final dir = await _dataDir();
+      final target = io.File('$dir/termai-bg.jpg');
+      await io.File(sourcePath).copy(target.path);
+      config.bgPhoto = target.path;
+      await saveConfig(autofill: false);
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    }
+  }
+
+  /// clearBackgroundPhoto — вернуть фон темы.
+  Future<void> clearBackgroundPhoto() async {
+    final p = config.bgPhoto;
+    config.bgPhoto = '';
+    await saveConfig(autofill: false);
+    if (p.isNotEmpty) {
+      try {
+        final f = io.File(p);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    }
+  }
+
+  /// setBackgroundTuning — размытие и затемнение фона (сохраняем без перезапуска ИИ).
+  Future<void> setBackgroundTuning({double? blur, double? dim, bool persist = false}) async {
+    if (blur != null) config.bgBlur = blur.clamp(0, 40);
+    if (dim != null) config.bgDim = dim.clamp(0, 0.9);
+    if (persist) {
+      final dir = await _dataDir();
+      await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
+    }
+    notifyListeners();
   }
 
 
@@ -292,7 +374,7 @@ Future<String> Function() loadCoursesAsset = () async => '[]';
 extension AppCourses on AppController {
   Course get cur => courses[courseIdx];
 
-  String get stateKey => cur.id;
+  String get stateKey => courses.isEmpty ? '__empty__' : cur.id;
 
   void ensureStateForTask(Task t) {
     if (stateTask[stateKey] == t.id) return;
@@ -302,6 +384,7 @@ extension AppCourses on AppController {
   }
 
   void resetCourseState() {
+    if (courses.isEmpty) return;
     if (!states.containsKey(stateKey)) {
       states[stateKey] =
           viewIdx < cur.tasks.length ? cur.tasks[viewIdx].start.clone() : SandboxState();
@@ -331,6 +414,7 @@ extension AppCourses on AppController {
   }
 
   void switchCourse(int i) {
+    if (i < 0 || i >= courses.length) return;
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
@@ -343,7 +427,7 @@ extension AppCourses on AppController {
 
   /// switchCourseSilent — смена курса без строк в терминале (из карты курсов).
   void switchCourseSilent(int i) {
-    if (i == courseIdx) return;
+    if (i < 0 || i >= courses.length || i == courseIdx) return;
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
@@ -726,6 +810,7 @@ extension AppCourses on AppController {
         await ai!.ensureCourseFilled(c); // минимум 5 задач в каждом новом курсе
       }
       courses.addAll(news);
+      allCourses.addAll(news);
       prog.extraCourses.addAll(news);
       await saveProgress();
       grant('architect');
@@ -827,6 +912,23 @@ extension AppCourses on AppController {
     if (i < 0 || i >= courses.length || title.trim().isEmpty) return;
     courses[i].title = title.trim();
     prog.courseTitles[courses[i].id] = courses[i].title;
+    final all = allCourses.where((c) => c.id == courses[i].id).firstOrNull;
+    if (all != null) all.title = courses[i].title;
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// renameCourseById — переименование с экрана архива.
+  void renameCourseById(String id, String title) {
+    final t = title.trim();
+    if (t.isEmpty) return;
+    prog.courseTitles[id] = t;
+    for (final c in allCourses) {
+      if (c.id == id) c.title = t;
+    }
+    for (final c in courses) {
+      if (c.id == id) c.title = t;
+    }
     saveProgress();
     notifyListeners();
   }
@@ -854,6 +956,56 @@ extension AppCourses on AppController {
     if (courseIdx >= courses.length) courseIdx = 0;
     if (viewIdx >= (courses.isEmpty ? 0 : cur.tasks.length)) viewIdx = 0;
     prog.lastCourse = courses.isEmpty ? '' : cur.id;
+    saveProgress();
+    notifyListeners();
+  }
+
+  // ---------- архив курсов ----------
+
+  /// archivedCourses — курсы, убранные в архив (в порядке «всех» курсов).
+  List<Course> get archivedCourses =>
+      allCourses.where((c) => prog.archived.contains(c.id)).toList();
+
+  /// archiveCourse — убрать курс из основного списка в архив.
+  /// Прогресс и чаты курса сохраняются: курс можно вернуть в любой момент.
+  void archiveCourse(String id) {
+    final c = allCourses.where((x) => x.id == id).firstOrNull;
+    if (c == null || prog.archived.contains(id)) return;
+    prog.archived.add(id);
+    prog.courseOrder.remove(id);
+    _applyCourseFilter();
+    if (courses.isNotEmpty) {
+      if (viewIdx >= cur.tasks.length) viewIdx = 0;
+      prog.lastCourse = cur.id;
+    } else {
+      prog.lastCourse = '';
+    }
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// unarchiveCourse — вернуть курс из архива в основной список.
+  void unarchiveCourse(String id) {
+    if (!prog.archived.contains(id)) return;
+    prog.archived.remove(id);
+    _applyCourseFilter();
+    final i = courses.indexWhere((c) => c.id == id);
+    if (i >= 0) {
+      courseIdx = i;
+      prog.lastCourse = id;
+    }
+    saveProgress();
+    notifyListeners();
+  }
+
+  /// deleteArchivedCourse — стереть архивный курс навсегда.
+  void deleteArchivedCourse(String id) {
+    prog.archived.remove(id);
+    prog.extraCourses.removeWhere((x) => x.id == id);
+    allCourses.removeWhere((x) => x.id == id);
+    if (!prog.hiddenCourses.contains(id)) prog.hiddenCourses.add(id);
+    prog.courseOrder.remove(id);
+    _applyCourseFilter();
     saveProgress();
     notifyListeners();
   }

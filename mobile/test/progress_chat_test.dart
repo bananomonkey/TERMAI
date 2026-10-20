@@ -56,4 +56,53 @@ void main() {
     expect(english.tasks.every((t) => t.isQuiz), isTrue);
     expect(english.tasks.every((t) => t.quiz.length == 2), isTrue);
   });
+
+  test('archive list and token usage survive Progress JSON round-trip', () {
+    final p = Progress()
+      ..archived = ['linux', 'english-a1']
+      ..aiUsage = {
+        'deepseek-chat': [1200, 340],
+        'gpt-4o-mini': [50, 10],
+      };
+
+    final back = Progress.fromJson(p.toJson());
+
+    expect(back.archived, ['linux', 'english-a1']);
+    expect(back.aiUsage['deepseek-chat'], [1200, 340]);
+    expect(back.tokensIn, 1250);
+    expect(back.tokensOut, 350);
+    expect(back.tokensTotal, 1600);
+
+    // старые файлы прогресса без новых полей читаются без ошибок
+    final legacy = Progress.fromJson({'xp': 10});
+    expect(legacy.archived, isEmpty);
+    expect(legacy.aiUsage, isEmpty);
+  });
+
+  test('fallback endpoints and background photo survive Config JSON round-trip', () {
+    final cfg = Config()
+      ..theme = 'navy'
+      ..fallbacks = [
+        AiEndpoint(provider: 'openai', apiKey: 'sk-a', model: 'gpt-4o-mini'),
+        AiEndpoint(provider: 'gemini', apiKey: 'g-key', model: 'gemini-2.0-flash', baseUrl: 'https://example.test/v1'),
+      ]
+      ..bgPhoto = '/tmp/photo.jpg'
+      ..bgBlur = 12
+      ..bgDim = 0.4;
+
+    final back = Config.fromJson(cfg.toJson());
+
+    expect(back.theme, 'navy');
+    expect(back.fallbacks, hasLength(2));
+    expect(back.fallbacks.first.ready, isTrue);
+    expect(back.fallbacks[1].baseUrl, 'https://example.test/v1');
+    expect(back.bgPhoto, '/tmp/photo.jpg');
+    expect(back.bgBlur, 12);
+    expect(back.bgDim, 0.4);
+
+    // прежние конфиги (без резервов и фона) получают тёмно-синюю тему
+    final legacy = Config.fromJson({'theme': 'sage'});
+    expect(legacy.fallbacks, isEmpty);
+    expect(legacy.bgPhoto, isEmpty);
+  });
 }

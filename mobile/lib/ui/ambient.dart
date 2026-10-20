@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 /// AmbientBackground — туманная сцена-«фото».
 class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key});
@@ -33,7 +35,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         _renderScene(w, h);
       }
       final img = _img;
-      if (img == null) return const ColoredBox(color: Color(0xFF120D0A));
+      if (img == null) return ColoredBox(color: C.bg);
       return SizedBox.expand(
         child: RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.low),
       );
@@ -60,24 +62,27 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
   void _paintScene(ui.Canvas canvas, ui.Size size) {
     final r = math.Random(5);
 
-    // ночная база: чуть светлее кверху
+    // ночная база в тоне темы: чуть светлее кверху
     canvas.drawRect(
       Offset.zero & size,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [const Color(0xFF1A120D), const Color(0xFF0E0906)],
+          colors: [
+            Color.alphaBlend(Colors.white.withAlpha(10), C.bg),
+            Color.alphaBlend(Colors.black.withAlpha(60), C.bg),
+          ],
         ).createShader(Offset.zero & size),
     );
-    // лунная подсветка из верхнего левого угла
+    // лунная подсветка из верхнего левого угла — акцентом темы
     canvas.drawRect(
       Offset.zero & size,
       Paint()
         ..shader = RadialGradient(
           center: const Alignment(-0.75, -0.85),
           radius: 1.3,
-          colors: [const Color(0x38C97E3C), const Color(0x000E0906)],
+          colors: [C.accent.withAlpha(56), C.bg.withAlpha(0)],
         ).createShader(Offset.zero & size),
     );
     // косой луч света сквозь туман
@@ -91,7 +96,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [const Color(0x00D08C3C), const Color(0x20D08C3C), const Color(0x00D08C3C)],
+          colors: [C.secondary.withAlpha(0), C.secondary.withAlpha(32), C.secondary.withAlpha(0)],
         ).createShader(shaft),
     );
     canvas.restore();
@@ -120,7 +125,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
           rect,
           Paint()
             ..shader = RadialGradient(
-              colors: [const Color(0xFFD9B48C).withAlpha(a), const Color(0xFFD9B48C).withAlpha(0)],
+              colors: [C.secondary.withAlpha(a), C.secondary.withAlpha(0)],
             ).createShader(rect),
         );
       }

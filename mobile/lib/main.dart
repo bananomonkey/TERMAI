@@ -10,6 +10,8 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'store.dart';
+import 'ui/app_background.dart';
+import 'ui/dock.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
@@ -290,7 +292,20 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: const CourseGraphView(),
+      body: AppBackdrop(
+        child: Stack(children: [
+          const Positioned.fill(child: CourseGraphView()),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Center(child: const GlassDock()),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }

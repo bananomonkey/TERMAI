@@ -22,6 +22,14 @@ class ThemePreset {
 }
 
 const themePresets = <ThemePreset>[
+  // Тёмно-синий — основной пресет TERMAI: ночное море, голубой акцент.
+  ThemePreset(
+    id: 'navy', title: 'Тёмно-синий',
+    bg: Color(0xFF0A1226), surface: Color(0xFF101A33), card: Color(0xFF16213F), card2: Color(0xFF1D2A4C),
+    secondary: Color(0xFF6E8BC4), accent: Color(0xFF4DA3FF), accentDark: Color(0xFF2E86E0),
+    text: Color(0xFFE6EDF8), muted: Color(0xFF8296B8), good: Color(0xFF3FD69A), warn: Color(0xFFE5B567),
+    danger: Color(0xFFE0707F), border: Color(0xFF223158), termBg: Color(0xFF070E1F), termText: Color(0xFFB9C9E4),
+  ),
   // Приятный зелёный — «приложение-эко»
   ThemePreset(
     id: 'emerald', title: 'Изумруд',
@@ -86,6 +94,28 @@ class C {
   static Color get danger => p.danger;
   static Color get termBg => p.termBg;
   static Color get termText => p.termText;
+
+  // ---------- жидкое стекло ----------
+
+  /// Верхняя грань стекла: чуть светлее поверх тона темы.
+  static Color get glassTop => Color.alphaBlend(
+      Colors.white.withAlpha(30), p.card);
+
+  /// Нижняя грань стекла: глубже и темнее (объём «линзы»).
+  static Color get glassBottom => Color.alphaBlend(
+      Colors.black.withAlpha(70), p.bg);
+
+  /// Градиент стекла: верх/середина/низ.
+  static List<Color> get glassGradient => [
+        Colors.white.withAlpha(38),
+        Colors.white.withAlpha(14),
+        p.accent.withAlpha(16),
+        Colors.black.withAlpha(30),
+      ];
+
+  /// Свечение активного элемента — мягкий акцент сквозь размытие.
+  static Color glow({Color? color, int alpha = 70}) =>
+      (color ?? p.good).withAlpha(alpha);
 }
 
 ThemeData buildTheme() {

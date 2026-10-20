@@ -313,28 +313,75 @@ class Bookmark {
 
 // ---------- настройки и прогресс ----------
 
+/// AiEndpoint — одно подключение к ИИ: провайдер, ключ, модель, base URL.
+/// Основное подключение лежит в Config напрямую, резервные — списком
+/// Config.fallbacks: если основной провайдер откажет, TERMAI идёт по списку.
+class AiEndpoint {
+  String provider, apiKey, model, baseUrl;
+  AiEndpoint({
+    this.provider = 'deepseek',
+    this.apiKey = '',
+    this.model = '',
+    this.baseUrl = '',
+  });
+
+  bool get ready => apiKey.trim().isNotEmpty;
+
+  factory AiEndpoint.fromJson(Map<String, dynamic> j) => AiEndpoint(
+        provider: j['provider'] as String? ?? 'deepseek',
+        apiKey: j['api_key'] as String? ?? '',
+        model: j['model'] as String? ?? '',
+        baseUrl: j['base_url'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'provider': provider,
+        'api_key': apiKey,
+        'model': model,
+        'base_url': baseUrl,
+      };
+}
+
 class Config {
   String apiKey, provider, model, baseUrl, theme;
   bool ambient;
   bool onboarded;
+  /// Резервные ИИ-подключения: перебираются по порядку, если основной откажет.
+  List<AiEndpoint> fallbacks;
+  /// Фоновое фото главного экрана: путь к файлу (пусто — фон темы).
+  String bgPhoto;
+  /// Размытие фонового фото, 0–40.
+  double bgBlur;
+  /// Затемнение фонового фото, 0–0.9 (чтобы текст читался).
+  double bgDim;
   Config({
     this.apiKey = '',
     this.provider = 'deepseek',
     this.model = '',
     this.baseUrl = '',
-    this.theme = 'cocoa',
+    this.theme = 'navy',
     this.ambient = true,
     this.onboarded = false,
-  });
+    List<AiEndpoint>? fallbacks,
+    this.bgPhoto = '',
+    this.bgBlur = 24,
+    this.bgDim = 0.55,
+  }) : fallbacks = fallbacks ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
         provider: j['provider'] as String? ?? 'deepseek',
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
-        theme: j['theme'] as String? ?? 'sage',
+        theme: j['theme'] as String? ?? 'navy',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
+        fallbacks: ((j['fallbacks'] as List?) ?? [])
+            .map((e) => AiEndpoint.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        bgPhoto: j['bg_photo'] as String? ?? '',
+        bgBlur: (j['bg_blur'] as num?)?.toDouble() ?? 24,
+        bgDim: (j['bg_dim'] as num?)?.toDouble() ?? 0.55,
       );
 
   Map<String, dynamic> toJson() => {
@@ -345,6 +392,10 @@ class Config {
         'theme': theme,
         'ambient': ambient,
         'onboarded': onboarded,
+        'fallbacks': fallbacks.map((e) => e.toJson()).toList(),
+        'bg_photo': bgPhoto,
+        'bg_blur': bgBlur,
+        'bg_dim': bgDim,
       };
 }
 
@@ -365,8 +416,17 @@ class Progress {
   Map<String, String> courseTitles = {};
   List<String> courseOrder = [];
   List<String> hiddenCourses = [];
+  /// Курсы, убранные в архив (в основном списке не показываются).
+  List<String> archived = [];
+  /// Расход токенов по моделям: модель → [вход, выход].
+  Map<String, List<int>> aiUsage = {};
 
   Progress();
+
+  /// tokensIn / tokensOut / totalTokens — сводка расхода.
+  int get tokensIn => aiUsage.values.fold(0, (a, v) => a + (v.isNotEmpty ? v[0] : 0));
+  int get tokensOut => aiUsage.values.fold(0, (a, v) => a + (v.length > 1 ? v[1] : 0));
+  int get tokensTotal => tokensIn + tokensOut;
 
   factory Progress.fromJson(Map<String, dynamic> j) {
     final p = Progress();
@@ -398,6 +458,10 @@ class Progress {
     p.genCleaned = j['gen_cleaned'] as bool? ?? false;
     p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
     p.hiddenCourses = (j['hidden_courses'] as List?)?.cast<String>() ?? [];
+    p.archived = (j['archived'] as List?)?.cast<String>() ?? [];
+    p.aiUsage = ((j['ai_usage'] as Map?) ?? {}).map((k, v) => MapEntry(
+        k as String,
+        ((v as List?) ?? []).map((e) => (e as num).toInt()).toList()));
     return p;
   }
 
@@ -413,6 +477,7 @@ class Progress {
         'active_chat': activeChatId,
         'gen_cleaned': genCleaned,
         'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
+        'archived': archived, 'ai_usage': aiUsage,
       };
 
   int get level => xp ~/ 100 + 1;

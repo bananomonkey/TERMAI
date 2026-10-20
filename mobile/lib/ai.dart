@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'models.dart';
+import 'usage.dart';
 
 class ProviderPreset {
   final String id, title, baseUrl, defaultModel;
@@ -50,39 +51,60 @@ String formatHist(List<HistEntry> hist, int maxOut) {
 }
 
 class AIClient {
-  final String base, key, model, auth;
-  AIClient._(this.base, this.key, this.model, this.auth);
+  /// endpoints — основное подключение + резервные, по порядку перебора.
+  final List<AiEndpoint> _endpoints;
+  final List<String> _labels;
+  AIClient._(this._endpoints, this._labels);
 
   factory AIClient(Config cfg) {
-    final p = findProvider(cfg.provider);
-    final b = cfg.baseUrl.trim().isNotEmpty ? cfg.baseUrl.trim() : p.baseUrl;
-    var k = cfg.apiKey.trim();
-    if (k.isEmpty && (p.id == 'ollama' || b.contains('localhost') || b.contains('127.0.0.1'))) {
-      k = 'local';
+    final eps = <AiEndpoint>[];
+    final labels = <String>[];
+
+    void add(String provider, String apiKey, String model, String baseUrl) {
+      final p = findProvider(provider);
+      final b = baseUrl.trim().isNotEmpty ? baseUrl.trim() : p.baseUrl;
+      var k = apiKey.trim();
+      if (k.isEmpty && (p.id == 'ollama' || b.contains('localhost') || b.contains('127.0.0.1'))) {
+        k = 'local';
+      }
+      final m = model.trim().isNotEmpty ? model.trim() : p.defaultModel;
+      if (k.isEmpty || b.isEmpty || m.isEmpty) return;
+      eps.add(AiEndpoint(provider: p.id, apiKey: k, model: m, baseUrl: b));
+      labels.add(p.title);
     }
-    final m = cfg.model.trim().isNotEmpty ? cfg.model.trim() : p.defaultModel;
-    return AIClient._(b, k, m, p.auth);
+
+    add(cfg.provider, cfg.apiKey, cfg.model, cfg.baseUrl);
+    for (final f in cfg.fallbacks) {
+      add(f.provider, f.apiKey, f.model, f.baseUrl);
+    }
+    return AIClient._(eps, labels);
   }
 
-  bool get ready => key.isNotEmpty && base.isNotEmpty && model.isNotEmpty;
+  bool get ready => _endpoints.isNotEmpty;
 
-  Uri get _uri => Uri.parse('$base/chat/completions');
+  /// onUsage — расход токенов: модель, вход, выход. Ставит контроллер.
+  void Function(String model, int prompt, int completion)? onUsage;
+  /// onRetry — сюда пишем, какое резервное подключение сработало.
+  void Function(String message)? onRetry;
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Authorization': '${auth == 'apikey' ? 'Api-Key' : 'Bearer'} $key',
-      };
+  String get model => _endpoints.isEmpty ? '' : _endpoints.first.model;
 
-  Future<Map<String, dynamic>> _chat(List<Map<String, String>> messages, double temp, {bool jsonMode = true}) async {
-    Future<http.Response> post(bool strict) => http.post(_uri,
-        headers: _headers,
+  Map<String, String> _headers(AiEndpoint ep) {
+    final auth = findProvider(ep.provider).auth;
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': '${auth == 'apikey' ? 'Api-Key' : 'Bearer'} ${ep.apiKey}',
+    };
+  }
+
+  Future<Map<String, dynamic>> _chatOnce(AiEndpoint ep, List<Map<String, String>> messages, double temp,
+      {bool jsonMode = true}) async {
+    final uri = Uri.parse('${ep.baseUrl}/chat/completions');
+    Future<http.Response> post(bool strict) => http.post(uri,
+        headers: _headers(ep),
         body: jsonEncode({
-          'model': model,
-          'messages': strict && jsonMode
-              ? [
-                  ...messages,
-                ]
-              : messages,
+          'model': ep.model,
+          'messages': messages,
           'temperature': temp,
           if (jsonMode && strict) 'response_format': {'type': 'json_object'},
         })).timeout(const Duration(seconds: 180));
@@ -95,7 +117,40 @@ class AIClient {
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     final choices = data['choices'] as List?;
     if (choices == null || choices.isEmpty) throw Exception('пустой ответ модели');
-    return ((choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>).cast<String, dynamic>();
+    final msg = ((choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>).cast<String, dynamic>();
+
+    // расход токенов: провайдер обычно отдаёт usage, иначе оцениваем по длине
+    final usage = data['usage'] as Map?;
+    var pt = (usage?['prompt_tokens'] as num?)?.toInt() ?? 0;
+    var ct = (usage?['completion_tokens'] as num?)?.toInt() ?? 0;
+    if (pt <= 0) {
+      pt = estimateTokens(messages.map((m) => m['content'] ?? '').join('\n'));
+    }
+    if (ct <= 0) ct = estimateTokens((msg['content'] as String?) ?? '');
+    onUsage?.call(ep.model, pt, ct);
+    return msg;
+  }
+
+  /// _chat — идём по основному подключению, а при отказе — по резервным.
+  Future<Map<String, dynamic>> _chat(List<Map<String, String>> messages, double temp, {bool jsonMode = true}) async {
+    if (_endpoints.isEmpty) throw Exception('нет настроенных ИИ-подключений');
+    final errors = <String>[];
+    for (var i = 0; i < _endpoints.length; i++) {
+      try {
+        final msg = await _chatOnce(_endpoints[i], messages, temp, jsonMode: jsonMode);
+        if (i > 0) onRetry?.call('Основная модель недоступна — ответила резервная: ${_labels[i]}');
+        return msg;
+      } catch (e) {
+        errors.add('${_labels[i]}: ${_short(e)}');
+      }
+    }
+    throw Exception('Все модели недоступны. ${errors.join(' · ')}');
+  }
+
+  String _short(Object e) {
+    var s = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+    if (s.length > 120) s = '${s.substring(0, 120)}…';
+    return s;
   }
 
   /// chatJSON — просим строгий JSON, при ошибке повторяем без response_format.

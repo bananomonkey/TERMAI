@@ -68,7 +68,7 @@ class CourseGraphView extends StatelessWidget {
             Expanded(
               child: ListView.builder(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 116),
                 itemCount: courses.length,
                 itemBuilder: (context, i) => _CourseTile(index: i),
               ),
@@ -87,7 +87,8 @@ class CourseGraphView extends StatelessWidget {
   }
 }
 
-/// _CourseTile — плитка курса: имя, зелёный прогресс-бар, процент.
+/// _CourseTile — стеклянная плитка курса: имя, число уроков, прогресс.
+/// У активного курса под стеклом — зелёное свечение, видное сквозь размытие.
 class _CourseTile extends StatelessWidget {
   final int index;
   const _CourseTile({required this.index});
@@ -108,88 +109,58 @@ class _CourseTile extends StatelessWidget {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
         onDoubleTap: () => _showCourseActions(context, index),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              if (current)
-                BoxShadow(color: accent.withAlpha(30), blurRadius: 26, spreadRadius: 1),
-              BoxShadow(
-                color: Colors.black.withAlpha(45),
-                blurRadius: 22,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withAlpha(current ? 34 : 22),
-                      Colors.white.withAlpha(6),
-                      Colors.black.withAlpha(12),
-                    ],
-                    stops: const [0.0, 0.55, 1.0],
+        child: glass(
+          radius: 20,
+          blur: done ? 30 : 40,
+          padding: const EdgeInsets.all(16),
+          glow: current ? C.glow(color: C.good, alpha: 80) : C.glow(color: accent, alpha: 26),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
+                      size: 15, color: accent),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(c.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Text('$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
+                    style: TextStyle(fontSize: 11, color: C.muted)),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: LinearProgressIndicator(
+                    value: total == 0 ? 0 : solved / total,
+                    minHeight: 6,
+                    backgroundColor: Colors.white.withAlpha(18),
+                    color: done ? C.good : (current ? C.good : accent),
                   ),
                 ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
-                            size: 15, color: accent),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(c.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
-                        ),
-                      ]),
-                      const SizedBox(height: 4),
-                      Text(c.isTheory ? 'теория · тесты · ментор' : 'практика в терминале',
-                          style: TextStyle(fontSize: 11, color: C.muted)),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: LinearProgressIndicator(
-                          value: total == 0 ? 0 : solved / total,
-                          minHeight: 6,
-                          backgroundColor: Colors.white.withAlpha(18),
-                          color: done ? C.good : accent,
-                        ),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(width: 14),
-                  Text('$pct%',
-                      style: TextStyle(
-                          fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
-                  const SizedBox(width: 6),
-                  if (done)
-                    Icon(Icons.check_circle_rounded, color: C.good, size: 22)
-                  else
-                    Icon(Icons.chevron_right, color: C.muted, size: 22),
-                ]),
-              ),
+              ]),
             ),
-          ),
+            const SizedBox(width: 12),
+            Text('$pct%',
+                style: TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
+            const SizedBox(width: 4),
+            if (done)
+              Icon(Icons.check_circle_rounded, color: C.good, size: 22)
+            else
+              chevron(size: current ? 28 : 26, color: current ? C.good : C.muted),
+          ]),
         ),
       ),
     );
   }
 
   int _currentIdx() {
+    if (controller.courses.isEmpty) return -1;
     for (var i = 0; i < controller.courses.length; i++) {
       if (!controller.isCourseDone(i)) return i;
     }
@@ -246,6 +217,22 @@ void _showCourseActions(BuildContext context, int courseIdx) {
                       },
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('Переименовать'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        controller.archiveCourse(c.id);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('«${c.title}» в архиве'),
+                          action: SnackBarAction(
+                            label: 'Вернуть',
+                            onPressed: () => controller.unarchiveCourse(c.id),
+                          ),
+                        ));
+                      },
+                      icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                      label: const Text('В архив'),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
@@ -375,7 +362,7 @@ class _TaskGroups extends StatelessWidget {
       if (c.syllabus.isNotEmpty) {
         topic = c.syllabus[(start ~/ 5).clamp(0, c.syllabus.length - 1)];
       }
-      groups.add(sectionHeader('${end - start} задач: $topic'));
+      groups.add(sectionHeader('${end - start} уроков: $topic'));
       for (var i = start; i < end; i++) {
         final t = c.tasks[i];
         groups.add(_TaskRow(
@@ -456,7 +443,7 @@ class _TaskRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: C.muted, size: 22),
+            chevron(size: 24, color: current ? C.accent : C.muted),
           ],
         ),
       ),
