@@ -184,6 +184,56 @@ void showMoreSheet(BuildContext context) {
   );
 }
 
+/// _ThemePicker — выбор палитры: перекрашивает всё приложение сразу.
+/// Тёмно-синяя тема — один из вариантов, а не основа.
+class _ThemePicker extends StatelessWidget {
+  final StateSetter setSheet;
+  const _ThemePicker({required this.setSheet});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final p in themePresets)
+          GestureDetector(
+            onTap: () async {
+              controller.config.theme = p.id;
+              C.p = presetById(p.id);
+              setSheet(() {});
+              await controller.saveConfig(autofill: false);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: controller.config.theme == p.id ? p.accent : p.border,
+                  width: controller.config.theme == p.id ? 2 : 1,
+                ),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 7),
+                Text(p.title,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.text)),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _SheetButton extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -266,6 +316,10 @@ void _showSettings(BuildContext context) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 14),
+            caption('Тема оформления', color: C.accent),
+            const SizedBox(height: 10),
+            _ThemePicker(setSheet: setSheet),
+            const SizedBox(height: 18),
             caption('Настройки ИИ-провайдера', color: C.accent),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(

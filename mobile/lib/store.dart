@@ -85,7 +85,7 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
-    if (config.theme == 'sage' || config.theme == 'cocoa') config.theme = 'navy';
+    if (config.theme == 'sage') config.theme = 'cocoa';
     C.p = presetById(config.theme);
     _initAI();
 
@@ -212,7 +212,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveConfig({bool autofill = true}) async {
-    if (config.theme == 'sage' || config.theme == 'cocoa') config.theme = 'navy';
+    if (config.theme == 'sage') config.theme = 'cocoa';
     C.p = presetById(config.theme);
     final dir = await _dataDir();
     await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));

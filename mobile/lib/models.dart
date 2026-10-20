@@ -359,7 +359,7 @@ class Config {
     this.provider = 'deepseek',
     this.model = '',
     this.baseUrl = '',
-    this.theme = 'navy',
+    this.theme = 'cocoa',
     this.ambient = true,
     this.onboarded = false,
     List<AiEndpoint>? fallbacks,
@@ -373,7 +373,7 @@ class Config {
         provider: j['provider'] as String? ?? 'deepseek',
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
-        theme: j['theme'] as String? ?? 'navy',
+        theme: j['theme'] as String? ?? 'cocoa',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
         fallbacks: ((j['fallbacks'] as List?) ?? [])

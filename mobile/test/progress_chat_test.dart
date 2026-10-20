@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termai/models.dart';
+import 'package:termai/ui/theme.dart';
 
 void main() {
   test('MentorChat survives Progress JSON round-trip', () {
@@ -100,7 +101,14 @@ void main() {
     expect(back.bgBlur, 12);
     expect(back.bgDim, 0.4);
 
-    // прежние конфиги (без резервов и фона) получают тёмно-синюю тему
+    // основа по-прежнему «какао»; тёмно-синяя — переключаемый вариант
+    expect(Config().theme, 'cocoa');
+    expect(Config.fromJson(const {}).theme, 'cocoa');
+    expect(themePresets.any((p) => p.id == 'navy'), isTrue);
+    expect(themePresets.any((p) => p.id == 'cocoa'), isTrue);
+    expect(presetById('navy').title, 'Тёмно-синий');
+
+    // прежние конфиги (без резервов и фона) читаются без ошибок
     final legacy = Config.fromJson({'theme': 'sage'});
     expect(legacy.fallbacks, isEmpty);
     expect(legacy.bgPhoto, isEmpty);
