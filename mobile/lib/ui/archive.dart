@@ -59,7 +59,7 @@ class ArchiveScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('📦', style: TextStyle(fontSize: 40)),
+                      Icon(Icons.inventory_2_outlined, size: 42, color: C.muted),
                       const SizedBox(height: 14),
                       Text(
                         'Архив пуст.',

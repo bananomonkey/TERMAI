@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../store.dart';
-import 'ambient.dart';
+import 'app_background.dart';
 import 'chat.dart';
 import 'lesson.dart';
 import 'review.dart';
@@ -34,7 +34,12 @@ class CourseGraphView extends StatelessWidget {
             ),
           );
         }
-        final ambient = controller.config.ambient;
+        // индекс активного курса считаем один раз, а не для каждой плитки
+        var current = -1;
+        for (var i = 0; i < courses.length; i++) {
+          if (!controller.isCourseDone(i)) { current = i; break; }
+        }
+        if (current < 0) current = courses.length - 1;
         final list = Column(
           children: [
             if (controller.generating && controller.fillTotal > 0)
@@ -70,18 +75,13 @@ class CourseGraphView extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 116),
                 itemCount: courses.length,
-                itemBuilder: (context, i) => _CourseTile(index: i),
+                itemBuilder: (context, i) => _CourseTile(index: i, currentIdx: current),
               ),
             ),
           ],
         );
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (ambient) const Positioned.fill(child: AmbientBackground()),
-            Positioned.fill(child: list),
-          ],
-        );
+        // фон (фото/туман + затемнение) рисует AppBackdrop вокруг всего тела
+        return list;
       },
     );
   }
@@ -91,7 +91,8 @@ class CourseGraphView extends StatelessWidget {
 /// У активного курса под стеклом — зелёное свечение, видное сквозь размытие.
 class _CourseTile extends StatelessWidget {
   final int index;
-  const _CourseTile({required this.index});
+  final int currentIdx;
+  const _CourseTile({required this.index, required this.currentIdx});
 
   @override
   Widget build(BuildContext context) {
@@ -101,70 +102,78 @@ class _CourseTile extends StatelessWidget {
     final completedMap = controller.prog.completed[c.id] ?? {};
     final solved = total == 0 ? 0 : c.tasks.where((t) => completedMap[t.id] ?? false).length;
     final pct = total == 0 ? 0 : ((solved / total) * 100).round();
-    final current = !done && index == _currentIdx();
+    final current = !done && index == currentIdx;
     final accent = c.isTheory ? C.secondary : C.accent;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
-        onDoubleTap: () => _showCourseActions(context, index),
-        child: glass(
-          radius: 20,
-          blur: done ? 30 : 40,
-          padding: const EdgeInsets.all(16),
-          glow: current ? C.glow(color: C.good, alpha: 80) : C.glow(color: accent, alpha: 26),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
-                      size: 15, color: accent),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(c.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 15.5, fontWeight: FontWeight.w800, color: C.text)),
+      // выделение текста при двойном тапе отключено: заголовок не должен
+      // подсвечиваться и «краснеть» системным селектом
+      child: SelectionContainer.disabled(
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
+          onDoubleTap: () => _showCourseActions(context, index),
+          child: glass(
+            radius: 20,
+            blur: 22,
+            padding: const EdgeInsets.all(16),
+            glow: current ? C.glow(color: C.good, alpha: 70) : C.glow(color: accent, alpha: 18),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
+                        size: 15, color: accent),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(c.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                              color: C.text,
+                              decoration: TextDecoration.none)),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text('$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
+                      style: TextStyle(fontSize: 11, color: C.muted)),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: LinearProgressIndicator(
+                      value: total == 0 ? 0 : solved / total,
+                      minHeight: 6,
+                      backgroundColor: Colors.white.withAlpha(14),
+                      color: done ? C.good : (current ? C.good : accent),
+                    ),
                   ),
                 ]),
-                const SizedBox(height: 4),
-                Text('$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
-                    style: TextStyle(fontSize: 11, color: C.muted)),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(5),
-                  child: LinearProgressIndicator(
-                    value: total == 0 ? 0 : solved / total,
-                    minHeight: 6,
-                    backgroundColor: Colors.white.withAlpha(18),
-                    color: done ? C.good : (current ? C.good : accent),
+              ),
+              const SizedBox(width: 10),
+              Text('$pct%',
+                  style: TextStyle(
+                      fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
+              const SizedBox(width: 2),
+              if (done)
+                Icon(Icons.check_circle_rounded, color: C.good, size: 22)
+              else ...[
+                chevron(size: current ? 28 : 26, color: current ? C.good : C.muted),
+                GestureDetector(
+                  onTap: () => _showCourseActions(context, index),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Icon(Icons.more_vert, size: 18, color: C.muted.withAlpha(170)),
                   ),
                 ),
-              ]),
-            ),
-            const SizedBox(width: 12),
-            Text('$pct%',
-                style: TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
-            const SizedBox(width: 4),
-            if (done)
-              Icon(Icons.check_circle_rounded, color: C.good, size: 22)
-            else
-              chevron(size: current ? 28 : 26, color: current ? C.good : C.muted),
-          ]),
+              ],
+            ]),
+          ),
         ),
       ),
     );
-  }
-
-  int _currentIdx() {
-    if (controller.courses.isEmpty) return -1;
-    for (var i = 0; i < controller.courses.length; i++) {
-      if (!controller.isCourseDone(i)) return i;
-    }
-    return controller.courses.length - 1;
   }
 }
 
@@ -198,7 +207,11 @@ void _showCourseActions(BuildContext context, int courseIdx) {
                   children: [
                     Text(c.title,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: C.text,
+                            decoration: TextDecoration.none)),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: () {
@@ -307,10 +320,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
       builder: (context, _) {
         final c = controller.cur;
         return Scaffold(
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
             title: Text(c.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
-          body: const _TaskGroups(),
+          body: AppBackdrop(child: const _TaskGroups()),
         );
       },
     );
@@ -385,9 +399,11 @@ class _TaskGroups extends StatelessWidget {
       groups.add(const SizedBox(height: 14));
     }
     groups.add(_EndActions());
-    return ListView(
+    // ленивая сборка строк: длинные курсы не строят все элементы сразу
+    return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-      children: groups,
+      itemCount: groups.length,
+      itemBuilder: (context, i) => groups[i],
     );
   }
 
@@ -422,7 +438,6 @@ class _TaskRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: cardBox(
-        accent: current ? C.accent : null,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

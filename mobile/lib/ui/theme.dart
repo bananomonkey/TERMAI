@@ -22,53 +22,21 @@ class ThemePreset {
 }
 
 const themePresets = <ThemePreset>[
-  // Тёмно-синий — основной пресет TERMAI: ночное море, голубой акцент.
-  ThemePreset(
-    id: 'navy', title: 'Тёмно-синий',
-    bg: Color(0xFF0A1226), surface: Color(0xFF101A33), card: Color(0xFF16213F), card2: Color(0xFF1D2A4C),
-    secondary: Color(0xFF6E8BC4), accent: Color(0xFF4DA3FF), accentDark: Color(0xFF2E86E0),
-    text: Color(0xFFE6EDF8), muted: Color(0xFF8296B8), good: Color(0xFF3FD69A), warn: Color(0xFFE5B567),
-    danger: Color(0xFFE0707F), border: Color(0xFF223158), termBg: Color(0xFF070E1F), termText: Color(0xFFB9C9E4),
-  ),
-  // Приятный зелёный — «приложение-эко»
-  ThemePreset(
-    id: 'emerald', title: 'Изумруд',
-    bg: Color(0xFF121A15), surface: Color(0xFF19241D), card: Color(0xFF1F2C24), card2: Color(0xFF26352B),
-    secondary: Color(0xFF6FA287), accent: Color(0xFF7FD1A7), accentDark: Color(0xFF5FB087),
-    text: Color(0xFFE3EEE7), muted: Color(0xFF8AA396), good: Color(0xFF7FD1A7), warn: Color(0xFFD9C36B),
-    danger: Color(0xFFE08A7A), border: Color(0xFF2A3A31), termBg: Color(0xFF0E1511), termText: Color(0xFFBFD8C8),
-  ),
-  // Классическая тёмная консоль
-  ThemePreset(
-    id: 'matrix', title: 'Матрица',
-    bg: Color(0xFF0B0E0B), surface: Color(0xFF111611), card: Color(0xFF151C15), card2: Color(0xFF1B241B),
-    secondary: Color(0xFF4C6B4C), accent: Color(0xFF89D185), accentDark: Color(0xFF6FB46C),
-    text: Color(0xFFDCE8DC), muted: Color(0xFF7C8F7C), good: Color(0xFF89D185), warn: Color(0xFFD6C08A),
-    danger: Color(0xFFE08A7A), border: Color(0xFF202A20), termBg: Color(0xFF070907), termText: Color(0xFFA8D8A8),
-  ),
-  // Фирменный синий Docker — фон с синим подтоном
-  ThemePreset(
-    id: 'docker', title: 'Голубой Docker',
-    bg: Color(0xFF16202B), surface: Color(0xFF1C2836), card: Color(0xFF223040), card2: Color(0xFF293A4D),
-    secondary: Color(0xFF5E81AC), accent: Color(0xFF0DB7ED), accentDark: Color(0xFF0B99C6),
-    text: Color(0xFFE4EBF2), muted: Color(0xFF8595A6), good: Color(0xFF7FBFA0), warn: Color(0xFFE2B34C),
-    danger: Color(0xFFE06C75), border: Color(0xFF2C3A4A), termBg: Color(0xFF101820), termText: Color(0xFFABB2BF),
-  ),
-  // Чёрный + синий — как в редакторах кода
-  ThemePreset(
-    id: 'coding', title: 'Тёмный кодинг',
-    bg: Color(0xFF0D1117), surface: Color(0xFF161B22), card: Color(0xFF1C2128), card2: Color(0xFF22272E),
-    secondary: Color(0xFF8B949E), accent: Color(0xFF58A6FF), accentDark: Color(0xFF3F8FE8),
-    text: Color(0xFFE6EDF3), muted: Color(0xFF7D8590), good: Color(0xFF3FB950), warn: Color(0xFFD29922),
-    danger: Color(0xFFE06C75), border: Color(0xFF30363D), termBg: Color(0xFF0A0D12), termText: Color(0xFFABB2BF),
-  ),
-  // Тёплый бизнес: коричневый + бежевый + терракота
+  // Тёплый бизнес: коричневый + бежевый + терракота — основная тема.
   ThemePreset(
     id: 'cocoa', title: 'Какао',
-    bg: Color(0xFF1B1713), surface: Color(0xFF241F1A), card: Color(0xFF2B2520), card2: Color(0xFF332C25),
+    bg: Color(0xFF14100D), surface: Color(0xFF1C1814), card: Color(0xFF241E19), card2: Color(0xFF2C251E),
     secondary: Color(0xFFA78B6F), accent: Color(0xFFD97757), accentDark: Color(0xFFC05F42),
     text: Color(0xFFEDE6DE), muted: Color(0xFF9C9083), good: Color(0xFFA3BE8C), warn: Color(0xFFD9A05B),
-    danger: Color(0xFFCF6A5A), border: Color(0xFF3A322A), termBg: Color(0xFF15110E), termText: Color(0xFFD6CCC0),
+    danger: Color(0xFFCF6A5A), border: Color(0xFF342C24), termBg: Color(0xFF0F0C09), termText: Color(0xFFD6CCC0),
+  ),
+  // Синий — второй допустимый вариант оформления.
+  ThemePreset(
+    id: 'navy', title: 'Синий',
+    bg: Color(0xFF060B18), surface: Color(0xFF0B1428), card: Color(0xFF111B33), card2: Color(0xFF17233F),
+    secondary: Color(0xFF6E8BC4), accent: Color(0xFF4DA3FF), accentDark: Color(0xFF2E86E0),
+    text: Color(0xFFE6EDF8), muted: Color(0xFF8296B8), good: Color(0xFF3FD69A), warn: Color(0xFFE5B567),
+    danger: Color(0xFFE0707F), border: Color(0xFF1B2A4A), termBg: Color(0xFF040814), termText: Color(0xFFB9C9E4),
   ),
 ];
 
@@ -105,12 +73,13 @@ class C {
   static Color get glassBottom => Color.alphaBlend(
       Colors.black.withAlpha(70), p.bg);
 
-  /// Градиент стекла: верх/середина/низ.
+  /// Градиент стекла: верх/середина/низ. Держим тёмным, чтобы плитки
+  /// не «светились» поверх и без того тёмного фона.
   static List<Color> get glassGradient => [
-        Colors.white.withAlpha(38),
-        Colors.white.withAlpha(14),
-        p.accent.withAlpha(16),
-        Colors.black.withAlpha(30),
+        Colors.white.withAlpha(20),
+        Colors.white.withAlpha(7),
+        p.accent.withAlpha(12),
+        Colors.black.withAlpha(70),
       ];
 
   /// Свечение активного элемента — мягкий акцент сквозь размытие.

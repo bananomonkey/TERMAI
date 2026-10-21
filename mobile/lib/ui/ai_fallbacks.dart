@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../ai.dart';
 import '../main.dart';
 import '../models.dart';
+import 'app_background.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -14,10 +15,12 @@ class AiFallbacksScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Резервные модели', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
       ),
-      body: ListenableBuilder(
+      body: AppBackdrop(
+        child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
           final list = controller.config.fallbacks;
@@ -66,6 +69,7 @@ class AiFallbacksScreen extends StatelessWidget {
           );
         },
       ),
+      ),
     );
   }
 
@@ -96,6 +100,7 @@ class AiFallbacksScreen extends StatelessWidget {
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: findProvider(providerCtrl.text).id,
                     decoration: const InputDecoration(labelText: 'Провайдер'),
                     items: providers

@@ -85,7 +85,7 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
-    if (config.theme == 'sage') config.theme = 'cocoa';
+    _migrateTheme();
     C.p = presetById(config.theme);
     _initAI();
 
@@ -182,6 +182,13 @@ class AppController extends ChangeNotifier {
     return list.map((c) => Course.fromJson(c)).toList();
   }
 
+  /// _migrateTheme — старые конфиги и авто-тема возвращаются на «какао».
+  /// Если тему выбирали руками (themeAuto=false), не трогаем.
+  void _migrateTheme() {
+    if (config.theme == 'sage') config.theme = 'cocoa';
+    if (config.themeAuto && config.theme != 'cocoa') config.theme = 'cocoa';
+  }
+
   /// _initAI — собирает клиент из основного и резервных подключений.
   /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
   void _initAI() {
@@ -212,7 +219,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveConfig({bool autofill = true}) async {
-    if (config.theme == 'sage') config.theme = 'cocoa';
+    _migrateTheme();
     C.p = presetById(config.theme);
     final dir = await _dataDir();
     await io.File('$dir/termai.json').writeAsString(jsonEncode(config.toJson()));
@@ -223,15 +230,24 @@ class AppController extends ChangeNotifier {
 
   // ---------- фоновое фото ----------
 
-  /// setBackgroundPhoto — копирует выбранное изображение в папку приложения
-  /// и запоминает путь: фон живёт, даже если оригинал удалить.
+  /// setBackgroundPhoto — копирует выбранное изображение в папку приложения.
+  /// Имя уникальное: так кэш картинок Flutter не покажет старое фото вместо
+  /// нового, а старый файл мы аккуратно удаляем.
   Future<String> setBackgroundPhoto(String sourcePath) async {
     try {
       final dir = await _dataDir();
-      final target = io.File('$dir/termai-bg.jpg');
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final target = io.File('$dir/termai-bg-$stamp.jpg');
       await io.File(sourcePath).copy(target.path);
+      final old = config.bgPhoto;
       config.bgPhoto = target.path;
       await saveConfig(autofill: false);
+      if (old.isNotEmpty && old != target.path) {
+        try {
+          final f = io.File(old);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
       return '';
     } catch (e) {
       return _errMsg(e);
@@ -447,7 +463,19 @@ extension AppCourses on AppController {
 
   SandboxState get state => states[stateKey] ?? SandboxState();
 
-  void termLine(String text) => termText += '$text\n';
+  void termLine(String text) {
+    termText += '$text\n';
+    _capTerm();
+  }
+
+  /// _capTerm — не даём выводу терминала расти бесконечно (иначе кадры
+  /// становятся тяжёлыми, а приложение «подвисает» на длинных сессиях).
+  void _capTerm() {
+    const max = 60000;
+    if (termText.length > max) {
+      termText = termText.substring(termText.length - max);
+    }
+  }
 
   void refreshTerminal() => notifyListeners();
 
@@ -457,6 +485,7 @@ extension AppCourses on AppController {
     final cmd = input.trim();
     if (cmd.isEmpty || termBusy) return;
     termText += prompt + cmd + '\n';
+    _capTerm();
     undoBuf.add(UndoEntry(stateKey, state.clone(), _termBefore(cmd)));
     if (undoBuf.length > 20) undoBuf.removeAt(0);
     redoBuf.clear();

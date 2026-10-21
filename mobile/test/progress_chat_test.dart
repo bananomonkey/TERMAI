@@ -101,12 +101,23 @@ void main() {
     expect(back.bgBlur, 12);
     expect(back.bgDim, 0.4);
 
-    // основа по-прежнему «какао»; тёмно-синяя — переключаемый вариант
+    // основа по-прежнему «какао»; синяя — второй допустимый вариант
     expect(Config().theme, 'cocoa');
     expect(Config.fromJson(const {}).theme, 'cocoa');
+    expect(themePresets, hasLength(2));
     expect(themePresets.any((p) => p.id == 'navy'), isTrue);
     expect(themePresets.any((p) => p.id == 'cocoa'), isTrue);
-    expect(presetById('navy').title, 'Тёмно-синий');
+    expect(presetById('navy').title, 'Синий');
+    expect(presetById('cocoa').title, 'Какао');
+
+    // осознанный выбор синей темы сохраняется, авто-тема — нет
+    final chosen = Config()
+      ..theme = 'navy'
+      ..themeAuto = false;
+    final chosenBack = Config.fromJson(chosen.toJson());
+    expect(chosenBack.theme, 'navy');
+    expect(chosenBack.themeAuto, isFalse);
+    expect(Config.fromJson(const {}).themeAuto, isTrue);
 
     // прежние конфиги (без резервов и фона) читаются без ошибок
     final legacy = Config.fromJson({'theme': 'sage'});

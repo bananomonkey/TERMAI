@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'app_background.dart';
 import 'chat.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -71,6 +72,7 @@ class ChatsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Чат с ментором', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         actions: [
@@ -82,7 +84,8 @@ class ChatsScreen extends StatelessWidget {
           const SizedBox(width: 4),
         ],
       ),
-      body: ListenableBuilder(
+      body: AppBackdrop(
+        child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
           final chats = List<MentorChat>.from(controller.prog.mentorChats)
@@ -94,7 +97,7 @@ class ChatsScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('💬', style: TextStyle(fontSize: 40)),
+                    Icon(Icons.forum_outlined, size: 42, color: C.muted),
                     const SizedBox(height: 14),
                     Text('Бесед пока нет.',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
@@ -128,8 +131,13 @@ class ChatsScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 18,
                       backgroundColor: C.card2,
-                      child: Text(c.taskId == '__interview__' ? '🎯' : '💬',
-                          style: const TextStyle(fontSize: 15)),
+                      child: Icon(
+                        c.taskId == '__interview__'
+                            ? Icons.work_outline
+                            : Icons.chat_bubble_outline,
+                        size: 18,
+                        color: C.secondary,
+                      ),
                     ),
                     const SizedBox(width: 11),
                     Expanded(
@@ -170,6 +178,7 @@ class ChatsScreen extends StatelessWidget {
             },
           );
         },
+      ),
       ),
     );
   }

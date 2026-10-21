@@ -8,6 +8,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'app_background.dart';
 import 'chat.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -166,6 +167,7 @@ class _LessonScreenState extends State<LessonScreen>
     final t = controller.currentTask;
     return Scaffold(
       resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -173,9 +175,10 @@ class _LessonScreenState extends State<LessonScreen>
         ),
         titleSpacing: 0,
       ),
-      body: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) {
+      body: AppBackdrop(
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
           if (t == null) {
             return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
           }
@@ -219,7 +222,8 @@ class _LessonScreenState extends State<LessonScreen>
                       if (dx > 0 && current > 0) setState(() => _tabIdx = current - 1);
                     }
                   },
-                  child: IndexedStack(
+                  child: RepaintBoundary(
+                    child: IndexedStack(
                     index: current,
                     children: [
                       _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
@@ -245,11 +249,13 @@ class _LessonScreenState extends State<LessonScreen>
                       ],
                     ],
                   ),
+                  ),
                 ),
               ),
             ],
           );
         },
+      ),
       ),
     );
   }
@@ -408,8 +414,8 @@ class _TaskSlide extends StatelessWidget {
           OutlinedButton(
             onPressed: controller.toggleBookmark,
             style: OutlinedButton.styleFrom(minimumSize: const Size(52, 48), padding: const EdgeInsets.symmetric(horizontal: 12)),
-            child: Text(controller.isBookmarked(t) ? '★' : '☆',
-                style: TextStyle(fontSize: 17, color: controller.isBookmarked(t) ? C.warn : C.muted)),
+            child: Icon(controller.isBookmarked(t) ? Icons.star : Icons.star_border,
+                size: 20, color: controller.isBookmarked(t) ? C.warn : C.muted),
           ),
         ]),
         const SizedBox(height: 18),

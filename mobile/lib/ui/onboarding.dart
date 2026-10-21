@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import 'help.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -29,7 +30,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _starting = true);
     if (saveKey) controller.config.apiKey = _key.text.trim();
     controller.config.onboarded = true;
-    await controller.saveConfig();
+    // даже если запись файла не удалась — пользователь не должен застрять
+    try {
+      await controller.saveConfig();
+    } catch (_) {}
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
   }
@@ -54,18 +58,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: C.bg,
       body: SafeArea(
         child: Stack(children: [
-          Positioned(
-            top: 4,
-            right: 6,
-            child: TextButton(
-              onPressed: () => _finish(saveKey: false),
-              child: Text('Пропустить', style: TextStyle(color: C.muted, fontSize: 12.5)),
-            ),
-          ),
           PageView(
             controller: _page,
             onPageChanged: (i) => setState(() => _idx = i),
             children: [_intro(), _setup()],
+          ),
+          // Кнопки поверх PageView: раньше «Пропустить» лежала ПОД ним
+          // и не получала нажатия.
+          Positioned(
+            top: 4,
+            right: 6,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).push(pageRoute(const HelpScreen())),
+                child: Text('Инструкция', style: TextStyle(color: C.muted, fontSize: 12.5)),
+              ),
+              TextButton(
+                onPressed: _starting ? null : () => _finish(saveKey: false),
+                child: Text('Пропустить', style: TextStyle(color: C.accent, fontSize: 12.5)),
+              ),
+            ]),
           ),
         ]),
       ),
@@ -107,7 +119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
               child: Center(
-                child: Text('>_',
+                child: Text('>_<',
                     style: TextStyle(
                         color: C.accent, fontSize: 32, fontWeight: FontWeight.w900)),
               ),

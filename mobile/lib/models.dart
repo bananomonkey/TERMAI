@@ -346,6 +346,9 @@ class Config {
   String apiKey, provider, model, baseUrl, theme;
   bool ambient;
   bool onboarded;
+  /// true — тему ещё не выбирали вручную; такую тему можно безопасно
+  /// вернуть на «какао» при обновлении.
+  bool themeAuto;
   /// Резервные ИИ-подключения: перебираются по порядку, если основной откажет.
   List<AiEndpoint> fallbacks;
   /// Фоновое фото главного экрана: путь к файлу (пусто — фон темы).
@@ -362,6 +365,7 @@ class Config {
     this.theme = 'cocoa',
     this.ambient = true,
     this.onboarded = false,
+    this.themeAuto = true,
     List<AiEndpoint>? fallbacks,
     this.bgPhoto = '',
     this.bgBlur = 24,
@@ -376,6 +380,7 @@ class Config {
         theme: j['theme'] as String? ?? 'cocoa',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
+        themeAuto: j['theme_auto'] as bool? ?? true,
         fallbacks: ((j['fallbacks'] as List?) ?? [])
             .map((e) => AiEndpoint.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -392,6 +397,7 @@ class Config {
         'theme': theme,
         'ambient': ambient,
         'onboarded': onboarded,
+        'theme_auto': themeAuto,
         'fallbacks': fallbacks.map((e) => e.toJson()).toList(),
         'bg_photo': bgPhoto,
         'bg_blur': bgBlur,

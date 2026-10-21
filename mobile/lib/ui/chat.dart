@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'app_background.dart';
 import 'theme.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _asked = false;
+  int _lastMsgCount = -1;
 
   @override
   void initState() {
@@ -252,10 +254,16 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        _scrollDown();
         final chat = controller.activeChat;
         final msgs = controller.chatMsgs;
+        // прокручиваем вниз только когда пришло новое сообщение,
+        // а не на каждой перерисовке (это подвешивало длинные чаты)
+        if (msgs.length != _lastMsgCount) {
+          _lastMsgCount = msgs.length;
+          _scrollDown();
+        }
         return Scaffold(
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,7 +316,8 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 4),
             ],
           ),
-          body: SafeArea(
+          body: AppBackdrop(
+            child: SafeArea(
             child: Column(children: [
               Expanded(
                 child: msgs.isEmpty
@@ -363,6 +372,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ]),
               ),
             ]),
+          ),
           ),
         );
       },

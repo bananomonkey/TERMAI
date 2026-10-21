@@ -6,11 +6,11 @@ import 'theme.dart';
 
 /// glass — «жидкое стекло»: размытие фона + градиентная линза + мягкая тень.
 /// [glow] рисует свечение под элементом (у активного курса — зелёное).
-/// [glowColor] переопределяет цвет свечения, [radius] — скругление.
+/// Без рамки: секции курсов не должны иметь обводок.
 Widget glass({
   required Widget child,
   double radius = 20,
-  double blur = 36,
+  double blur = 22,
   EdgeInsets padding = const EdgeInsets.all(0),
   Color? glow,
   Color? tint,
@@ -23,14 +23,14 @@ Widget glass({
         if (glow != null)
           BoxShadow(
             color: glow,
-            blurRadius: 38,
-            spreadRadius: -2,
-            offset: const Offset(0, 10),
+            blurRadius: 30,
+            spreadRadius: -3,
+            offset: const Offset(0, 8),
           ),
         BoxShadow(
-          color: Colors.black.withAlpha(70),
-          blurRadius: 24,
-          offset: const Offset(0, 10),
+          color: Colors.black.withAlpha(60),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
         ),
       ],
     ),
@@ -50,7 +50,6 @@ Widget glass({
                   : C.glassGradient,
               stops: const [0.0, 0.45, 0.78, 1.0],
             ),
-            border: Border.all(color: Colors.white.withAlpha(26), width: 1),
           ),
           child: child,
         ),
@@ -66,13 +65,14 @@ Widget chevron({double size = 26, Color? color}) => Icon(
       color: color ?? C.muted,
     );
 
-/// cardBox — «окно»: скруглённая карточка с рамкой; [accent] подсвечивает активную.
+/// cardBox — «окно»: скруглённая карточка; [accent] подсвечивает активную.
+/// По умолчанию без рамки — лишние обводки у секций не нужны.
 Widget cardBox({required Widget child, Color? accent, EdgeInsets padding = const EdgeInsets.all(14)}) {
   return Container(
     decoration: BoxDecoration(
       color: C.card,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: accent ?? C.border, width: accent != null ? 1.5 : 1),
+      border: accent != null ? Border.all(color: accent, width: 1.4) : null,
     ),
     child: Padding(padding: padding, child: child),
   );
@@ -90,14 +90,15 @@ extension TextColorX on Text {
   }
 }
 
-/// statusGlyph — ✓ / ▶ / ○ для статуса задачи.
+/// statusGlyph — ✓ / ▶ / ○ для статуса задачи (монохромные иконки,
+/// как и остальные символы интерфейса).
 Widget statusGlyph(bool done, bool current, {double size = 15}) {
-  final (glyph, color) = done
-      ? ('✓', C.good)
+  final (icon, color) = done
+      ? (Icons.check_circle_outline, C.good)
       : current
-          ? ('▶', C.accent)
-          : ('○', C.muted);
-  return Text(glyph, style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w700));
+          ? (Icons.play_circle_outline, C.accent)
+          : (Icons.radio_button_unchecked, C.muted);
+  return Icon(icon, size: size + 2, color: color);
 }
 
 /// dots — полоска сложности ●●●○○.
@@ -128,12 +129,8 @@ PageRouteBuilder<T> pageRoute<T>(Widget page) {
   );
 }
 
-/// sectionHeader — «5 задач: тема» с разделителем, как в Coddy.
-Widget sectionHeader(String text) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
-        const SizedBox(height: 8),
-        const Divider(),
-      ],
+/// sectionHeader — заголовок секции без лишних линий-обводок.
+Widget sectionHeader(String text) => Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
     );

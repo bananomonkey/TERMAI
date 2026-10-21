@@ -166,7 +166,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                   border: Border.all(color: C.accent, width: 2),
                 ),
                 child: Center(
-                  child: Text('>_', style: TextStyle(color: C.accent, fontSize: 34, fontWeight: FontWeight.w900)),
+                  child: Text('>_<', style: TextStyle(color: C.accent, fontSize: 34, fontWeight: FontWeight.w900)),
                 ),
               ),
             ),
@@ -254,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
               border: Border.all(color: C.accent, width: 1.4),
             ),
             child: Center(
-              child: Text('>_', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: C.accent, height: 1)),
+              child: Text('>_<', style: TextStyle(fontSize: 9.5, letterSpacing: -0.8, fontWeight: FontWeight.w900, color: C.accent, height: 1)),
             ),
           ),
           const SizedBox(width: 9),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../usage.dart';
+import 'app_background.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -36,6 +37,7 @@ class UsageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Расход токенов', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         actions: [
@@ -47,7 +49,8 @@ class UsageScreen extends StatelessWidget {
           const SizedBox(width: 4),
         ],
       ),
-      body: ListenableBuilder(
+      body: AppBackdrop(
+        child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
           final usage = controller.prog.aiUsage;
@@ -75,7 +78,7 @@ class UsageScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('💰', style: TextStyle(fontSize: 40)),
+                    Icon(Icons.payments_outlined, size: 42, color: C.muted),
                     const SizedBox(height: 14),
                     Text('Пока ничего не потрачено.',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
@@ -141,6 +144,7 @@ class UsageScreen extends StatelessWidget {
             ],
           );
         },
+      ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import 'app_background.dart';
 import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -14,8 +15,10 @@ class ReviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Повторение', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-      body: ListenableBuilder(
+      body: AppBackdrop(
+        child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
           final due = controller.dueBookmarks();
@@ -24,7 +27,7 @@ class ReviewScreen extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
-                  'К повторению пока ничего нет.\nЗакладывай задачи ☆ в панели задачи —\nони будут возвращаться по расписанию.',
+                  'К повторению пока ничего нет.\nЗакладывай задачи звёздочкой в панели задачи —\nони будут возвращаться по расписанию.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: C.muted, height: 1.5),
                 ),
@@ -45,6 +48,7 @@ class ReviewScreen extends StatelessWidget {
           );
         },
       ),
+      ),
     );
   }
 }
@@ -64,9 +68,8 @@ class _ReviewRow extends StatelessWidget {
         Navigator.of(context).push(pageRoute(const LessonScreen()));
       },
       child: cardBox(
-        accent: C.secondary.withAlpha(120),
         child: Row(children: [
-          Padding(padding: EdgeInsets.only(top: 2), child: Text('↻', style: TextStyle(color: C.secondary, fontSize: 16, fontWeight: FontWeight.w800))),
+          Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.replay, size: 18, color: C.secondary)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -75,7 +78,7 @@ class _ReviewRow extends StatelessWidget {
               Text(taskTitle, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, height: 1.25)),
             ]),
           ),
-          Icon(Icons.chevron_right, color: C.muted, size: 22),
+          chevron(size: 24, color: C.muted),
         ]),
       ),
     );

@@ -1,6 +1,7 @@
 // ambient.dart — кинематографичный туман, отрендеренный ОДИН РАЗ в статичную
 // картинку (как фото): нулевая нагрузка в кадре. Рендер в половинном
 // разрешении — туману мягкость только на пользу.
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -10,7 +11,11 @@ import 'theme.dart';
 
 /// AmbientBackground — туманная сцена-«фото».
 class AmbientBackground extends StatefulWidget {
-  const AmbientBackground({super.key});
+  /// Размытие фона в том же масштабе, что и у фото (0–40).
+  final double blur;
+  /// Идентификатор темы: при смене палитры туман перерисовывается.
+  final String themeId;
+  const AmbientBackground({super.key, this.blur = 0, this.themeId = ''});
   @override
   State<AmbientBackground> createState() => _AmbientBackgroundState();
 }
@@ -18,10 +23,30 @@ class AmbientBackground extends StatefulWidget {
 class _AmbientBackgroundState extends State<AmbientBackground> {
   ui.Image? _img;
   Size _renderedFor = Size.zero;
+  int _renderedBlur = -1;
+  String _renderedTheme = '';
   int _renderToken = 0;
+  Timer? _debounce;
+
+  @override
+  void didUpdateWidget(AmbientBackground old) {
+    super.didUpdateWidget(old);
+    if (old.themeId != widget.themeId) {
+      _renderedFor = Size.zero;
+    }
+    if (old.blur.round() != widget.blur.round()) {
+      // слайдер шлёт десятки значений — перерисовываем после паузы
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 150), () {
+        if (!mounted) return;
+        setState(() => _renderedFor = Size.zero);
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _img?.dispose();
     super.dispose();
   }
@@ -30,8 +55,14 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, box) {
       final w = box.maxWidth, h = box.maxHeight;
-      if ((w - _renderedFor.width).abs() > 1 || (h - _renderedFor.height).abs() > 1) {
+      final b = widget.blur.round();
+      if ((w - _renderedFor.width).abs() > 1 ||
+          (h - _renderedFor.height).abs() > 1 ||
+          b != _renderedBlur ||
+          widget.themeId != _renderedTheme) {
         _renderedFor = Size(w, h);
+        _renderedBlur = b;
+        _renderedTheme = widget.themeId;
         _renderScene(w, h);
       }
       final img = _img;
@@ -46,7 +77,20 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
     final token = ++_renderToken;
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
+    final blur = widget.blur;
+    if (blur > 0.5) {
+      canvas.saveLayer(
+        Offset.zero & ui.Size(w, h),
+        Paint()
+          ..imageFilter = ui.ImageFilter.blur(
+            sigmaX: blur * 0.7,
+            sigmaY: blur * 0.7,
+            tileMode: TileMode.clamp,
+          ),
+      );
+    }
     _paintScene(canvas, ui.Size(w, h));
+    if (blur > 0.5) canvas.restore();
     final picture = recorder.endRecording();
     final scale = 0.5; // полразрешения: туману мягкость не вредит
     final img = await picture.toImage(
@@ -56,13 +100,17 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
       img.dispose();
       return;
     }
+    final old = _img;
     setState(() => _img = img);
+    if (old != null && old != img) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
   }
 
   void _paintScene(ui.Canvas canvas, ui.Size size) {
     final r = math.Random(5);
 
-    // ночная база в тоне темы: чуть светлее кверху
+    // ночная база в тоне темы: тёмная, без «молочного» свечения
     canvas.drawRect(
       Offset.zero & size,
       Paint()
@@ -70,8 +118,8 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color.alphaBlend(Colors.white.withAlpha(10), C.bg),
-            Color.alphaBlend(Colors.black.withAlpha(60), C.bg),
+            Color.alphaBlend(Colors.black.withAlpha(12), C.bg),
+            Color.alphaBlend(Colors.black.withAlpha(110), C.bg),
           ],
         ).createShader(Offset.zero & size),
     );
@@ -82,7 +130,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ..shader = RadialGradient(
           center: const Alignment(-0.75, -0.85),
           radius: 1.3,
-          colors: [C.accent.withAlpha(56), C.bg.withAlpha(0)],
+          colors: [C.accent.withAlpha(34), C.bg.withAlpha(0)],
         ).createShader(Offset.zero & size),
     );
     // косой луч света сквозь туман
