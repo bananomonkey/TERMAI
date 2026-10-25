@@ -279,7 +279,19 @@ class AppController extends ChangeNotifier {
   }
 
 
+  Timer? _progressSaveTimer;
+
+  /// saveProgress — сохраняем прогресс с небольшой задержкой: во время
+  /// работы в терминале уведомления идут очередями, и кодировать весь JSON
+  /// (со всеми чатами и задачами) на каждую команду — заметный фриз.
   Future<void> saveProgress() async {
+    _progressSaveTimer?.cancel();
+    _progressSaveTimer = Timer(const Duration(milliseconds: 160), () {
+      _writeProgress();
+    });
+  }
+
+  Future<void> _writeProgress() async {
     final json = jsonEncode(prog.toJson());
     final dir = await _dataDir();
     await io.File('$dir/termai-progress.json').writeAsString(json);

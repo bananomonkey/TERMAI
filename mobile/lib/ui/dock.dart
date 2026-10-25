@@ -18,8 +18,8 @@ class GlassDock extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: glass(
-        radius: 44,
-        blur: 20,
+        radius: 22,
+        blur: 0,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -71,15 +71,7 @@ class _DockButton extends StatelessWidget {
           height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withAlpha(26),
-                C.accent.withAlpha(22),
-                Colors.black.withAlpha(46),
-              ],
-            ),
+            color: C.card2,
           ),
           child: InkWell(
             onTap: () {

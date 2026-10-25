@@ -56,7 +56,8 @@ Future<void> main() async {
 }
 
 /// мост для store.dart: грузим встроенные курсы из бандла
-Future<String> _loadCoursesAsset() async => rootBundle.loadString('assets/courses.json');
+Future<String> _loadCoursesAsset() async =>
+    rootBundle.loadString('assets/courses.json');
 
 class TermaiApp extends StatelessWidget {
   const TermaiApp({super.key});
@@ -114,7 +115,8 @@ class BootScreen extends StatefulWidget {
   State<BootScreen> createState() => _BootScreenState();
 }
 
-class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateMixin {
+class _BootScreenState extends State<BootScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 1200), value: 0)
     ..repeat(reverse: true);
@@ -135,7 +137,9 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(
-      controller.config.onboarded ? const HomeScreen() : const OnboardingScreen(),
+      controller.config.onboarded
+          ? const HomeScreen()
+          : const OnboardingScreen(),
     ));
   }
 
@@ -157,24 +161,20 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
               scale: Tween(begin: 0.96, end: 1.04).animate(
                 CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
               ),
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: C.card,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: C.accent, width: 2),
-                ),
-                child: Center(
-                  child: Text('>_<', style: TextStyle(color: C.accent, fontSize: 34, fontWeight: FontWeight.w900)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/icon/termai.png',
+                  width: 112,
+                  height: 112,
+                  cacheWidth: 224,
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
-            const SizedBox(height: 22),
-            Text('TERMAI',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4, color: C.text)),
-            const SizedBox(height: 8),
-            Text('тренажёр с ИИ-наставником', style: TextStyle(color: C.muted, fontSize: 13)),
+            const SizedBox(height: 20),
+            Text('тренажёр навыков с ИИ-наставником',
+                style: TextStyle(color: C.muted, fontSize: 13)),
           ],
         ),
       ),
@@ -189,7 +189,8 @@ Future<void> _scheduleReminder() async {
     await plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ));
-    final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final android = plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     await android?.requestNotificationsPermission();
     tzdata.initializeTimeZones();
     try {
@@ -205,15 +206,19 @@ Future<void> _scheduleReminder() async {
       1,
       'TERMAI — Барсик ждёт',
       controller.prog.streak > 0
-          ? 'Серия ' + controller.prog.streak.toString() + ' дн. под угрозой — реши задачу дня!'
+          ? 'Серия ' +
+              controller.prog.streak.toString() +
+              ' дн. под угрозой — реши задачу дня!'
           : 'Заходи на задачу дня — начнём серию!',
       when,
       const NotificationDetails(
         android: AndroidNotificationDetails('reminders', 'Напоминания',
-            importance: Importance.defaultImportance, priority: Priority.defaultPriority),
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
     );
   } catch (_) {
@@ -234,7 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     if (diagAutoLesson) {
       Future.delayed(const Duration(milliseconds: 2500), () {
-        if (mounted) Navigator.of(context).push(pageRoute(const LessonScreen()));
+        if (mounted)
+          Navigator.of(context).push(pageRoute(const LessonScreen()));
       });
     }
   }
@@ -243,32 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: C.card,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: C.accent, width: 1.4),
-            ),
-            child: Center(
-              child: Text('>_<', style: TextStyle(fontSize: 9.5, letterSpacing: -0.8, fontWeight: FontWeight.w900, color: C.accent, height: 1)),
-            ),
-          ),
-          const SizedBox(width: 9),
-          Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                  text: 'TERM',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: C.text)),
-              TextSpan(
-                  text: 'AI',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: C.accent)),
-            ]),
-          ),
-        ]),
+        toolbarHeight: 56,
         actions: [
           ListenableBuilder(
             listenable: controller,
@@ -276,19 +257,23 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(right: 4),
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: C.card,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: C.border),
                   ),
-                  child: Text('ур.${controller.prog.level} · ${controller.prog.xp} XP',
+                  child: Text(
+                      'ур.${controller.prog.level} · ${controller.prog.xp} XP',
                       style: TextStyle(fontSize: 11, color: C.muted)),
                 ),
               ),
             ),
           ),
-          IconButton(icon: const Icon(Icons.more_horiz), onPressed: () => showMoreSheet(context)),
+          IconButton(
+              icon: const Icon(Icons.more_horiz),
+              onPressed: () => showMoreSheet(context)),
           const SizedBox(width: 4),
         ],
       ),
@@ -311,7 +296,8 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 /// вспомогательное: диалог однострочного ввода («Задача от ИИ», «Курс от ИИ»)
-Future<String?> askText(BuildContext context, String title, String hint, {String? initial}) {
+Future<String?> askText(BuildContext context, String title, String hint,
+    {String? initial}) {
   final c = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,
@@ -319,9 +305,14 @@ Future<String?> askText(BuildContext context, String title, String hint, {String
       backgroundColor: C.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(title, style: const TextStyle(fontSize: 17)),
-      content: TextField(controller: c, autofocus: true, decoration: InputDecoration(hintText: hint)),
+      content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: InputDecoration(hintText: hint)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отмена', style: TextStyle(color: C.muted))),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Отмена', style: TextStyle(color: C.muted))),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, c.text.trim()),
           style: FilledButton.styleFrom(minimumSize: const Size(40, 42)),

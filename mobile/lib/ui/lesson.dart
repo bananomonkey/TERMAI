@@ -24,6 +24,7 @@ class _LessonScreenState extends State<LessonScreen>
   String _search = '';
   List<int> _answers = const [];
   String _answersFor = '';
+  String _taskId = '';
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
   Offset _swipeStart = Offset.zero;
 
@@ -31,13 +32,36 @@ class _LessonScreenState extends State<LessonScreen>
   void initState() {
     super.initState();
     if (diagAutoLesson) _tabIdx = 2;
+    _taskId = controller.currentTask?.id ?? '';
     _syncAnswers();
+    controller.addListener(_onController);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeCompletionDialog());
+  }
+
+  /// Слушаем контроллер только ради смены задачи и окна «выполнено».
+  /// Раньше на каждый вывод терминала перестраивался весь урок вместе
+  /// с markdown-слайдами — отсюда были фризы при работе в терминале.
+  void _onController() {
+    if (!mounted) return;
+    final id = controller.currentTask?.id ?? '';
+    if (id != _taskId) {
+      _taskId = id;
+      setState(_syncAnswers);
+    }
+    _maybeCompletionDialog();
   }
 
   void _syncAnswers() {
     final t = controller.currentTask;
     _answersFor = t?.id ?? '';
-    setState(() => _answers = List.filled(t?.quiz.length ?? 0, -1, growable: false));
+    _answers = List.filled(t?.quiz.length ?? 0, -1, growable: false);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onController);
+    super.dispose();
   }
 
   void _snack(String msg) {
@@ -81,24 +105,40 @@ class _LessonScreenState extends State<LessonScreen>
                       decoration: BoxDecoration(
                         color: C.good,
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: C.good.withAlpha(90), blurRadius: 26, spreadRadius: 3)],
+                        boxShadow: [
+                          BoxShadow(
+                              color: C.good.withAlpha(90),
+                              blurRadius: 26,
+                              spreadRadius: 3)
+                        ],
                       ),
-                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 42),
+                      child: const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 42),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text('Задача выполнена!',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: C.text)),
                 const SizedBox(height: 6),
-                Text(lc['title'] as String, style: TextStyle(fontSize: 13, color: C.muted)),
+                Text(lc['title'] as String,
+                    style: TextStyle(fontSize: 13, color: C.muted)),
                 const SizedBox(height: 10),
                 if ((lc['xp'] as int) > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(color: C.good.withAlpha(40), borderRadius: BorderRadius.circular(20)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                        color: C.good.withAlpha(40),
+                        borderRadius: BorderRadius.circular(20)),
                     child: Text('+${lc['xp']} XP',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: C.good)),
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: C.good)),
                   ),
                 if ((lc['peeked'] as bool)) ...[
                   const SizedBox(height: 8),
@@ -113,15 +153,19 @@ class _LessonScreenState extends State<LessonScreen>
                     decoration: BoxDecoration(
                       color: C.card,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border(left: BorderSide(color: C.secondary, width: 3)),
+                      border: Border(
+                          left: BorderSide(color: C.secondary, width: 3)),
                     ),
                     child: Text(lc['comment'] as String,
-                        style: TextStyle(fontSize: 13, height: 1.4, color: C.text)),
+                        style: TextStyle(
+                            fontSize: 13, height: 1.4, color: C.text)),
                   ),
                 ],
                 if (achievements.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Align(alignment: Alignment.centerLeft, child: caption('НОВЫЕ ДОСТИЖЕНИЯ', color: C.accent)),
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: caption('НОВЫЕ ДОСТИЖЕНИЯ', color: C.accent)),
                   const SizedBox(height: 6),
                   for (var i = 0; i < achievements.length; i++)
                     TweenAnimationBuilder<double>(
@@ -135,10 +179,13 @@ class _LessonScreenState extends State<LessonScreen>
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 6),
                             child: Row(children: [
-                              Icon(Icons.workspace_premium, color: C.warn, size: 20),
+                              Icon(Icons.workspace_premium,
+                                  color: C.warn, size: 20),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(achievements[i],
-                                  style: TextStyle(fontSize: 13, color: C.text))),
+                              Expanded(
+                                  child: Text(achievements[i],
+                                      style: TextStyle(
+                                          fontSize: 13, color: C.text))),
                             ]),
                           ),
                         ),
@@ -148,8 +195,8 @@ class _LessonScreenState extends State<LessonScreen>
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: () {
-                    Navigator.pop(ctx);            // закрыть окно
-                    Navigator.of(context).pop();   // урок → список задач курса
+                    Navigator.pop(ctx); // закрыть окно
+                    Navigator.of(context).pop(); // урок → список задач курса
                   },
                   icon: const Icon(Icons.list_alt, size: 18),
                   label: const Text('К списку задач'),
@@ -176,86 +223,107 @@ class _LessonScreenState extends State<LessonScreen>
         titleSpacing: 0,
       ),
       body: AppBackdrop(
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) {
-          if (t == null) {
-            return Center(child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.', style: TextStyle(color: C.muted)));
-          }
-          // после завершения задачи контроллер сразу открывает следующую —
-          // ответы теста нужно пересоздать под её вопросы
-          if (_answersFor != t.id) {
-            _answersFor = t.id;
-            _answers = List.filled(t.quiz.length, -1);
-          }
-          _maybeCompletionDialog();
-          // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку.
-          // В курсах-теориях терминал не нужен — остаются справка, задача и решение.
-          final theory = controller.cur.isTheory;
-          final slideNames = theory
-              ? ['Справка', 'Задача', 'Решение']
-              : ['Справка', 'Задача', 'Терминал', 'Решение'];
-          final last = slideNames.length - 1;
-          final current = _tabIdx.clamp(0, last);
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                child: Row(children: [
-                  for (var i = 0; i < slideNames.length; i++)
-                    Expanded(child: _SlideTab(
-                      title: slideNames[i],
-                      active: current == i,
-                      onTap: () => setState(() => _tabIdx = i),
-                    )),
-                ]),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: Listener(
-                  onPointerDown: (e) => _swipeStart = e.position,
-                  onPointerUp: (e) {
-                    final dx = e.position.dx - _swipeStart.dx;
-                    final dy = (e.position.dy - _swipeStart.dy).abs();
-                    if (dx.abs() > 90 && dx.abs() > dy * 2) {
-                      if (dx < 0 && current < last) setState(() => _tabIdx = current + 1);
-                      if (dx > 0 && current > 0) setState(() => _tabIdx = current - 1);
-                    }
-                  },
-                  child: RepaintBoundary(
-                    child: IndexedStack(
-                    index: current,
-                    children: [
-                      _HelpSlide(t: t, search: _search, onSearch: (v) => setState(() => _search = v)),
-                      _TaskSlide(
-                        t: t,
-                        answers: _answers,
-                        onAnswer: (qi, oi) => setState(() {
-                          if (qi >= _answers.length) {
-                            _answers = [
-                              ..._answers,
-                              ...List.filled(qi - _answers.length + 1, -1),
-                            ];
-                          }
-                          _answers[qi] = oi;
-                        }),
-                        onSnack: _snack,
+        child: Builder(
+          builder: (context) {
+            if (t == null) {
+              return Center(
+                  child: Text('Задач нет — создай через «Ещё» → Задача от ИИ.',
+                      style: TextStyle(color: C.muted)));
+            }
+            // после завершения задачи контроллер сразу открывает следующую —
+            // ответы теста нужно пересоздать под её вопросы
+            if (_answersFor != t.id) {
+              _answersFor = t.id;
+              _answers = List.filled(t.quiz.length, -1);
+            }
+            // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку.
+            // В курсах-теориях терминал не нужен — остаются справка, задача и решение.
+            final theory = controller.cur.isTheory;
+            final slideNames = theory
+                ? ['Справка', 'Задача', 'Решение']
+                : ['Справка', 'Задача', 'Терминал', 'Решение'];
+            final last = slideNames.length - 1;
+            final current = _tabIdx.clamp(0, last);
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  child: Row(children: [
+                    for (var i = 0; i < slideNames.length; i++)
+                      Expanded(
+                          child: _SlideTab(
+                        title: slideNames[i],
+                        active: current == i,
+                        onTap: () => setState(() => _tabIdx = i),
+                      )),
+                  ]),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: Listener(
+                    onPointerDown: (e) => _swipeStart = e.position,
+                    onPointerUp: (e) {
+                      final dx = e.position.dx - _swipeStart.dx;
+                      final dy = (e.position.dy - _swipeStart.dy).abs();
+                      if (dx.abs() > 90 && dx.abs() > dy * 2) {
+                        if (dx < 0 && current < last)
+                          setState(() => _tabIdx = current + 1);
+                        if (dx > 0 && current > 0)
+                          setState(() => _tabIdx = current - 1);
+                      }
+                    },
+                    child: RepaintBoundary(
+                      child: IndexedStack(
+                        index: current,
+                        children: [
+                          _HelpSlide(
+                              t: t,
+                              search: _search,
+                              onSearch: (v) => setState(() => _search = v)),
+                          _LiveSlide(
+                            active: current == 1,
+                            builder: () => _TaskSlide(
+                              t: t,
+                              answers: _answers,
+                              onAnswer: (qi, oi) => setState(() {
+                                if (qi >= _answers.length) {
+                                  _answers = [
+                                    ..._answers,
+                                    ...List.filled(
+                                        qi - _answers.length + 1, -1),
+                                  ];
+                                }
+                                _answers[qi] = oi;
+                              }),
+                              onSnack: _snack,
+                            ),
+                          ),
+                          if (theory)
+                            _LiveSlide(
+                              active: current == 2,
+                              builder: () =>
+                                  _SolutionSlide(t: t, onSnack: _snack),
+                            )
+                          else ...[
+                            _LiveSlide(
+                              active: current == 2,
+                              builder: () => _TermSlide(onSnack: _snack),
+                            ),
+                            _LiveSlide(
+                              active: current == 3,
+                              builder: () =>
+                                  _SolutionSlide(t: t, onSnack: _snack),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (theory)
-                        _SolutionSlide(t: t, onSnack: _snack)
-                      else ...[
-                        _TermSlide(onSnack: _snack),
-                        _SolutionSlide(t: t, onSnack: _snack),
-                      ],
-                    ],
-                  ),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -266,7 +334,8 @@ class _SlideTab extends StatelessWidget {
   final String title;
   final bool active;
   final VoidCallback onTap;
-  const _SlideTab({required this.title, required this.active, required this.onTap});
+  const _SlideTab(
+      {required this.title, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +365,8 @@ class _HelpSlide extends StatelessWidget {
   final Task t;
   final String search;
   final ValueChanged<String> onSearch;
-  const _HelpSlide({required this.t, required this.search, required this.onSearch});
+  const _HelpSlide(
+      {required this.t, required this.search, required this.onSearch});
 
   @override
   Widget build(BuildContext context) {
@@ -318,12 +388,16 @@ class _HelpSlide extends StatelessWidget {
         if (paras.isEmpty)
           Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: Text('Ничего не найдено.', style: TextStyle(color: C.muted))),
+            child: Center(
+                child: Text('Ничего не найдено.',
+                    style: TextStyle(color: C.muted))),
           )
         else
           ...paras.map((p) => Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: cardBox(child: MarkdownBody(data: p, selectable: true, styleSheet: mdStyle())),
+                child: cardBox(
+                    child: MarkdownBody(
+                        data: p, selectable: true, styleSheet: mdStyle())),
               )),
       ],
     );
@@ -335,7 +409,11 @@ MarkdownStyleSheet mdStyle() => MarkdownStyleSheet(
       h1: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.text),
       h2: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: C.text),
       h3: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: C.text),
-      code: TextStyle(fontSize: 13, color: C.accent, fontFamily: 'monospace', backgroundColor: C.card2),
+      code: TextStyle(
+          fontSize: 13,
+          color: C.accent,
+          fontFamily: 'monospace',
+          backgroundColor: C.card2),
       codeblockDecoration: BoxDecoration(
         color: const Color(0xFF101318),
         borderRadius: BorderRadius.circular(12),
@@ -344,7 +422,8 @@ MarkdownStyleSheet mdStyle() => MarkdownStyleSheet(
       codeblockPadding: const EdgeInsets.all(12),
       listBullet: TextStyle(fontSize: 14.5, height: 1.4, color: C.text),
       blockquoteDecoration: BoxDecoration(
-        border: Border(left: BorderSide(color: C.accent.withAlpha(120), width: 3)),
+        border:
+            Border(left: BorderSide(color: C.accent.withAlpha(120), width: 3)),
         color: C.card2.withAlpha(80),
       ),
       blockquotePadding: const EdgeInsets.all(10),
@@ -357,15 +436,22 @@ class _TaskSlide extends StatelessWidget {
   final List<int> answers;
   final void Function(int qi, int oi) onAnswer;
   final void Function(String) onSnack;
-  const _TaskSlide({required this.t, required this.answers, required this.onAnswer, required this.onSnack});
+  const _TaskSlide(
+      {required this.t,
+      required this.answers,
+      required this.onAnswer,
+      required this.onSnack});
 
   @override
   Widget build(BuildContext context) {
-    final needQuiz = t.quiz.isNotEmpty && !controller.quizDone(t) && !controller.isDone(t);
+    final needQuiz =
+        t.quiz.isNotEmpty && !controller.quizDone(t) && !controller.isDone(t);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(t.title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
+        Text(t.title,
+            style: const TextStyle(
+                fontSize: 21, fontWeight: FontWeight.w900, height: 1.2)),
         const SizedBox(height: 8),
         if (controller.reviewKey != null)
           Container(
@@ -380,17 +466,23 @@ class _TaskSlide extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, color: C.text)),
           ),
         Row(children: [
-          Text(controller.cur.isTheory ? 'урок' : (t.isQuiz ? 'тест' : 'практика'),
+          Text(
+              controller.cur.isTheory
+                  ? 'урок'
+                  : (t.isQuiz ? 'тест' : 'практика'),
               style: TextStyle(fontSize: 12, color: C.muted)),
           const SizedBox(width: 10),
           difficultyDots(t.difficulty),
           const SizedBox(width: 10),
-          Text('+${t.xp} XP', style: TextStyle(fontSize: 12, color: C.accent, fontWeight: FontWeight.w700)),
+          Text('+${t.xp} XP',
+              style: TextStyle(
+                  fontSize: 12, color: C.accent, fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 14),
         cardBox(
           accent: C.accent.withAlpha(140),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             caption('Задача', color: C.accent),
             const SizedBox(height: 8),
             MarkdownBody(data: t.goal, styleSheet: mdStyle()),
@@ -404,27 +496,36 @@ class _TaskSlide extends StatelessWidget {
                 final q = controller.cur.isTheory
                     ? 'Объясни тему «${t.title}»: главную идею, примеры и на что обратить внимание. Не давай сразу готовый ответ — сначала подсказку.'
                     : 'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.';
-                Navigator.of(context).push(pageRoute(ChatScreen(autoQuestion: q)));
+                Navigator.of(context)
+                    .push(pageRoute(ChatScreen(autoQuestion: q)));
               },
               icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
-              label: Text('Объяснить задание', style: TextStyle(color: C.accent)),
+              label:
+                  Text('Объяснить задание', style: TextStyle(color: C.accent)),
             ),
           ),
           const SizedBox(width: 8),
           OutlinedButton(
             onPressed: controller.toggleBookmark,
-            style: OutlinedButton.styleFrom(minimumSize: const Size(52, 48), padding: const EdgeInsets.symmetric(horizontal: 12)),
-            child: Icon(controller.isBookmarked(t) ? Icons.star : Icons.star_border,
-                size: 20, color: controller.isBookmarked(t) ? C.warn : C.muted),
+            style: OutlinedButton.styleFrom(
+                minimumSize: const Size(52, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 12)),
+            child: Icon(
+                controller.isBookmarked(t) ? Icons.star : Icons.star_border,
+                size: 20,
+                color: controller.isBookmarked(t) ? C.warn : C.muted),
           ),
         ]),
         const SizedBox(height: 18),
         if (needQuiz) ...[
           caption('Тест по теории', color: C.accent),
           const SizedBox(height: 10),
-          _QuizBlock(t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
+          _QuizBlock(
+              t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
         ],
-        if (controller.cur.isTheory && controller.quizDone(t) && !controller.isDone(t)) ...[
+        if (controller.cur.isTheory &&
+            controller.quizDone(t) &&
+            !controller.isDone(t)) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -437,7 +538,8 @@ class _TaskSlide extends StatelessWidget {
         if (t.hints.isNotEmpty) ...[
           caption('Подсказки'),
           const SizedBox(height: 8),
-          for (var i = 0; i < t.hints.length && i < 2; i++) _HintTile(t: t, index: i),
+          for (var i = 0; i < t.hints.length && i < 2; i++)
+            _HintTile(t: t, index: i),
         ],
         const SizedBox(height: 30),
       ],
@@ -450,7 +552,11 @@ class _QuizBlock extends StatelessWidget {
   final List<int> answers;
   final void Function(int qi, int oi) onAnswer;
   final void Function(String) onSnack;
-  const _QuizBlock({required this.t, required this.answers, required this.onAnswer, required this.onSnack});
+  const _QuizBlock(
+      {required this.t,
+      required this.answers,
+      required this.onAnswer,
+      required this.onSnack});
 
   @override
   Widget build(BuildContext context) {
@@ -460,7 +566,8 @@ class _QuizBlock extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text('${qi + 1}. ${t.quiz[qi].question}',
-                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, height: 1.3)),
+                style: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w700, height: 1.3)),
           ),
           const SizedBox(height: 8),
           for (var oi = 0; oi < t.quiz[qi].options.length; oi++)
@@ -470,10 +577,15 @@ class _QuizBlock extends StatelessWidget {
                 onTap: () => onAnswer(qi, oi),
                 child: cardBox(
                   accent: answers[qi] == oi ? C.accent : null,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   child: Row(children: [
-                    Icon(answers[qi] == oi ? Icons.radio_button_checked : Icons.radio_button_off,
-                        size: 18, color: answers[qi] == oi ? C.accent : C.muted),
+                    Icon(
+                        answers[qi] == oi
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        size: 18,
+                        color: answers[qi] == oi ? C.accent : C.muted),
                     const SizedBox(width: 10),
                     Expanded(
                         child: Text(t.quiz[qi].options[oi],
@@ -518,9 +630,14 @@ class _HintTile extends StatelessWidget {
           childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
           collapsedBackgroundColor: C.card,
           backgroundColor: C.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
-          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
-          title: Text('Подсказка ${index + 1}', style: TextStyle(fontSize: 14, color: C.text)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: C.border)),
+          collapsedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: C.border)),
+          title: Text('Подсказка ${index + 1}',
+              style: TextStyle(fontSize: 14, color: C.text)),
           onExpansionChanged: (open) {
             if (open && !used) {
               final m = controller.prog.hints[controller.cur.id] ?? {};
@@ -529,7 +646,12 @@ class _HintTile extends StatelessWidget {
               controller.saveProgress();
             }
           },
-          children: [Align(alignment: Alignment.centerLeft, child: MarkdownBody(data: t.hints[index], styleSheet: mdStyle()))],
+          children: [
+            Align(
+                alignment: Alignment.centerLeft,
+                child:
+                    MarkdownBody(data: t.hints[index], styleSheet: mdStyle()))
+          ],
         ),
       ),
     );
@@ -590,11 +712,13 @@ class _TermSlideState extends State<_TermSlide> {
         children: [
           if ((t?.expected ?? '').isNotEmpty) ...[
             cardBox(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                caption('Ожидаемый вывод'),
-                const SizedBox(height: 6),
-                MarkdownBody(data: t!.expected, styleSheet: mdStyle()),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    caption('Ожидаемый вывод'),
+                    const SizedBox(height: 6),
+                    MarkdownBody(data: t!.expected, styleSheet: mdStyle()),
+                  ]),
             ),
             const SizedBox(height: 12),
           ],
@@ -611,27 +735,32 @@ class _TermSlideState extends State<_TermSlide> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
                 child: Row(children: [
-                  Text('Терминал', style: TextStyle(fontSize: 11, color: C.muted)),
+                  Text('Терминал',
+                      style: TextStyle(fontSize: 11, color: C.muted)),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Чат с ментором',
-                    onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-                    icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
+                    onPressed: () => Navigator.of(context)
+                        .push(pageRoute(const ChatScreen())),
+                    icon: Icon(Icons.chat_bubble_outline,
+                        size: 17, color: C.secondary),
                   ),
                   const Spacer(),
-                  TextButton.icon(
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Отменить команду',
                     onPressed: controller.undoCommand,
-                    icon: Icon(Icons.undo, size: 16, color: C.muted),
-                    label: Text('Отменить', style: TextStyle(fontSize: 12, color: C.muted)),
+                    icon: Icon(Icons.undo, size: 17, color: C.muted),
                   ),
-                  TextButton.icon(
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Очистить вывод',
                     onPressed: () {
                       controller.termText = '';
                       controller.termLine('  (вывод терминала очищен)');
                       controller.refreshTerminal();
                     },
-                    icon: Icon(Icons.refresh, size: 16, color: C.muted),
-                    label: Text('Сбросить', style: TextStyle(fontSize: 12, color: C.muted)),
+                    icon: Icon(Icons.refresh, size: 17, color: C.muted),
                   ),
                 ]),
               ),
@@ -643,7 +772,11 @@ class _TermSlideState extends State<_TermSlide> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       controller.termText,
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.45, color: C.termText),
+                      style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                          height: 1.45,
+                          color: C.termText),
                     ),
                   ),
                 ),
@@ -665,7 +798,11 @@ class _TermSlideState extends State<_TermSlide> {
             IconButton.filled(
               onPressed: controller.termBusy ? null : _run,
               icon: controller.termBusy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.play_arrow),
               style: IconButton.styleFrom(backgroundColor: C.accentDark),
             ),
@@ -675,7 +812,8 @@ class _TermSlideState extends State<_TermSlide> {
                   ? null
                   : () async {
                       final err = await controller.submitTask();
-                      if (err.isNotEmpty && context.mounted) widget.onSnack(err);
+                      if (err.isNotEmpty && context.mounted)
+                        widget.onSnack(err);
                     },
               icon: const Icon(Icons.send, size: 19),
               style: IconButton.styleFrom(backgroundColor: C.good),
@@ -686,9 +824,12 @@ class _TermSlideState extends State<_TermSlide> {
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen())),
-                icon: Icon(Icons.chat_bubble_outline, size: 17, color: C.secondary),
-                label: Text('Ментор', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+                onPressed: () =>
+                    Navigator.of(context).push(pageRoute(const ChatScreen())),
+                icon: Icon(Icons.chat_bubble_outline,
+                    size: 17, color: C.secondary),
+                label: Text('Ментор',
+                    style: TextStyle(fontSize: 12.5, color: C.secondary)),
               ),
             ),
             const SizedBox(width: 8),
@@ -711,12 +852,15 @@ class _TermSlideState extends State<_TermSlide> {
     showModalBottomSheet(
       context: context,
       backgroundColor: C.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => SafeArea(
         child: st.files.isEmpty
             ? Padding(
                 padding: const EdgeInsets.all(28),
-                child: Center(child: Text('Файлов в песочнице нет.', style: TextStyle(color: C.muted))),
+                child: Center(
+                    child: Text('Файлов в песочнице нет.',
+                        style: TextStyle(color: C.muted))),
               )
             : ListView(
                 padding: const EdgeInsets.all(16),
@@ -729,12 +873,23 @@ class _TermSlideState extends State<_TermSlide> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: cardBox(
                         padding: const EdgeInsets.all(12),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(e.key, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.accent)),
-                          const SizedBox(height: 6),
-                          Text(e.value, maxLines: 6, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: C.muted)),
-                        ]),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(e.key,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: C.accent)),
+                              const SizedBox(height: 6),
+                              Text(e.value,
+                                  maxLines: 6,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                      color: C.muted)),
+                            ]),
                       ),
                     ),
                 ],
@@ -805,8 +960,10 @@ class _SolutionSlideState extends State<_SolutionSlide> {
               const Text('Решение скрыто',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              Text('Сначала попробуй сам — ментор подскажет в чате.\nРешение готовит ИИ после удержания кнопки.',
-                  textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
+              Text(
+                  'Сначала попробуй сам — ментор подскажет в чате.\nРешение готовит ИИ после удержания кнопки.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: C.muted, fontSize: 13, height: 1.4)),
               const SizedBox(height: 16),
               if (controller.solutionLoad)
                 Padding(
@@ -814,7 +971,8 @@ class _SolutionSlideState extends State<_SolutionSlide> {
                   child: CircularProgressIndicator(color: C.accent),
                 )
               else
-                _HoldButton(progress: _hold, onStart: _startHold, onStop: _stopHold),
+                _HoldButton(
+                    progress: _hold, onStart: _startHold, onStop: _stopHold),
             ]),
           ),
         ] else if (!t.peeked) ...[
@@ -832,7 +990,8 @@ class _SolutionSlideState extends State<_SolutionSlide> {
               Positioned.fill(
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: C.bg.withAlpha(200),
                       borderRadius: BorderRadius.circular(12),
@@ -848,14 +1007,17 @@ class _SolutionSlideState extends State<_SolutionSlide> {
           const SizedBox(height: 14),
           _HoldButton(progress: _hold, onStart: _startHold, onStop: _stopHold),
         ] else ...[
-          cardBox(child: MarkdownBody(data: t.solution, selectable: true, styleSheet: mdStyle())),
+          cardBox(
+              child: MarkdownBody(
+                  data: t.solution, selectable: true, styleSheet: mdStyle())),
           const SizedBox(height: 10),
           Text('За подсмотренное решение XP не начисляются.',
               style: TextStyle(color: C.muted, fontSize: 12)),
         ],
         const SizedBox(height: 12),
         if (!t.peeked && t.solution.isNotEmpty)
-          Text('Если вы покажете решение, вы не получите XP при решении этой задачи.',
+          Text(
+              'Если вы покажете решение, вы не получите XP при решении этой задачи.',
               style: TextStyle(color: C.muted, fontSize: 12.5, height: 1.35)),
         const SizedBox(height: 30),
       ],
@@ -866,7 +1028,8 @@ class _SolutionSlideState extends State<_SolutionSlide> {
 class _HoldButton extends StatelessWidget {
   final double progress;
   final VoidCallback onStart, onStop;
-  const _HoldButton({required this.progress, required this.onStart, required this.onStop});
+  const _HoldButton(
+      {required this.progress, required this.onStart, required this.onStop});
 
   @override
   Widget build(BuildContext context) {
@@ -884,16 +1047,67 @@ class _HoldButton extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: Text(
-            progress > 0 ? 'держи ещё… ${((1 - progress) * 5).toStringAsFixed(1)} с' : 'Удерживай 5 секунд — показать решение',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: C.text),
+            progress > 0
+                ? 'держи ещё… ${((1 - progress) * 5).toStringAsFixed(1)} с'
+                : 'Удерживай 5 секунд — показать решение',
+            style: TextStyle(
+                fontWeight: FontWeight.w800, fontSize: 14, color: C.text),
           ),
         ),
       ),
       const SizedBox(height: 8),
       ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: C.card2, color: C.accent),
+        child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 4,
+            backgroundColor: C.card2,
+            color: C.accent),
       ),
     ]);
   }
+}
+
+/// _LiveSlide — перестраивает слайд по уведомлениям контроллера только когда
+/// он активен: скрытые слайды не тратят кадры на терминал и markdown.
+class _LiveSlide extends StatefulWidget {
+  final bool active;
+  final Widget Function() builder;
+  const _LiveSlide({required this.active, required this.builder});
+
+  @override
+  State<_LiveSlide> createState() => _LiveSlideState();
+}
+
+class _LiveSlideState extends State<_LiveSlide> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) controller.addListener(_onChange);
+  }
+
+  @override
+  void didUpdateWidget(_LiveSlide old) {
+    super.didUpdateWidget(old);
+    if (old.active != widget.active) {
+      if (widget.active) {
+        controller.addListener(_onChange);
+      } else {
+        controller.removeListener(_onChange);
+      }
+    }
+  }
+
+  void _onChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onChange);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder();
 }

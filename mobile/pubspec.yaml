@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — тренажёр навыков с ИИ-наставником (языки, Linux, Docker, Git и другие курсы)"
 publish_to: "none"
-version: 1.15.2+29
+version: 1.15.3+30
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -38,5 +38,5 @@ flutter:
 flutter_launcher_icons:
   android: true
   image_path: "assets/icon/termai.png"
-  adaptive_icon_background: "#14100D"
+  adaptive_icon_background: "#0A0A0A"
   adaptive_icon_foreground: "assets/icon/termai_fg.png"

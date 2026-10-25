@@ -56,7 +56,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
       ),
       body: AppBackdrop(
-        includeAmbient: false,
         child: ListenableBuilder(
           listenable: controller,
           builder: (context, _) {
@@ -80,15 +79,7 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                             maxWidth: 900,
                           )
                         else
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [C.card, C.card2, C.bg],
-                              ),
-                            ),
-                          ),
+                          ColoredBox(color: C.bg),
                         // затемнение — ровно как на реальном экране
                         ColoredBox(
                           color: C.bg.withAlpha(
@@ -163,9 +154,13 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                       max: 40,
                       divisions: 40,
                       label: cfg.bgBlur.round().toString(),
-                      onChanged: (v) => controller.setBackgroundTuning(blur: v),
-                      onChangeEnd: (v) => controller.setBackgroundTuning(
-                          blur: v, persist: true),
+                      onChanged: has
+                          ? (v) => controller.setBackgroundTuning(blur: v)
+                          : null,
+                      onChangeEnd: has
+                          ? (v) => controller.setBackgroundTuning(
+                              blur: v, persist: true)
+                          : null,
                     ),
                   ),
                   SizedBox(
@@ -176,7 +171,9 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                   ),
                 ]),
                 Text(
-                    'Размытие применяется ко всему фону — и к фото, и к туману темы.',
+                    has
+                        ? 'Размытие применяется к фото фона и видно в предпросмотре сразу.'
+                        : 'Фон сейчас ровный. Выбери фото, чтобы включить размытие.',
                     style: TextStyle(fontSize: 11.5, color: C.muted)),
                 const SizedBox(height: 18),
                 caption('Затемнение', color: C.accent),
@@ -188,9 +185,13 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                       max: 0.9,
                       divisions: 18,
                       label: '${(cfg.bgDim * 100).round()}%',
-                      onChanged: (v) => controller.setBackgroundTuning(dim: v),
-                      onChangeEnd: (v) =>
-                          controller.setBackgroundTuning(dim: v, persist: true),
+                      onChanged: has
+                          ? (v) => controller.setBackgroundTuning(dim: v)
+                          : null,
+                      onChangeEnd: has
+                          ? (v) => controller.setBackgroundTuning(
+                              dim: v, persist: true)
+                          : null,
                     ),
                   ),
                   SizedBox(
@@ -201,8 +202,9 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                   ),
                 ]),
                 Text(
-                    'Затемнение тоже общее: приглушает и фото, и фон темы, '
-                    'чтобы карточки и текст читались.',
+                    has
+                        ? 'Затемнение приглушает фото, чтобы карточки и текст читались.'
+                        : 'Затемнение включится вместе с фото.',
                     style: TextStyle(fontSize: 11.5, color: C.muted)),
                 const SizedBox(height: 20),
                 Text(

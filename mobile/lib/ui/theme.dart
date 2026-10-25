@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 class ThemePreset {
   final String id, title;
-  final Color bg;        // 60%
+  final Color bg; // 60%
   final Color surface, card, card2, border; // 30%: поверхности
   final Color secondary; // 30%: элементы, префикс терминала, черты ИИ
   final Color accent, accentDark; // 10%: кнопки действия
@@ -13,35 +13,71 @@ class ThemePreset {
   final Color good, warn, danger;
   final Color termBg, termText;
   const ThemePreset({
-    required this.id, required this.title,
-    required this.bg, required this.surface, required this.card, required this.card2,
-    required this.secondary, required this.accent, required this.accentDark,
-    required this.text, required this.muted, required this.good, required this.warn,
-    required this.danger, required this.border, required this.termBg, required this.termText,
+    required this.id,
+    required this.title,
+    required this.bg,
+    required this.surface,
+    required this.card,
+    required this.card2,
+    required this.secondary,
+    required this.accent,
+    required this.accentDark,
+    required this.text,
+    required this.muted,
+    required this.good,
+    required this.warn,
+    required this.danger,
+    required this.border,
+    required this.termBg,
+    required this.termText,
   });
 }
 
 const themePresets = <ThemePreset>[
   // Тёплый бизнес: коричневый + бежевый + терракота — основная тема.
   ThemePreset(
-    id: 'cocoa', title: 'Какао',
-    bg: Color(0xFF14100D), surface: Color(0xFF1C1814), card: Color(0xFF241E19), card2: Color(0xFF2C251E),
-    secondary: Color(0xFFA78B6F), accent: Color(0xFFD97757), accentDark: Color(0xFFC05F42),
-    text: Color(0xFFEDE6DE), muted: Color(0xFF9C9083), good: Color(0xFFA3BE8C), warn: Color(0xFFD9A05B),
-    danger: Color(0xFFCF6A5A), border: Color(0xFF342C24), termBg: Color(0xFF0F0C09), termText: Color(0xFFD6CCC0),
+    id: 'cocoa',
+    title: 'Какао',
+    bg: Color(0xFF1B1713),
+    surface: Color(0xFF241F1A),
+    card: Color(0xFF2B2520),
+    card2: Color(0xFF332C25),
+    secondary: Color(0xFFA78B6F),
+    accent: Color(0xFFD97757),
+    accentDark: Color(0xFFC05F42),
+    text: Color(0xFFEDE6DE),
+    muted: Color(0xFF9C9083),
+    good: Color(0xFFA3BE8C),
+    warn: Color(0xFFD9A05B),
+    danger: Color(0xFFCF6A5A),
+    border: Color(0xFF3A322A),
+    termBg: Color(0xFF15110E),
+    termText: Color(0xFFD6CCC0),
   ),
   // Синий — второй допустимый вариант оформления.
   ThemePreset(
-    id: 'navy', title: 'Синий',
-    bg: Color(0xFF060B18), surface: Color(0xFF0B1428), card: Color(0xFF111B33), card2: Color(0xFF17233F),
-    secondary: Color(0xFF6E8BC4), accent: Color(0xFF4DA3FF), accentDark: Color(0xFF2E86E0),
-    text: Color(0xFFE6EDF8), muted: Color(0xFF8296B8), good: Color(0xFF3FD69A), warn: Color(0xFFE5B567),
-    danger: Color(0xFFE0707F), border: Color(0xFF1B2A4A), termBg: Color(0xFF040814), termText: Color(0xFFB9C9E4),
+    id: 'navy',
+    title: 'Синий',
+    bg: Color(0xFF0A1226),
+    surface: Color(0xFF101A33),
+    card: Color(0xFF16213F),
+    card2: Color(0xFF1D2A4C),
+    secondary: Color(0xFF6E8BC4),
+    accent: Color(0xFF4DA3FF),
+    accentDark: Color(0xFF2E86E0),
+    text: Color(0xFFE6EDF8),
+    muted: Color(0xFF8296B8),
+    good: Color(0xFF3FD69A),
+    warn: Color(0xFFE5B567),
+    danger: Color(0xFFE0707F),
+    border: Color(0xFF223158),
+    termBg: Color(0xFF070E1F),
+    termText: Color(0xFFB9C9E4),
   ),
 ];
 
-ThemePreset presetById(String id) =>
-    themePresets.firstWhere((p) => p.id == id, orElse: () => themePresets.first);
+ThemePreset presetById(String id) => themePresets.firstWhere((p) => p.id == id,
+    orElse: () => themePresets.first);
 
 /// C — живые цвета: все виджеты читают их отсюда, смена пресета в настройках
 /// перекрашивает всё приложение (MaterialApp перестраивается от notifyListeners).
@@ -63,26 +99,7 @@ class C {
   static Color get termBg => p.termBg;
   static Color get termText => p.termText;
 
-  // ---------- жидкое стекло ----------
-
-  /// Верхняя грань стекла: чуть светлее поверх тона темы.
-  static Color get glassTop => Color.alphaBlend(
-      Colors.white.withAlpha(30), p.card);
-
-  /// Нижняя грань стекла: глубже и темнее (объём «линзы»).
-  static Color get glassBottom => Color.alphaBlend(
-      Colors.black.withAlpha(70), p.bg);
-
-  /// Градиент стекла: верх/середина/низ. Держим тёмным, чтобы плитки
-  /// не «светились» поверх и без того тёмного фона.
-  static List<Color> get glassGradient => [
-        Colors.white.withAlpha(20),
-        Colors.white.withAlpha(7),
-        p.accent.withAlpha(12),
-        Colors.black.withAlpha(70),
-      ];
-
-  /// Свечение активного элемента — мягкий акцент сквозь размытие.
+  /// Свечение активного элемента под карточкой.
   static Color glow({Color? color, int alpha = 70}) =>
       (color ?? p.good).withAlpha(alpha);
 }

@@ -1,8 +1,6 @@
 // home.dart — главный экран в стиле Duolingo: вертикальная зигзаг-тропинка
 // из кружков-курсов, толстые соединения (пройдено — ярко, впереди — серо),
 // баннеры модулей каждые пять кружков. Скролл только сверху вниз.
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -30,14 +28,18 @@ class CourseGraphView extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(32),
               child: Text('Курсов пока нет — создай через «Ещё» → Курс от ИИ.',
-                  textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: C.muted)),
             ),
           );
         }
         // индекс активного курса считаем один раз, а не для каждой плитки
         var current = -1;
         for (var i = 0; i < courses.length; i++) {
-          if (!controller.isCourseDone(i)) { current = i; break; }
+          if (!controller.isCourseDone(i)) {
+            current = i;
+            break;
+          }
         }
         if (current < 0) current = courses.length - 1;
         final list = Column(
@@ -46,28 +48,30 @@ class CourseGraphView extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: cardBox(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Icon(Icons.auto_awesome, size: 15, color: C.accent),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Наполняю курсы задачами: ${controller.fillDone}/${controller.fillTotal} · ${controller.fillCurrent}',
-                          style: TextStyle(fontSize: 12, color: C.text),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(Icons.auto_awesome, size: 15, color: C.accent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Наполняю курсы задачами: ${controller.fillDone}/${controller.fillTotal} · ${controller.fillCurrent}',
+                              style: TextStyle(fontSize: 12, color: C.text),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 6),
+                        LinearProgressIndicator(
+                          value: controller.fillDone / controller.fillTotal,
+                          minHeight: 5,
+                          borderRadius: BorderRadius.circular(3),
+                          backgroundColor: C.card2,
+                          color: C.accent,
                         ),
-                      ),
-                    ]),
-                    const SizedBox(height: 6),
-                    LinearProgressIndicator(
-                      value: controller.fillDone / controller.fillTotal,
-                      minHeight: 5,
-                      borderRadius: BorderRadius.circular(3),
-                      backgroundColor: C.card2,
-                      color: C.accent,
-                    ),
-                  ]),
+                      ]),
                 ),
               ),
             Expanded(
@@ -75,7 +79,8 @@ class CourseGraphView extends StatelessWidget {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 116),
                 itemCount: courses.length,
-                itemBuilder: (context, i) => _CourseTile(index: i, currentIdx: current),
+                itemBuilder: (context, i) =>
+                    _CourseTile(index: i, currentIdx: current),
               ),
             ),
           ],
@@ -100,76 +105,95 @@ class _CourseTile extends StatelessWidget {
     final done = controller.isCourseDone(index);
     final total = c.tasks.length;
     final completedMap = controller.prog.completed[c.id] ?? {};
-    final solved = total == 0 ? 0 : c.tasks.where((t) => completedMap[t.id] ?? false).length;
+    final solved = total == 0
+        ? 0
+        : c.tasks.where((t) => completedMap[t.id] ?? false).length;
     final pct = total == 0 ? 0 : ((solved / total) * 100).round();
     final current = !done && index == currentIdx;
     final accent = c.isTheory ? C.secondary : C.accent;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      // выделение текста при двойном тапе отключено: заголовок не должен
-      // подсвечиваться и «краснеть» системным селектом
-      child: SelectionContainer.disabled(
-        child: GestureDetector(
-          onTap: () => Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: index))),
-          onDoubleTap: () => _showCourseActions(context, index),
-          child: glass(
-            radius: 20,
-            blur: 22,
-            padding: const EdgeInsets.all(16),
-            glow: current ? C.glow(color: C.good, alpha: 70) : C.glow(color: accent, alpha: 18),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Icon(c.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
-                        size: 15, color: accent),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(c.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w800,
-                              color: C.text,
-                              decoration: TextDecoration.none)),
-                    ),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text('$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
-                      style: TextStyle(fontSize: 11, color: C.muted)),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: LinearProgressIndicator(
-                      value: total == 0 ? 0 : solved / total,
-                      minHeight: 6,
-                      backgroundColor: Colors.white.withAlpha(14),
-                      color: done ? C.good : (current ? C.good : accent),
-                    ),
-                  ),
-                ]),
-              ),
-              const SizedBox(width: 10),
-              Text('$pct%',
-                  style: TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w900, color: done ? C.good : C.muted)),
-              const SizedBox(width: 2),
-              if (done)
-                Icon(Icons.check_circle_rounded, color: C.good, size: 22)
-              else ...[
-                chevron(size: current ? 28 : 26, color: current ? C.good : C.muted),
-                GestureDetector(
-                  onTap: () => _showCourseActions(context, index),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 2),
-                    child: Icon(Icons.more_vert, size: 18, color: C.muted.withAlpha(170)),
-                  ),
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        // выделение текста при двойном тапе отключено: заголовок не должен
+        // подсвечиваться и «краснеть» системным селектом
+        child: SelectionContainer.disabled(
+          child: GestureDetector(
+            onTap: () => Navigator.of(context)
+                .push(pageRoute(TaskListScreen(courseIdx: index))),
+            onDoubleTap: () => _showCourseActions(context, index),
+            child: glass(
+              radius: 20,
+              blur: 22,
+              padding: const EdgeInsets.all(16),
+              glow: current
+                  ? C.glow(color: C.good, alpha: 70)
+                  : C.glow(color: accent, alpha: 18),
+              child: Row(children: [
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(
+                              c.isTheory
+                                  ? Icons.auto_stories_outlined
+                                  : Icons.terminal,
+                              size: 15,
+                              color: accent),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(c.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: C.text,
+                                    decoration: TextDecoration.none)),
+                          ),
+                        ]),
+                        const SizedBox(height: 4),
+                        Text(
+                            '$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
+                            style: TextStyle(fontSize: 11, color: C.muted)),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: LinearProgressIndicator(
+                            value: total == 0 ? 0 : solved / total,
+                            minHeight: 6,
+                            backgroundColor: Colors.white.withAlpha(14),
+                            color: done ? C.good : (current ? C.good : accent),
+                          ),
+                        ),
+                      ]),
                 ),
-              ],
-            ]),
+                const SizedBox(width: 10),
+                Text('$pct%',
+                    style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: done ? C.good : C.muted)),
+                const SizedBox(width: 2),
+                if (done)
+                  Icon(Icons.check_circle_rounded, color: C.good, size: 22)
+                else ...[
+                  chevron(
+                      size: current ? 28 : 26,
+                      color: current ? C.good : C.muted),
+                  GestureDetector(
+                    onTap: () => _showCourseActions(context, index),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(Icons.more_vert,
+                          size: 18, color: C.muted.withAlpha(170)),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
           ),
         ),
       ),
@@ -177,7 +201,7 @@ class _CourseTile extends StatelessWidget {
   }
 }
 
-/// Двойной тап по плитке: размытие фона + окно (открыть/переименовать/удалить).
+/// Двойной тап по плитке: окно действий (открыть/переименовать/в архив/удалить).
 void _showCourseActions(BuildContext context, int courseIdx) {
   final cid = controller.courses[courseIdx].id;
   showGeneralDialog(
@@ -187,104 +211,111 @@ void _showCourseActions(BuildContext context, int courseIdx) {
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 180),
     pageBuilder: (ctx, anim, _) {
-      return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          color: C.bg.withAlpha(110),
-          alignment: Alignment.center,
-          child: StatefulBuilder(
-            builder: (ctx, setSheet) {
-              final idx = controller.courses.indexWhere((x) => x.id == cid);
-              if (idx < 0) return cardBox(child: const Text('Курс удалён'));
-              final c = controller.courses[idx];
-              return Container(
-                width: 300,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(20)),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(c.title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: C.text,
-                            decoration: TextDecoration.none)),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(pageRoute(TaskListScreen(courseIdx: idx)));
-                      },
-                      icon: const Icon(Icons.menu_book_outlined, size: 18),
-                      label: const Text('Открыть'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        final t = await askText(context, 'Переименовать курс', 'новое название', initial: c.title);
-                        if (t != null && t.isNotEmpty) controller.renameCourse(idx, t);
-                      },
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Переименовать'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        controller.archiveCourse(c.id);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('«${c.title}» в архиве'),
-                          action: SnackBarAction(
-                            label: 'Вернуть',
-                            onPressed: () => controller.unarchiveCourse(c.id),
-                          ),
-                        ));
-                      },
-                      icon: const Icon(Icons.inventory_2_outlined, size: 18),
-                      label: const Text('В архив'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: ctx,
-                          builder: (dctx) => AlertDialog(
-                            backgroundColor: C.surface,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            title: const Text('Удалить курс?'),
-                            content: Text('«' + c.title + '» исчезнет из списка. Прогресс сохранится.'),
-                            actions: [
-                              OutlinedButton(
-                                onPressed: () => Navigator.pop(dctx),
-                                style: OutlinedButton.styleFrom(minimumSize: const Size(64, 42)),
-                                child: const Text('Отмена'),
-                              ),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                    backgroundColor: C.danger, minimumSize: const Size(64, 42)),
-                                onPressed: () {
-                                  Navigator.pop(dctx);
-                                  controller.deleteCourse(idx);
-                                  Navigator.pop(ctx);
-                                },
-                                child: const Text('Удалить'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      icon: Icon(Icons.delete_outline, size: 18, color: C.danger),
-                      label: Text('Удалить', style: TextStyle(color: C.danger)),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+      return Container(
+        color: C.bg.withAlpha(175),
+        alignment: Alignment.center,
+        child: StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final idx = controller.courses.indexWhere((x) => x.id == cid);
+            if (idx < 0) return cardBox(child: const Text('Курс удалён'));
+            final c = controller.courses[idx];
+            return Container(
+              width: 300,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                  color: C.surface, borderRadius: BorderRadius.circular(20)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(c.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: C.text,
+                          decoration: TextDecoration.none)),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.of(context)
+                          .push(pageRoute(TaskListScreen(courseIdx: idx)));
+                    },
+                    icon: const Icon(Icons.menu_book_outlined, size: 18),
+                    label: const Text('Открыть'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final t = await askText(
+                          context, 'Переименовать курс', 'новое название',
+                          initial: c.title);
+                      if (t != null && t.isNotEmpty)
+                        controller.renameCourse(idx, t);
+                    },
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Переименовать'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      controller.archiveCourse(c.id);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('«${c.title}» в архиве'),
+                        action: SnackBarAction(
+                          label: 'Вернуть',
+                          onPressed: () => controller.unarchiveCourse(c.id),
+                        ),
+                      ));
+                    },
+                    icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                    label: const Text('В архив'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          backgroundColor: C.surface,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          title: const Text('Удалить курс?'),
+                          content: Text('«' +
+                              c.title +
+                              '» исчезнет из списка. Прогресс сохранится.'),
+                          actions: [
+                            OutlinedButton(
+                              onPressed: () => Navigator.pop(dctx),
+                              style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(64, 42)),
+                              child: const Text('Отмена'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: C.danger,
+                                  minimumSize: const Size(64, 42)),
+                              onPressed: () {
+                                Navigator.pop(dctx);
+                                controller.deleteCourse(idx);
+                                Navigator.pop(ctx);
+                              },
+                              child: const Text('Удалить'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.delete_outline, size: 18, color: C.danger),
+                    label: Text('Удалить', style: TextStyle(color: C.danger)),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       );
     },
@@ -322,7 +353,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
         return Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: Text(c.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            title: Text(c.title,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
           body: AppBackdrop(child: const _TaskGroups()),
         );
@@ -441,14 +474,19 @@ class _TaskRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(padding: const EdgeInsets.only(top: 2), child: statusGlyph(done, current)),
+            Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: statusGlyph(done, current)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.25)),
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          height: 1.25)),
                   const SizedBox(height: 5),
                   Row(children: [
                     Text(kind, style: TextStyle(fontSize: 11, color: C.muted)),
@@ -465,7 +503,6 @@ class _TaskRow extends StatelessWidget {
     );
   }
 }
-
 
 /// _EndActions — действия в конце списка задач: создать задачу,
 /// повторение закладок, собеседование.
@@ -486,7 +523,8 @@ class _EndActions extends StatelessWidget {
                   if (topic == null || topic.isEmpty) return;
                   final err = await controller.generateTask(topic);
                   if (err.isNotEmpty && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(err)));
                   }
                 },
           child: Container(
@@ -497,12 +535,22 @@ class _EndActions extends StatelessWidget {
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               if (controller.generating)
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: C.accent))
+                SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: C.accent))
               else
                 Icon(Icons.add, color: C.accent, size: 20),
               const SizedBox(width: 8),
-              Text(controller.generating ? 'ИИ пишет задачу…' : 'Создать задачу от ИИ',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: C.accent)),
+              Text(
+                  controller.generating
+                      ? 'ИИ пишет задачу…'
+                      : 'Создать задачу от ИИ',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: C.accent)),
             ]),
           ),
         ),
@@ -510,17 +558,21 @@ class _EndActions extends StatelessWidget {
         Row(children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(pageRoute(const ReviewScreen())),
+              onPressed: () =>
+                  Navigator.of(context).push(pageRoute(const ReviewScreen())),
               icon: Icon(Icons.refresh, size: 17, color: C.secondary),
-              label: Text('Повторение', style: TextStyle(fontSize: 12.5, color: C.secondary)),
+              label: Text('Повторение',
+                  style: TextStyle(fontSize: 12.5, color: C.secondary)),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(pageRoute(const ChatScreen(interview: true))),
+              onPressed: () => Navigator.of(context)
+                  .push(pageRoute(const ChatScreen(interview: true))),
               icon: Icon(Icons.work_history_outlined, size: 17, color: C.warn),
-              label: Text('Собеседование', style: TextStyle(fontSize: 12.5, color: C.warn)),
+              label: Text('Собеседование',
+                  style: TextStyle(fontSize: 12.5, color: C.warn)),
             ),
           ),
         ]),

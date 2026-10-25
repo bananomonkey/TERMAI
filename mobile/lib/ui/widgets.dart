@@ -1,60 +1,40 @@
 // widgets.dart — общие элементы UI: карточки-«окна», подписи, плашки.
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'theme.dart';
 
-/// glass — «жидкое стекло»: размытие фона + градиентная линза + мягкая тень.
-/// [glow] рисует свечение под элементом (у активного курса — зелёное).
-/// Без рамки: секции курсов не должны иметь обводок.
+/// glass — карточка в стиле «стекла»: полупрозрачная заливка и мягкая тень.
+/// Без BackdropFilter: размытие на каждой плитке списка сильно тормозило
+/// прокрутку и переключения. Визуально то же стекло, но дешевле для GPU.
 Widget glass({
   required Widget child,
   double radius = 20,
-  double blur = 22,
+  double blur = 0,
   EdgeInsets padding = const EdgeInsets.all(0),
   Color? glow,
   Color? tint,
   bool lens = true,
 }) {
   return Container(
+    padding: padding,
     decoration: BoxDecoration(
+      color: C.card.withAlpha(228),
       borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         if (glow != null)
           BoxShadow(
             color: glow,
-            blurRadius: 30,
-            spreadRadius: -3,
-            offset: const Offset(0, 8),
+            blurRadius: 26,
+            spreadRadius: -4,
+            offset: const Offset(0, 6),
           ),
         BoxShadow(
-          color: Colors.black.withAlpha(60),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
+          color: Colors.black.withAlpha(55),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
         ),
       ],
     ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: tint != null && !lens
-                  ? [tint.withAlpha(40), tint.withAlpha(14)]
-                  : C.glassGradient,
-              stops: const [0.0, 0.45, 0.78, 1.0],
-            ),
-          ),
-          child: child,
-        ),
-      ),
-    ),
+    child: child,
   );
 }
 
@@ -67,7 +47,10 @@ Widget chevron({double size = 26, Color? color}) => Icon(
 
 /// cardBox — «окно»: скруглённая карточка; [accent] подсвечивает активную.
 /// По умолчанию без рамки — лишние обводки у секций не нужны.
-Widget cardBox({required Widget child, Color? accent, EdgeInsets padding = const EdgeInsets.all(14)}) {
+Widget cardBox(
+    {required Widget child,
+    Color? accent,
+    EdgeInsets padding = const EdgeInsets.all(14)}) {
   return Container(
     decoration: BoxDecoration(
       color: C.card,
@@ -80,7 +63,8 @@ Widget cardBox({required Widget child, Color? accent, EdgeInsets padding = const
 
 Widget caption(String text, {Color? color}) => Text(
       text.toUpperCase(),
-      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+      style: const TextStyle(
+          fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1),
     ).addColor(color ?? C.muted);
 
 extension TextColorX on Text {
@@ -121,7 +105,8 @@ PageRouteBuilder<T> pageRoute<T>(Widget page) {
       return FadeTransition(
         opacity: curved,
         child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved),
+          position: Tween(begin: const Offset(0, 0.04), end: Offset.zero)
+              .animate(curved),
           child: child,
         ),
       );
@@ -132,5 +117,7 @@ PageRouteBuilder<T> pageRoute<T>(Widget page) {
 /// sectionHeader — заголовок секции без лишних линий-обводок.
 Widget sectionHeader(String text) => Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 10),
-      child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
     );

@@ -4,6 +4,7 @@ import 'package:termai/main.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/app_background.dart';
 import 'package:termai/ui/home.dart';
+import 'package:termai/ui/lesson.dart';
 import 'package:termai/ui/onboarding.dart';
 import 'package:termai/ui/settings_screen.dart';
 import 'package:termai/ui/theme.dart';
@@ -87,5 +88,25 @@ void main() {
     expect(find.text('Пропустить'), findsNothing);
     expect(find.text('Linux'), findsOneWidget);
     expect(controller.config.onboarded, isTrue);
+  });
+
+  testWidgets('lesson switches slides without errors', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const LessonScreen(),
+    ));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Справка'), findsOneWidget);
+    await tester.tap(find.text('Задача'));
+    await tester.pump();
+    await tester.tap(find.text('Терминал'));
+    await tester.pump();
+    expect(find.text('Терминал'), findsWidgets);
+    await tester.tap(find.text('Решение'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 }

@@ -350,7 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('TERMAI · версия 1.15.2',
+                child: Text('версия 1.15.3',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),

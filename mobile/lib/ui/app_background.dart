@@ -1,6 +1,6 @@
-// app_background.dart — единый фон приложения: своё фото пользователя или
-// туман темы, поверх — затемнение. Размытие применяется ко всему фону и
-// считается ОДИН раз в ui.Image (кэш), а не каждой перерисовкой кадра.
+// app_background.dart — фон приложения: ровный цвет темы или своё фото.
+// Никакого тумана и градиентов: чёткий коричневый/синий фон по выбору.
+// Размытие фото считается один раз в ui.Image, а не в каждом кадре.
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -8,7 +8,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../main.dart';
-import 'ambient.dart';
 import 'theme.dart';
 
 /// BackdropImage — фото фона, размытое один раз и отрисованное как картинка.
@@ -78,7 +77,6 @@ class _BackdropImageState extends State<BackdropImage> {
       if (key == _key && _img != null) return;
 
       final bytes = await f.readAsBytes();
-      // декодируем с запасом под экран — меньше памяти и быстрее blur
       final codec =
           await ui.instantiateImageCodec(bytes, targetWidth: widget.maxWidth);
       final frame = await codec.getNextFrame();
@@ -108,7 +106,7 @@ class _BackdropImageState extends State<BackdropImage> {
         image.dispose();
         return;
       }
-      // старую картинку этого же виджета освобождаем после кадра: без утечек
+      // старую картинку освобождаем после кадра: без утечек
       final old = _img;
       setState(() {
         _img = image;
@@ -137,41 +135,71 @@ class _BackdropImageState extends State<BackdropImage> {
   }
 }
 
-/// AppBackdrop — оборачивает экран: под контентом всегда есть фон
-/// (фото или туман темы), затемнение и только потом сам контент.
-class AppBackdrop extends StatelessWidget {
+/// AppBackdrop — оборачивает экран и рисует под ним ровный фон.
+/// Слушает контроллер только ради смены фона/темы, а не каждой команды.
+class AppBackdrop extends StatefulWidget {
   final Widget child;
+  const AppBackdrop({super.key, required this.child});
 
-  /// false — не рисовать туман темы (например, на служебных экранах).
-  final bool includeAmbient;
-  const AppBackdrop(
-      {super.key, required this.child, this.includeAmbient = true});
+  @override
+  State<AppBackdrop> createState() => _AppBackdropState();
+}
+
+class _AppBackdropState extends State<AppBackdrop> {
+  String _path = '';
+  double _blur = 0;
+  double _dim = 0;
+  String _theme = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _capture();
+    controller.addListener(_onController);
+  }
+
+  void _capture() {
+    final cfg = controller.config;
+    _path = cfg.bgPhoto;
+    _blur = cfg.bgBlur;
+    _dim = cfg.bgDim;
+    _theme = C.p.id;
+  }
+
+  void _onController() {
+    final cfg = controller.config;
+    if (cfg.bgPhoto == _path &&
+        cfg.bgBlur == _blur &&
+        cfg.bgDim == _dim &&
+        C.p.id == _theme) {
+      return; // фон не изменился — не перерисовываем экран зря
+    }
+    setState(_capture);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onController);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final cfg = controller.config;
-        final path = cfg.bgPhoto;
-        final blur = cfg.bgBlur;
-        final dim = cfg.bgDim.clamp(0.0, 0.95);
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            RepaintBoundary(
-              child: path.isNotEmpty
-                  ? BackdropImage(path: path, blur: blur)
-                  : (cfg.ambient && includeAmbient
-                      ? AmbientBackground(blur: blur, themeId: C.p.id)
-                      : ColoredBox(color: C.bg)),
-            ),
-            // затемнение поверх любого фона — фото и тумана одинаково
-            ColoredBox(color: C.bg.withAlpha((dim * 255).round())),
-            child,
-          ],
-        );
-      },
+    if (_path.isEmpty) {
+      // ровный цвет темы, без градиента и тумана
+      return ColoredBox(color: C.bg, child: widget.child);
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(
+          child: BackdropImage(path: _path, blur: _blur),
+        ),
+        ColoredBox(
+          color: C.bg.withAlpha((_dim.clamp(0.0, 0.95) * 255).round()),
+        ),
+        widget.child,
+      ],
     );
   }
 }

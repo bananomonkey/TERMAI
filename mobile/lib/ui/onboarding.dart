@@ -49,7 +49,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    _page.nextPage(duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+    _page.nextPage(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic);
   }
 
   @override
@@ -70,12 +72,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             right: 6,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               TextButton(
-                onPressed: () => Navigator.of(context).push(pageRoute(const HelpScreen())),
-                child: Text('Инструкция', style: TextStyle(color: C.muted, fontSize: 12.5)),
+                onPressed: () =>
+                    Navigator.of(context).push(pageRoute(const HelpScreen())),
+                child: Text('Инструкция',
+                    style: TextStyle(color: C.muted, fontSize: 12.5)),
               ),
               TextButton(
                 onPressed: _starting ? null : () => _finish(saveKey: false),
-                child: Text('Пропустить', style: TextStyle(color: C.accent, fontSize: 12.5)),
+                child: Text('Пропустить',
+                    style: TextStyle(color: C.accent, fontSize: 12.5)),
               ),
             ]),
           ),
@@ -108,40 +113,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
-            child: Container(
-              width: 92,
-              height: 92,
-              decoration: BoxDecoration(
-                color: C.card,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: C.accent.withAlpha(30), blurRadius: 30, spreadRadius: 2),
-                ],
-              ),
-              child: Center(
-                child: Text('>_<',
-                    style: TextStyle(
-                        color: C.accent, fontSize: 32, fontWeight: FontWeight.w900)),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/icon/termai.png',
+                width: 108,
+                height: 108,
+                cacheWidth: 216,
+                fit: BoxFit.cover,
               ),
             ),
           ),
-          const SizedBox(height: 22),
-          Center(
-            child: Text('TERMAI',
-                style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 3,
-                    color: C.text)),
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
           Center(
             child: Text('тренажёр навыков с ИИ-наставником',
                 style: TextStyle(fontSize: 13, color: C.muted)),
           ),
           const SizedBox(height: 26),
           Text('Учись делать, а не смотреть',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: C.text)),
+              style: TextStyle(
+                  fontSize: 19, fontWeight: FontWeight.w800, color: C.text)),
           const SizedBox(height: 8),
           Text(
             'Короткие уроки, практика и наставник, который объясняет ошибки. '
@@ -194,7 +185,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           caption('Шаг 2 из 2', color: C.accent),
           const SizedBox(height: 10),
           Text('Подключи ИИ',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: C.text)),
+              style: TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w900, color: C.text)),
           const SizedBox(height: 8),
           Text(
             'Вставь API-ключ провайдера — например, DeepSeek. Ключ нужен для ментора, '
@@ -234,13 +226,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: s.busy ? null : _google,
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50)),
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 50)),
                     icon: s.busy
                         ? SizedBox(
                             width: 17,
                             height: 17,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2, color: C.accent))
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: C.accent))
                         : const Icon(Icons.login, size: 18),
                     label: const Text('Войти через Google'),
                   ),
@@ -253,7 +246,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             },
           ),
           const SizedBox(height: 8),
-          Text('Вход в Google необязателен: прогресс и чаты будут доступны на новом устройстве.',
+          Text(
+              'Вход в Google необязателен: прогресс и чаты будут доступны на новом устройстве.',
               style: TextStyle(fontSize: 11.5, height: 1.4, color: C.muted)),
           const SizedBox(height: 28),
           SizedBox(
@@ -263,7 +257,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
               child: _starting
                   ? const SizedBox(
-                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Начать'),
             ),
           ),
@@ -285,7 +281,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 class _FeatureRow extends StatelessWidget {
   final IconData icon;
   final String title, text;
-  const _FeatureRow({required this.icon, required this.title, required this.text});
+  const _FeatureRow(
+      {required this.icon, required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -309,9 +306,14 @@ class _FeatureRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: C.text)),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: C.text)),
                 const SizedBox(height: 2),
-                Text(text, style: TextStyle(fontSize: 12.5, height: 1.35, color: C.muted)),
+                Text(text,
+                    style: TextStyle(
+                        fontSize: 12.5, height: 1.35, color: C.muted)),
               ],
             ),
           ),
