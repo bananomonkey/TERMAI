@@ -1080,6 +1080,8 @@ class _LiveSlide extends StatefulWidget {
 }
 
 class _LiveSlideState extends State<_LiveSlide> {
+  Widget? _cache;
+
   @override
   void initState() {
     super.initState();
@@ -1109,5 +1111,9 @@ class _LiveSlideState extends State<_LiveSlide> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder();
+  Widget build(BuildContext context) {
+    // неактивный слайд не пересобираем: возвращаем последний готовый вид
+    if (!widget.active && _cache != null) return _cache!;
+    return _cache = widget.builder();
+  }
 }
