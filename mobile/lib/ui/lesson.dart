@@ -26,12 +26,18 @@ class _LessonScreenState extends State<LessonScreen>
   String _answersFor = '';
   String _taskId = '';
   int _tabIdx = 0; // текущий слайд (для resize-логики терминала)
+  int _lastSlideSeq = 0;
   Offset _swipeStart = Offset.zero;
 
   @override
   void initState() {
     super.initState();
     if (diagAutoLesson) _tabIdx = 2;
+    _lastSlideSeq = controller.lessonSlideSeq;
+    if (controller.lessonSlideRequest >= 0) {
+      _tabIdx = controller.lessonSlideRequest;
+      controller.lessonSlideRequest = -1;
+    }
     _taskId = controller.currentTask?.id ?? '';
     _syncAnswers();
     controller.addListener(_onController);
@@ -48,6 +54,13 @@ class _LessonScreenState extends State<LessonScreen>
     if (id != _taskId) {
       _taskId = id;
       setState(_syncAnswers);
+    }
+    if (controller.lessonSlideSeq != _lastSlideSeq) {
+      _lastSlideSeq = controller.lessonSlideSeq;
+      final last = controller.cur.isTheory ? 2 : 3;
+      final req = controller.lessonSlideRequest.clamp(0, last).toInt();
+      controller.lessonSlideRequest = -1;
+      if (mounted) setState(() => _tabIdx = req);
     }
     _maybeCompletionDialog();
   }
@@ -668,14 +681,14 @@ class _TermSlide extends StatefulWidget {
 }
 
 class _TermSlideState extends State<_TermSlide> {
-  final _input = TextEditingController();
+  // Общее поле ввода: ИИ вставляет команду прямо в него действием.
+  TextEditingController get _input => controller.termInput;
   final _pageScroll = ScrollController();
   final _consoleScroll = ScrollController();
   String _lastTerm = '';
 
   @override
   void dispose() {
-    _input.dispose();
     _pageScroll.dispose();
     _consoleScroll.dispose();
     super.dispose();

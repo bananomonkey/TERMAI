@@ -26,7 +26,7 @@ class GlassDock extends StatelessWidget {
           children: [
             _DockButton(
               icon: Icons.forum_outlined,
-              tooltip: 'Чат с ментором',
+              tooltip: 'Чат с Термаем',
               onTap: () =>
                   Navigator.of(context).push(pageRoute(const ChatsScreen())),
             ),

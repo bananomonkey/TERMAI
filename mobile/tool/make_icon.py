@@ -10,7 +10,7 @@ GREEN = (46, 139, 61, 255)
 BLACK = (8, 8, 8, 255)
 
 
-def face_icon(size=1024):
+def face_icon(size=1024, mouth_open=False):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
@@ -59,22 +59,42 @@ def face_icon(size=1024):
     eye(cx - size * 0.175, cy - size * 0.04, size * 0.125)
     eye(cx + size * 0.175, cy - size * 0.04, size * 0.125)
 
-    # маленькая улыбка-треугольник (V)
-    cell = size * 0.020
-    gap = cell * 0.24
-    top_y = cy + size * 0.155
-    depth = size * 0.045
-    n = 11
-    for i in range(n):
-        t = i / (n - 1)
-        x = cx + size * (-0.105 + 0.21 * t)
-        y = top_y + depth * (1 - abs(2 * t - 1))
-        d.rectangle([x - cell / 2, y - cell / 2, x + cell / 2, y + cell / 2],
+    if mouth_open:
+        # открытый рот: пиксельный овал, как кадр разговора
+        cell = size * 0.022
+        step = cell * 1.18
+        cols, rows = 9, 5
+        my = cy + size * 0.195
+        for iy in range(rows):
+            for ix in range(cols):
+                nx = (ix - (cols - 1) / 2) / ((cols - 1) / 2)
+                ny = (iy - (rows - 1) / 2) / ((rows - 1) / 2)
+                if abs(nx) ** 2.6 + abs(ny) ** 2.0 > 1:
+                    continue
+                x = cx + (ix - (cols - 1) / 2) * step
+                y = my + (iy - (rows - 1) / 2) * step
+                d.rectangle(
+                    [x - cell / 2, y - cell / 2, x + cell / 2, y + cell / 2],
                     fill=BLACK)
+    else:
+        # маленькая улыбка-треугольник (V)
+        cell = size * 0.020
+        top_y = cy + size * 0.155
+        depth = size * 0.045
+        n = 11
+        for i in range(n):
+            t = i / (n - 1)
+            x = cx + size * (-0.105 + 0.21 * t)
+            y = top_y + depth * (1 - abs(2 * t - 1))
+            d.rectangle(
+                [x - cell / 2, y - cell / 2, x + cell / 2, y + cell / 2],
+                fill=BLACK)
     return img
 
 
 if __name__ == "__main__":
     face_icon(1024).save("assets/icon/termai.png")
     face_icon(1024).save("assets/icon/termai_fg.png")
+    face_icon(512, mouth_open=False).save("assets/icon/termai_closed.png")
+    face_icon(512, mouth_open=True).save("assets/icon/termai_open.png")
     print("icons written")

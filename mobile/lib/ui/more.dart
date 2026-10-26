@@ -80,7 +80,7 @@ void showMoreSheet(BuildContext context) {
           const SizedBox(height: 8),
           _SheetButton(
             icon: Icons.chat_bubble_outline,
-            title: 'Ментор',
+            title: 'Термай',
             subtitle: 'Спроси о задаче, синтаксисе, ошибке',
             onTap: () {
               Navigator.pop(ctx);

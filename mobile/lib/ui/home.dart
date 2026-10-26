@@ -8,6 +8,7 @@ import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
 import 'lesson.dart';
+import 'mentor_launcher.dart';
 import 'review.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -77,7 +78,7 @@ class CourseGraphView extends StatelessWidget {
             Expanded(
               child: ListView.builder(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 116),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 196),
                 itemCount: courses.length,
                 itemBuilder: (context, i) =>
                     _CourseTile(index: i, currentIdx: current),
@@ -357,7 +358,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 style:
                     const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
-          body: AppBackdrop(child: const _TaskGroups()),
+          body: AppBackdrop(
+            child: Stack(children: [
+              const Positioned.fill(child: _TaskGroups()),
+              Positioned(
+                left: 14,
+                bottom: 14,
+                child: SafeArea(
+                  top: false,
+                  child: const MentorLauncher(),
+                ),
+              ),
+            ]),
+          ),
         );
       },
     );
@@ -434,7 +447,7 @@ class _TaskGroups extends StatelessWidget {
     groups.add(_EndActions());
     // ленивая сборка строк: длинные курсы не строят все элементы сразу
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
       itemCount: groups.length,
       itemBuilder: (context, i) => groups[i],
     );
@@ -568,8 +581,13 @@ class _EndActions extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context)
-                  .push(pageRoute(const ChatScreen(interview: true))),
+              onPressed: () {
+                controller.startInterview();
+                controller.createInterviewChat(force: true);
+                Navigator.of(context).push(pageRoute(
+                    const ChatScreen(interview: true, resume: true),
+                    name: 'InterviewScreen'));
+              },
               icon: Icon(Icons.work_history_outlined, size: 17, color: C.warn),
               label: Text('Собеседование',
                   style: TextStyle(fontSize: 12.5, color: C.warn)),

@@ -7,6 +7,7 @@ import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
+import 'mentor_avatar.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -59,9 +60,13 @@ class ChatsScreen extends StatelessWidget {
 
   void _open(BuildContext context, MentorChat c) {
     controller.openChat(c.id);
-    Navigator.of(context).push(pageRoute(c.taskId == '__interview__'
-        ? const ChatScreen(interview: true)
-        : const ChatScreen()));
+    final interview = c.taskId == '__interview__';
+    Navigator.of(context).push(pageRoute(
+      interview
+          ? const ChatScreen(interview: true, resume: true)
+          : const ChatScreen(resume: true),
+      name: interview ? 'InterviewScreen' : 'ChatScreen',
+    ));
   }
 
   void _new(BuildContext context) {
@@ -74,7 +79,7 @@ class ChatsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Чат с ментором', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text('Чаты с Термаем', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             tooltip: 'Новый чат',
@@ -97,13 +102,13 @@ class ChatsScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.forum_outlined, size: 42, color: C.muted),
+                    const MentorAvatar(size: 76, glow: true),
                     const SizedBox(height: 14),
                     Text('Бесед пока нет.',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
                     const SizedBox(height: 8),
                     Text(
-                      'Задай вопрос ментору о задаче, синтаксисе или ошибке — беседа сохранится здесь.',
+                      'Задай вопрос Термаю о задаче, синтаксисе или ошибке — беседа сохранится здесь.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 13, color: C.muted, height: 1.5),
                     ),
@@ -128,17 +133,7 @@ class ChatsScreen extends StatelessWidget {
                 child: cardBox(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: C.card2,
-                      child: Icon(
-                        c.taskId == '__interview__'
-                            ? Icons.work_outline
-                            : Icons.chat_bubble_outline,
-                        size: 18,
-                        color: C.secondary,
-                      ),
-                    ),
+                    const MentorAvatar(size: 36),
                     const SizedBox(width: 11),
                     Expanded(
                       child: GestureDetector(

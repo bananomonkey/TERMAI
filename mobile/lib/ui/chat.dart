@@ -5,13 +5,19 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
+import '../theme_refresh.dart';
 import 'app_background.dart';
+import 'mentor_avatar.dart';
 import 'theme.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends StatefulWidget implements PreserveOnTheme {
   final String? autoQuestion;
   final bool interview;
-  const ChatScreen({super.key, this.autoQuestion, this.interview = false});
+
+  /// resume — открыть уже выбранную беседу, не привязываясь заново к задаче.
+  final bool resume;
+  const ChatScreen({super.key, this.autoQuestion, this.interview = false,
+      this.resume = false});
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -29,15 +35,24 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       if (widget.interview) {
         controller.startInterview();
-        controller.createInterviewChat();
+        final active = controller.activeChat;
+        if (active == null || active.taskId != '__interview__') {
+          controller.createInterviewChat();
+        }
       } else {
-        controller.ensureChatForCurrentTask();
+        controller.stopInterview();
+        if (!widget.resume || controller.activeChat == null) {
+          controller.ensureChatForCurrentTask();
+        }
       }
       if (_asked) return;
       _asked = true;
       if (widget.interview) {
-        controller.sendChat(
-            '(Начни собеседование: коротко представься и задай первый вопрос по материалу курса)');
+        final active = controller.activeChat;
+        if (active == null || active.messages.isEmpty) {
+          controller.sendChat(
+              '(Начни собеседование: коротко представься и задай первый вопрос по материалу курса)');
+        }
       } else if ((widget.autoQuestion ?? '').isNotEmpty) {
         controller.sendChat(widget.autoQuestion!);
       }
@@ -69,7 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _newChat() async {
     if (widget.interview) {
-      controller.createInterviewChat();
+      controller.createInterviewChat(force: true);
     } else {
       controller.createChatForCurrentTask();
     }
@@ -265,27 +280,38 @@ class _ChatScreenState extends State<ChatScreen> {
         return Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                    widget.interview
-                        ? 'Собеседование'
-                        : (chat?.title ?? 'Ментор'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: widget.interview ? C.warn : C.text)),
-                if (!widget.interview && (chat?.taskTitle ?? '').isNotEmpty)
-                  Text(chat!.taskTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: C.muted)),
-              ],
-            ),
+            titleSpacing: 0,
+            title: Row(children: [
+              MentorAvatar(
+                  size: 36, speaking: controller.mentorBusy, glow: true),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Термай',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: C.text)),
+                    Text(
+                        widget.interview
+                            ? 'Собеседование · ИИ-интервьюер'
+                            : ((chat?.taskTitle ?? '').isNotEmpty
+                                ? chat!.taskTitle
+                                : (chat?.title ?? 'ИИ-наставник')),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: widget.interview ? C.warn : C.muted)),
+                  ],
+                ),
+              ),
+            ]),
             actions: [
               IconButton(
                 tooltip: 'Чаты',
@@ -324,10 +350,35 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(32),
-                          child: Text(
-                              'Спроси ментора о задаче, синтаксисе, ошибке…',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: C.muted)),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const MentorAvatar(size: 92, glow: true),
+                              const SizedBox(height: 16),
+                              Text('Термай',
+                                  style: TextStyle(
+                                      fontSize: 21,
+                                      fontWeight: FontWeight.w900,
+                                      color: C.text)),
+                              const SizedBox(height: 5),
+                              Text(
+                                  widget.interview
+                                      ? 'ИИ-интервьюер TERMAI'
+                                      : 'ИИ-наставник TERMAI',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: C.accent)),
+                              const SizedBox(height: 14),
+                              Text(
+                                  'Спроси о задаче, синтаксисе, ошибке…\n'
+                                  'Или попроси открыть настройки, архив или вставить команду в терминал.',
+                                  textAlign: TextAlign.center,
+                                  style:
+                                      TextStyle(color: C.muted, height: 1.45)),
+                            ],
+                          ),
                         ),
                       )
                     : ListView.builder(
@@ -340,12 +391,26 @@ class _ChatScreenState extends State<ChatScreen> {
                             return Padding(
                               padding: const EdgeInsets.all(14),
                               child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2.4, color: C.accent))),
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const MentorAvatar(
+                                        size: 28, speaking: true),
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            color: C.accent)),
+                                    const SizedBox(width: 8),
+                                    Text('Термай печатает…',
+                                        style: TextStyle(
+                                            fontSize: 12.5, color: C.muted)),
+                                  ],
+                                ),
+                              ),
                             );
                           }
                           return _Bubble(msg: msgs[i]);
@@ -405,13 +470,9 @@ class _Bubble extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: CircleAvatar(
-                  radius: 14,
-                  backgroundImage: AssetImage('assets/icon/clawd.png'),
-                  backgroundColor: C.card,
-                ),
+              const Padding(
+                padding: EdgeInsets.only(right: 7),
+                child: MentorAvatar(size: 28),
               ),
               Expanded(
                   child: _wrap(msg.text, C.secondary.withAlpha(28),

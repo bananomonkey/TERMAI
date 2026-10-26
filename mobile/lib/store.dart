@@ -5,11 +5,15 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
+import 'app_action.dart';
 import 'models.dart';
+import 'navigation.dart';
 import 'sandbox.dart';
 import 'sync_service.dart';
+import 'theme_refresh.dart';
 import 'ui/theme.dart';
 
 /// diagLog — глобальный журнал ошибок для экрана «Диагностика».
@@ -26,6 +30,10 @@ class AppController extends ChangeNotifier {
   Config config = Config();
   Progress prog = Progress();
   AIClient? ai;
+
+  /// Исполнитель MCP-подобных действий, регистрируется в main().
+  AppActionExecutor? actionExecutor;
+
   final SyncService sync = SyncService.instance;
 
   List<Course> courses = [];
@@ -40,6 +48,14 @@ class AppController extends ChangeNotifier {
   Map<String, String> stateTask = {};
 
   String termText = '';
+
+  /// Общее поле ввода терминала: ИИ может вставить туда команду действием.
+  final TextEditingController termInput = TextEditingController();
+
+  /// Запрос на переключение слайда урока из действия ИИ.
+  int lessonSlideRequest = -1;
+  int lessonSlideSeq = 0;
+
   List<String> cmdHist = [];
   int cmdHistIdx = 0;
   final List<UndoEntry> undoBuf = [];
@@ -227,7 +243,9 @@ class AppController extends ChangeNotifier {
 
   Future<void> saveConfig({bool autofill = true}) async {
     _migrateTheme();
+    final oldTheme = C.p.id;
     C.p = presetById(config.theme);
+    if (oldTheme != C.p.id) themeRevision.value++;
     final dir = await _dataDir();
     await io.File('$dir/termai.json')
         .writeAsString(jsonEncode(config.toJson()));
@@ -448,14 +466,17 @@ extension AppCourses on AppController {
   bool quizDone(Task t) => prog.quizDone[cur.id]?[t.id] ?? false;
 
   void selectTask(int i) {
+    final oldTaskId = currentTask?.id ?? '';
     viewIdx = i;
     if (i >= 0 && i < cur.tasks.length) ensureStateForTask(cur.tasks[i]);
+    if ((currentTask?.id ?? '') != oldTaskId) termInput.clear();
     bindChatForCurrentTask();
     notifyListeners();
   }
 
   void switchCourse(int i) {
     if (i < 0 || i >= courses.length) return;
+    if (i != courseIdx) termInput.clear();
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
@@ -469,6 +490,7 @@ extension AppCourses on AppController {
   /// switchCourseSilent — смена курса без строк в терминале (из карты курсов).
   void switchCourseSilent(int i) {
     if (i < 0 || i >= courses.length || i == courseIdx) return;
+    termInput.clear();
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
@@ -503,6 +525,13 @@ extension AppCourses on AppController {
   }
 
   void refreshTerminal() => notifyListeners();
+
+  /// requestLessonSlide — попросить открытый урок перейти на нужный слайд.
+  void requestLessonSlide(int index) {
+    lessonSlideRequest = index;
+    lessonSlideSeq++;
+    notifyListeners();
+  }
 
   String get prompt => termPrompt(state);
 
@@ -603,6 +632,7 @@ extension AppCourses on AppController {
   }
 
   Task? get currentTask {
+    if (courses.isEmpty) return null;
     final tasks = cur.tasks;
     if (viewIdx < 0 || viewIdx >= tasks.length) return null;
     return tasks[viewIdx];
@@ -786,8 +816,51 @@ extension AppCourses on AppController {
 
   // ---------- ментор ----------
 
+  /// appContextForAI — компактная карта приложения для решений Термая.
+  String get appContextForAI {
+    final visible = courses.take(14).map((c) => c.title).join('; ');
+    final archived = archivedCourses.take(14).map((c) => c.title).join('; ');
+    final task = currentTask;
+    final screen = ScreenObserver.current;
+    final screenLabel = switch (screen) {
+      '' || 'HomeScreen' => 'главная',
+      'ChatScreen' => 'чат',
+      'InterviewScreen' => 'собеседование',
+      'LessonScreen' => 'урок',
+      'TaskListScreen' => 'список задач',
+      'SettingsScreen' => 'настройки',
+      'ArchiveScreen' => 'архив',
+      'ChatsScreen' => 'чаты',
+      'UsageScreen' => 'расход токенов',
+      'HelpScreen' => 'справка',
+      'BackgroundSettingsScreen' => 'фон',
+      'AiFallbacksScreen' => 'резервные модели',
+      'ReviewScreen' => 'повторение',
+      _ => screen,
+    };
+    final chat = activeChat;
+    final isInterview = chat?.taskId == '__interview__';
+    return 'Экран: $screenLabel. '
+        'Чат: ${chat?.title ?? '—'}${isInterview ? ' (собеседование)' : ''}. '
+        'Тема: ${C.p.title}. '
+        'Курсы: ${visible.isEmpty ? '—' : visible}. '
+        'Архив: ${archived.isEmpty ? '—' : archived}. '
+        'Текущий курс: ${courses.isEmpty ? '—' : cur.title}. '
+        'Текущая задача: ${task?.title ?? '—'}. '
+        'XP: ${prog.xp}, серия: ${prog.streak}, решено: ${prog.solvedTotal}. '
+        'Токены: ${prog.tokensTotal}. '
+        'ИИ: ${config.provider}/${ai?.model ?? 'не настроен'}.';
+  }
+
   Future<String> sendChat(String question) async {
     if (mentorBusy) return '';
+    if (courses.isEmpty) {
+      chatMsgs = [
+        ChatMsg('system', 'Нет доступных курсов — верни курс из архива.'),
+      ];
+      notifyListeners();
+      return '';
+    }
     final chat = this.activeChat ?? this.createChatForCurrentTask();
     final echo = question.trim().isEmpty ? '(вложение)' : question;
     chat.messages.add(ChatMsg('user', echo));
@@ -811,18 +884,53 @@ extension AppCourses on AppController {
           : '';
       final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8),
           this.chatLogForAI, solvedCtx + question,
-          interview: interviewMode);
+          interview: chat.taskId == '__interview__',
+          appContext: appContextForAI);
       if (lastSolvedTitle.isNotEmpty) {
         lastSolvedTitle = '';
         lastSolvedHist = '';
       }
-      this.addChatMessage('mentor', answer);
+
+      // Ответ может содержать MCP-подобные вызовы приложения.
+      final parsed = parseAppActions(answer);
+      final visible = parsed.text.trim();
+      if (visible.isNotEmpty) {
+        this.addChatMessage('mentor', visible);
+      } else if (parsed.actions.isNotEmpty) {
+        this.addChatMessage('mentor', 'Готово.');
+      }
+      mentorBusy = false;
+      notifyListeners();
+
+      // Действия выполняем уже после снятия mentorBusy: генерация курса,
+      // проверка задачи и терминал внутри проверяют флаг busy.
+      await _executeAppActions(parsed.actions);
     } catch (e) {
       this.addChatMessage('system', 'Наставник недоступен: ${_errMsg(e)}');
+      mentorBusy = false;
+      notifyListeners();
     }
-    mentorBusy = false;
-    notifyListeners();
     return '';
+  }
+
+  Future<void> _executeAppActions(List<AppActionCall> actions) async {
+    if (actions.isEmpty) return;
+    final exec = actionExecutor;
+    if (exec == null) {
+      addChatMessage('system', 'Действия приложения недоступны.');
+      return;
+    }
+    for (final action in actions) {
+      var err = '';
+      try {
+        err = await exec(action);
+      } catch (e) {
+        err = _errMsg(e);
+      }
+      if (err.isNotEmpty) {
+        addChatMessage('system', 'Не удалось выполнить ${action.name}: $err');
+      }
+    }
   }
 
   // ---------- решение ----------
@@ -839,8 +947,8 @@ extension AppCourses on AppController {
       final ask = cur.isTheory
           ? 'Дай разбор этой темы: главные идеи, примеры и типичные ошибки. Без команд терминала.'
           : 'Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.';
-      final ans =
-          await ai!.mentor(cur, task, state, _lastHist(4), const [], ask);
+      final ans = await ai!.mentor(cur, task, state, _lastHist(4), const [], ask,
+          allowActions: false);
       if (ans.trim().isNotEmpty) {
         task.solution = ans;
         task.peeked = true;
@@ -1043,6 +1151,8 @@ extension AppCourses on AppController {
 
   void deleteCourse(int i) {
     if (i < 0 || i >= courses.length || courses.length <= 1) return;
+    final currentId = cur.id;
+    final wasCurrent = i == courseIdx;
     final c = courses.removeAt(i);
     if (c.id.startsWith('ai-')) {
       prog.extraCourses.removeWhere((x) => x.id == c.id);
@@ -1050,9 +1160,17 @@ extension AppCourses on AppController {
       prog.hiddenCourses.add(c.id);
     }
     prog.courseOrder = courses.map((x) => x.id).toList();
+    if (wasCurrent) {
+      courseIdx = courseIdx.clamp(0, courses.length - 1);
+    } else if (i < courseIdx) {
+      courseIdx--;
+    }
     if (courseIdx >= courses.length) courseIdx = 0;
+    final newCurrentId = courses.isEmpty ? '' : cur.id;
+    if (newCurrentId != currentId) viewIdx = 0;
     if (viewIdx >= (courses.isEmpty ? 0 : cur.tasks.length)) viewIdx = 0;
     prog.lastCourse = courses.isEmpty ? '' : cur.id;
+    if (courses.isNotEmpty) bindChatForCurrentTask();
     saveProgress();
     notifyListeners();
   }
@@ -1068,13 +1186,23 @@ extension AppCourses on AppController {
   void archiveCourse(String id) {
     final c = allCourses.where((x) => x.id == id).firstOrNull;
     if (c == null || prog.archived.contains(id)) return;
+    final currentId = courses.isEmpty ? '' : cur.id;
+    final oldCourseIdx = courseIdx;
     prog.archived.add(id);
     prog.courseOrder.remove(id);
     _applyCourseFilter();
     if (courses.isNotEmpty) {
+      // Если архивировали текущий курс, остаёмся на соседнем, а не
+      // проваливаемся на первый. Если другой — сохраняем текущий.
+      final idx = courses.indexWhere((x) => x.id == currentId);
+      courseIdx = idx >= 0 ? idx : oldCourseIdx.clamp(0, courses.length - 1);
+      if (cur.id != currentId) viewIdx = 0;
       if (viewIdx >= cur.tasks.length) viewIdx = 0;
       prog.lastCourse = cur.id;
+      bindChatForCurrentTask();
     } else {
+      courseIdx = 0;
+      viewIdx = 0;
       prog.lastCourse = '';
     }
     saveProgress();
@@ -1090,6 +1218,7 @@ extension AppCourses on AppController {
     if (i >= 0) {
       courseIdx = i;
       prog.lastCourse = id;
+      bindChatForCurrentTask();
     }
     saveProgress();
     notifyListeners();
@@ -1217,6 +1346,9 @@ extension AppMentorChats on AppController {
   /// ensureChatForCurrentTask — открыть существующий чат задачи или создать новый.
   MentorChat ensureChatForCurrentTask() {
     interviewMode = false;
+    if (courses.isEmpty) {
+      return activeChat ?? createChatForCurrentTask();
+    }
     bindChatForCurrentTask();
     return activeChat ?? createChatForCurrentTask();
   }
@@ -1227,7 +1359,7 @@ extension AppMentorChats on AppController {
     final t = (title ?? '').trim();
     final c = MentorChat(
       id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
-      courseId: cur.id,
+      courseId: courses.isEmpty ? '' : cur.id,
       taskId: task?.id ?? '',
       taskTitle: task?.title ?? '',
       title: t.isNotEmpty
@@ -1242,9 +1374,10 @@ extension AppMentorChats on AppController {
   }
 
   /// createInterviewChat — новая беседа для собеседования.
-  void createInterviewChat() {
+  /// force=true — начать новую, даже если уже открыто собеседование.
+  void createInterviewChat({bool force = false}) {
     final a = activeChat;
-    if (a != null && a.taskId == '__interview__' && a.messages.isEmpty) return;
+    if (!force && a != null && a.taskId == '__interview__') return;
     final now = DateTime.now().toIso8601String();
     final c = MentorChat(
       id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
@@ -1266,6 +1399,7 @@ extension AppMentorChats on AppController {
     if (c.taskId == '__interview__') {
       interviewMode = true;
     } else {
+      interviewMode = false;
       final ci = courses.indexWhere((x) => x.id == c.courseId);
       if (ci >= 0) {
         if (ci != courseIdx) {

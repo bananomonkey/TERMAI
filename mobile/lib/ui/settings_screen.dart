@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../ai.dart';
 import '../main.dart';
 import '../store.dart';
+import '../theme_refresh.dart';
 import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
@@ -17,7 +18,7 @@ void showSettings(BuildContext context) {
   Navigator.of(context).push(pageRoute(const SettingsScreen()));
 }
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatefulWidget implements PreserveOnTheme {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -60,7 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _pickTheme(String id) {
     controller.config.theme = id;
     controller.config.themeAuto = false; // выбор сделан осознанно
-    C.p = presetById(id);
     setState(() {});
     controller.saveConfig(autofill: false);
   }
@@ -350,7 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.15.7',
+                child: Text('версия 1.15.8',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),

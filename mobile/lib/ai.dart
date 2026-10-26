@@ -2,6 +2,7 @@
 // симулятор терминала, проверяющий, ментор, генератор задач и курсов.
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'app_action.dart';
 import 'models.dart';
 import 'usage.dart';
 
@@ -255,7 +256,7 @@ class AIClient {
   // ---------- роль 3: ментор ----------
 
   static const _sysMentorTerminal =
-      'Ты — ИИ-наставник в тренажёре по терминалу и инфраструктуре (Docker/Linux/Git и смежное). Стиль: тепло, по-человечески, кратко.\n'
+      'Тебя зовут Термай. Ты — ИИ-наставник в тренажёре по терминалу и инфраструктуре (Docker/Linux/Git и смежное). Стиль: тепло, по-человечески, кратко.\n'
       '- Отвечай по-русски, обычно до 120 слов. Без эмодзи.\n'
       '- Видишь задачу, состояние песочницы и историю команд студента — отвечай в этом контексте.\n'
       '- Сначала подтолкни к решению: идея, наводящий вопрос. Полное решение — только по прямой просьбе («дай решение»). Просто «покажи решение» — тоже просьба показать решение.\n'
@@ -263,7 +264,7 @@ class AIClient {
       '- Не выдумывай несуществующие команды и флаги.';
 
   static const _sysMentorTheory =
-      'Ты — ИИ-наставник в учебном тренажёре по разным навыкам: языки, школьные и вузовские предметы, профессии, soft skills.\n'
+      'Тебя зовут Термай. Ты — ИИ-наставник в учебном тренажёре по разным навыкам: языки, школьные и вузовские предметы, профессии, soft skills.\n'
       '- Отвечай по-русски, обычно до 120 слов, тепло и по делу. Без эмодзи.\n'
       '- Опирайся на материал курса и текущую задачу. Приводи примеры, аналогии и маленькие упражнения.\n'
       '- Сначала подтолкни к ответу: идея, наводящий вопрос. Готовый ответ — только по прямой просьбе.\n'
@@ -271,13 +272,13 @@ class AIClient {
       '- Используй markdown умеренно: **жирный**, `код`, списки.';
 
   static const _sysInterviewer =
-      'Ты — интервьюер по материалу курса и смежным темам. Неважно, какой это навык: язык, профессия или технология.\n'
+      'Тебя зовут Термай. Ты — интервьюер по материалу курса и смежным темам. Неважно, какой это навык: язык, профессия или технология.\n'
       '- По одному вопросу за раз; после ответа студента — коротко оцени его и задай следующий, чуть сложнее.\n'
       '- В конце (после 6–8 вопросов) дай разбор: что отвечено хорошо, что подтянуть, и вердикт.\n'
       '- Отвечай по-русски, кратко, без markdown-заголовков.';
 
   Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question,
-      {bool interview = false, String solvedContext = ''}) {
+      {bool interview = false, String solvedContext = '', String appContext = '', bool allowActions = true}) {
     final b = StringBuffer('Курс: ${c.title}\n');
     b.write('Режим курса: ${c.isTheory ? 'теория, тесты и наставник (без терминала)' : 'практика в терминале'}\n');
     if (task != null) b.write('Текущая задача: ${task.title} — ${task.goal}\n');
@@ -285,11 +286,12 @@ class AIClient {
       b.write(stateSummary(st));
       b.write('\nНедавние команды:\n${formatHist(hist, 160)}');
     }
+    if (appContext.isNotEmpty) b.write('\nСостояние приложения (для выбора действий):\n$appContext\n');
     if (solvedContext.isNotEmpty) b.write('\n' + solvedContext + '\n');
     if (chatLog.isNotEmpty) b.write('\nНедавний диалог:\n${chatLog.join('\n')}\n');
     b.write('\nВопрос студента: $question');
-    final sys = interview ? _sysInterviewer : (c.isTheory ? _sysMentorTheory : _sysMentorTerminal);
-    return chatText(sys, b.toString(), 0.7);
+    final base = interview ? _sysInterviewer : (c.isTheory ? _sysMentorTheory : _sysMentorTerminal);
+    return chatText(allowActions ? base + appActionsPrompt : base, b.toString(), 0.7);
   }
 
   // ---------- роль 4: генератор задач ----------

@@ -9,6 +9,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'app_actions.dart';
+import 'navigation.dart';
 import 'store.dart';
 import 'ui/app_background.dart';
 import 'ui/dock.dart';
@@ -16,6 +18,7 @@ import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
 import 'ui/lesson.dart';
+import 'ui/mentor_launcher.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
 
@@ -52,6 +55,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _installErrorHandlers();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+  // ИИ-наставник получает доступ к действиям приложения.
+  controller.actionExecutor = AppActions(controller).execute;
   runApp(const TermaiApp());
 }
 
@@ -75,10 +80,11 @@ class TermaiApp extends StatelessWidget {
       // слушаем контроллер: смена темы в настройках перекрашивает всё приложение
       listenable: controller,
       builder: (context, _) => MaterialApp(
-        key: ValueKey('theme-${C.p.id}'),
         title: 'TERMAI',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
+        navigatorKey: rootNavigatorKey,
+        navigatorObservers: [screenObserver],
         home: const BootScreen(),
       ),
     );
@@ -159,7 +165,7 @@ class _BootScreenState extends State<BootScreen>
   }
 }
 
-/// _scheduleReminder — ежедневное напоминание в 20:00 (Барсик и серия).
+/// _scheduleReminder — ежедневное напоминание в 20:00 (Термай и серия).
 Future<void> _scheduleReminder() async {
   try {
     final plugin = FlutterLocalNotificationsPlugin();
@@ -181,7 +187,7 @@ Future<void> _scheduleReminder() async {
     await plugin.cancel(1);
     await plugin.zonedSchedule(
       1,
-      'TERMAI — Барсик ждёт',
+      'TERMAI — Термай ждёт',
       controller.prog.streak > 0
           ? 'Серия ' +
               controller.prog.streak.toString() +
@@ -203,7 +209,7 @@ Future<void> _scheduleReminder() async {
   }
 }
 
-/// HomeScreen — апбар (логотип, XP, «Ещё») + карта курсов.
+/// HomeScreen — апбар (XP, «Ещё») + карта курсов.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -263,7 +269,17 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: Center(child: const GlassDock()),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(left: 14, bottom: 8),
+                    child: MentorLauncher(),
+                  ),
+                  const Center(child: GlassDock()),
+                ],
+              ),
             ),
           ),
         ]),

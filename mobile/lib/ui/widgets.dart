@@ -1,5 +1,6 @@
 // widgets.dart — общие элементы UI: карточки-«окна», подписи, плашки.
 import 'package:flutter/material.dart';
+import '../theme_refresh.dart';
 import 'theme.dart';
 
 /// glass — карточка в стиле «стекла»: полупрозрачная заливка и мягкая тень.
@@ -95,11 +96,23 @@ Widget difficultyDots(int d, {Color? color}) {
 }
 
 /// pageRoute — переход снизу с fade, как в Coddy.
-PageRouteBuilder<T> pageRoute<T>(Widget page) {
+PageRouteBuilder<T> pageRoute<T>(Widget page, {String? name}) {
   return PageRouteBuilder<T>(
+    settings: RouteSettings(name: name ?? page.runtimeType.toString()),
     transitionDuration: const Duration(milliseconds: 260),
     reverseTransitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (_, __, ___) => page,
+    // Обёртка перекрашивает страницу при смене темы, не сбрасывая стек
+    // навигации. Ключ меняется только вместе с палитрой.
+    pageBuilder: (_, __, ___) => ValueListenableBuilder<int>(
+      valueListenable: themeRevision,
+      builder: (_, rev, __) => KeyedSubtree(
+        // Страницы, которые сами слушают controller, не сбрасываем.
+        key: ValueKey(page is PreserveOnTheme
+            ? 'page-${page.runtimeType}'
+            : 'theme-$rev-${C.p.id}'),
+        child: page,
+      ),
+    ),
     transitionsBuilder: (_, anim, __, child) {
       final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
       return FadeTransition(
