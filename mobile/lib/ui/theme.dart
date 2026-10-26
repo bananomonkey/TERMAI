@@ -34,25 +34,25 @@ class ThemePreset {
 }
 
 const themePresets = <ThemePreset>[
-  // Тёплый бизнес: коричневый + бежевый + терракота — основная тема.
+  // VS Code Dark Modern: графит + фирменный синий акцент.
   ThemePreset(
-    id: 'cocoa',
-    title: 'Какао',
-    bg: Color(0xFF2C211A),
-    surface: Color(0xFF35281F),
-    card: Color(0xFF3E3025),
-    card2: Color(0xFF493A2D),
-    secondary: Color(0xFFC2A487),
-    accent: Color(0xFFE08A67),
-    accentDark: Color(0xFFC96F4D),
-    text: Color(0xFFF3ECE4),
-    muted: Color(0xFFBBA897),
-    good: Color(0xFFA9C98F),
-    warn: Color(0xFFE8B36E),
-    danger: Color(0xFFE07D6C),
-    border: Color(0xFF5A4636),
-    termBg: Color(0xFF1E1712),
-    termText: Color(0xFFE0D4C6),
+    id: 'dark',
+    title: 'Dark Modern',
+    bg: Color(0xFF1F1F1F),
+    surface: Color(0xFF181818),
+    card: Color(0xFF252526),
+    card2: Color(0xFF2D2D30),
+    secondary: Color(0xFF569CD6),
+    accent: Color(0xFF0078D4),
+    accentDark: Color(0xFF0063B1),
+    text: Color(0xFFCCCCCC),
+    muted: Color(0xFF9D9D9D),
+    good: Color(0xFF4EC9B0),
+    warn: Color(0xFFDCDCAA),
+    danger: Color(0xFFF48771),
+    border: Color(0xFF3C3C3C),
+    termBg: Color(0xFF181818),
+    termText: Color(0xFFCCCCCC),
   ),
   // Синий — второй допустимый вариант оформления.
   ThemePreset(
@@ -116,7 +116,7 @@ ThemeData buildTheme() {
     ),
     textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text),
     appBarTheme: AppBarTheme(
-      backgroundColor: C.bg,
+      backgroundColor: C.surface,
       foregroundColor: C.text,
       elevation: 0,
       scrolledUnderElevation: 0,

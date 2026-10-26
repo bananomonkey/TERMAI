@@ -350,7 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.15.5',
+                child: Text('версия 1.15.6',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -530,7 +530,7 @@ class _LinkRow extends StatelessWidget {
   }
 }
 
-/// _ThemePicker — только две палитры: «Какао» и «Синий».
+/// _ThemePicker — только две палитры: Dark Modern и «Синий».
 class _ThemePicker extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onPick;

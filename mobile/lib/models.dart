@@ -31,8 +31,14 @@ class ImageInfo {
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'repo': repo, 'tag': tag, 'size_mb': sizeMb,
-        'entrypoint': entrypoint, 'cmd': cmd, 'env': env, 'layers': layers,
+        'id': id,
+        'repo': repo,
+        'tag': tag,
+        'size_mb': sizeMb,
+        'entrypoint': entrypoint,
+        'cmd': cmd,
+        'env': env,
+        'layers': layers,
       };
 }
 
@@ -67,9 +73,15 @@ class ContainerInfo {
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'name': name, 'image': image, 'status': status,
-        'ports': ports, 'mounts': mounts, 'networks': networks,
-        'execs': execs, 'logs_viewed': logsViewed,
+        'id': id,
+        'name': name,
+        'image': image,
+        'status': status,
+        'ports': ports,
+        'mounts': mounts,
+        'networks': networks,
+        'execs': execs,
+        'logs_viewed': logsViewed,
       };
 }
 
@@ -100,22 +112,28 @@ class SandboxState {
   factory SandboxState.fromJson(Map<String, dynamic> j) => SandboxState(
         workdir: j['workdir'] as String? ?? '/workspace',
         files: (j['files'] as Map?)?.cast<String, String>() ?? {},
-        images: ((j['images'] as Map?) ?? {})
-            .map((k, v) => MapEntry(k as String, ImageInfo.fromJson(v as Map<String, dynamic>))),
-        containers: ((j['containers'] as Map?) ?? {})
-            .map((k, v) => MapEntry(k as String, ContainerInfo.fromJson(v as Map<String, dynamic>))),
+        images: ((j['images'] as Map?) ?? {}).map((k, v) => MapEntry(
+            k as String, ImageInfo.fromJson(v as Map<String, dynamic>))),
+        containers: ((j['containers'] as Map?) ?? {}).map((k, v) => MapEntry(
+            k as String, ContainerInfo.fromJson(v as Map<String, dynamic>))),
         volumes: (j['volumes'] as Map?)?.cast<String, String>() ?? {},
-        networks: (j['networks'] as List?)?.cast<String>() ?? ['bridge', 'host', 'none'],
+        networks: (j['networks'] as List?)?.cast<String>() ??
+            ['bridge', 'host', 'none'],
         events: (j['events'] as List?)?.cast<String>() ?? [],
       );
 
   Map<String, dynamic> toJson() => {
-        'workdir': workdir, 'files': files, 'images': images.map((k, v) => MapEntry(k, v.toJson())),
+        'workdir': workdir,
+        'files': files,
+        'images': images.map((k, v) => MapEntry(k, v.toJson())),
         'containers': containers.map((k, v) => MapEntry(k, v.toJson())),
-        'volumes': volumes, 'networks': networks, 'events': events,
+        'volumes': volumes,
+        'networks': networks,
+        'events': events,
       };
 
-  SandboxState clone() => SandboxState.fromJson(jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>);
+  SandboxState clone() => SandboxState.fromJson(
+      jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>);
 
   static SandboxState normalized(Map<String, dynamic> j) {
     final s = SandboxState.fromJson(j);
@@ -139,7 +157,8 @@ class QuizQ {
         correct: j['correct'] as int? ?? 0,
       );
 
-  Map<String, dynamic> toJson() => {'question': question, 'options': options, 'correct': correct};
+  Map<String, dynamic> toJson() =>
+      {'question': question, 'options': options, 'correct': correct};
 }
 
 class Task {
@@ -181,15 +200,26 @@ class Task {
         peeked: j['peeked'] as bool? ?? false,
         theory: (j['theory'] as List?)?.cast<String>() ?? [],
         hints: (j['hints'] as List?)?.cast<String>() ?? [],
-        quiz: ((j['quiz'] as List?) ?? []).map((q) => QuizQ.fromJson(q as Map<String, dynamic>)).toList(),
-        start: SandboxState.normalized((j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
+        quiz: ((j['quiz'] as List?) ?? [])
+            .map((q) => QuizQ.fromJson(q as Map<String, dynamic>))
+            .toList(),
+        start: SandboxState.normalized(
+            (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'title': title, 'kind': kind, 'difficulty': difficulty,
-        'theory': theory, 'quiz': quiz.map((q) => q.toJson()).toList(),
-        'goal': goal, 'hints': hints, 'check': check,
-        'expected_output': expected, 'solution': solution, 'peeked': peeked,
+        'id': id,
+        'title': title,
+        'kind': kind,
+        'difficulty': difficulty,
+        'theory': theory,
+        'quiz': quiz.map((q) => q.toJson()).toList(),
+        'goal': goal,
+        'hints': hints,
+        'check': check,
+        'expected_output': expected,
+        'solution': solution,
+        'peeked': peeked,
         'start_state': start.toJson(),
       };
 
@@ -199,6 +229,7 @@ class Task {
 
 class Course {
   String id, title, desc;
+
   /// terminal — практика командами в песочнице; theory — теория, тесты и ментор.
   String mode;
   List<String> syllabus;
@@ -218,13 +249,21 @@ class Course {
         id: j['id'] as String? ?? '',
         title: j['title'] as String? ?? '',
         desc: j['desc'] as String? ?? '',
-        mode: (j['mode'] as String?)?.toLowerCase() == 'theory' ? 'theory' : 'terminal',
+        mode: (j['mode'] as String?)?.toLowerCase() == 'theory'
+            ? 'theory'
+            : 'terminal',
         syllabus: (j['syllabus'] as List?)?.cast<String>() ?? [],
-        tasks: ((j['tasks'] as List?) ?? []).map((t) => Task.fromJson(t as Map<String, dynamic>)).toList(),
+        tasks: ((j['tasks'] as List?) ?? [])
+            .map((t) => Task.fromJson(t as Map<String, dynamic>))
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'title': title, 'desc': desc, 'mode': mode, 'syllabus': syllabus,
+        'id': id,
+        'title': title,
+        'desc': desc,
+        'mode': mode,
+        'syllabus': syllabus,
         'tasks': tasks.map((t) => t.toJson()).toList(),
       };
 
@@ -298,7 +337,11 @@ class MentorChat {
 class Bookmark {
   String taskId, courseId, due;
   int intervalDays;
-  Bookmark({required this.taskId, required this.courseId, this.intervalDays = 1, required this.due});
+  Bookmark(
+      {required this.taskId,
+      required this.courseId,
+      this.intervalDays = 1,
+      required this.due});
 
   factory Bookmark.fromJson(Map<String, dynamic> j) => Bookmark(
         taskId: j['task_id'] as String? ?? '',
@@ -307,8 +350,12 @@ class Bookmark {
         due: j['due'] as String? ?? '',
       );
 
-  Map<String, dynamic> toJson() =>
-      {'task_id': taskId, 'course_id': courseId, 'interval_days': intervalDays, 'due': due};
+  Map<String, dynamic> toJson() => {
+        'task_id': taskId,
+        'course_id': courseId,
+        'interval_days': intervalDays,
+        'due': due
+      };
 }
 
 // ---------- настройки и прогресс ----------
@@ -346,15 +393,20 @@ class Config {
   String apiKey, provider, model, baseUrl, theme;
   bool ambient;
   bool onboarded;
+
   /// true — тему ещё не выбирали вручную; такую тему можно безопасно
   /// вернуть на «какао» при обновлении.
   bool themeAuto;
+
   /// Резервные ИИ-подключения: перебираются по порядку, если основной откажет.
   List<AiEndpoint> fallbacks;
+
   /// Фоновое фото главного экрана: путь к файлу (пусто — фон темы).
   String bgPhoto;
+
   /// Размытие фонового фото, 0–40.
   double bgBlur;
+
   /// Затемнение фонового фото, 0–0.9 (чтобы текст читался).
   double bgDim;
   Config({
@@ -362,7 +414,7 @@ class Config {
     this.provider = 'deepseek',
     this.model = '',
     this.baseUrl = '',
-    this.theme = 'cocoa',
+    this.theme = 'dark',
     this.ambient = true,
     this.onboarded = false,
     this.themeAuto = true,
@@ -377,7 +429,7 @@ class Config {
         provider: j['provider'] as String? ?? 'deepseek',
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
-        theme: j['theme'] as String? ?? 'cocoa',
+        theme: j['theme'] as String? ?? 'dark',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
         themeAuto: j['theme_auto'] as bool? ?? true,
@@ -422,16 +474,20 @@ class Progress {
   Map<String, String> courseTitles = {};
   List<String> courseOrder = [];
   List<String> hiddenCourses = [];
+
   /// Курсы, убранные в архив (в основном списке не показываются).
   List<String> archived = [];
+
   /// Расход токенов по моделям: модель → [вход, выход].
   Map<String, List<int>> aiUsage = {};
 
   Progress();
 
   /// tokensIn / tokensOut / totalTokens — сводка расхода.
-  int get tokensIn => aiUsage.values.fold(0, (a, v) => a + (v.isNotEmpty ? v[0] : 0));
-  int get tokensOut => aiUsage.values.fold(0, (a, v) => a + (v.length > 1 ? v[1] : 0));
+  int get tokensIn =>
+      aiUsage.values.fold(0, (a, v) => a + (v.isNotEmpty ? v[0] : 0));
+  int get tokensOut =>
+      aiUsage.values.fold(0, (a, v) => a + (v.length > 1 ? v[1] : 0));
   int get tokensTotal => tokensIn + tokensOut;
 
   factory Progress.fromJson(Map<String, dynamic> j) {
@@ -449,10 +505,14 @@ class Progress {
         .map((k, v) => MapEntry(k as String, (v as Map).cast<String, int>()));
     p.hints = ((j['hints'] as Map?) ?? {})
         .map((k, v) => MapEntry(k as String, (v as Map).cast<String, int>()));
-    p.generated = ((j['generated'] as Map?) ?? {})
-        .map((k, v) => MapEntry(k as String, (v as List).map((t) => Task.fromJson(t as Map<String, dynamic>)).toList()));
+    p.generated = ((j['generated'] as Map?) ?? {}).map((k, v) => MapEntry(
+        k as String,
+        (v as List)
+            .map((t) => Task.fromJson(t as Map<String, dynamic>))
+            .toList()));
     p.extraCourses = ((j['extra_courses'] as List?) ?? [])
-        .map((c) => Course.fromJson(c as Map<String, dynamic>)).toList();
+        .map((c) => Course.fromJson(c as Map<String, dynamic>))
+        .toList();
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
     p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
         MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
@@ -472,18 +532,28 @@ class Progress {
   }
 
   Map<String, dynamic> toJson() => {
-        'xp': xp, 'solved_total': solvedTotal, 'streak': streak,
-        'last_course': lastCourse, 'last_day': lastDay,
-        'completed': completed, 'quiz_done': quizDone, 'quiz_tries': quizTries,
-        'hints': hints, 'generated': generated.map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
+        'xp': xp,
+        'solved_total': solvedTotal,
+        'streak': streak,
+        'last_course': lastCourse,
+        'last_day': lastDay,
+        'completed': completed,
+        'quiz_done': quizDone,
+        'quiz_tries': quizTries,
+        'hints': hints,
+        'generated': generated
+            .map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
         'extra_courses': extraCourses.map((c) => c.toJson()).toList(),
         'achievements': achieved,
         'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
         'mentor_chats': mentorChats.map((c) => c.toJson()).toList(),
         'active_chat': activeChatId,
         'gen_cleaned': genCleaned,
-        'course_titles': courseTitles, 'course_order': courseOrder, 'hidden_courses': hiddenCourses,
-        'archived': archived, 'ai_usage': aiUsage,
+        'course_titles': courseTitles,
+        'course_order': courseOrder,
+        'hidden_courses': hiddenCourses,
+        'archived': archived,
+        'ai_usage': aiUsage,
       };
 
   int get level => xp ~/ 100 + 1;

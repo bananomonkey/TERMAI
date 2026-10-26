@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/theme.dart';
@@ -80,12 +81,17 @@ void main() {
     expect(legacy.aiUsage, isEmpty);
   });
 
-  test('fallback endpoints and background photo survive Config JSON round-trip', () {
+  test('fallback endpoints and background photo survive Config JSON round-trip',
+      () {
     final cfg = Config()
       ..theme = 'navy'
       ..fallbacks = [
         AiEndpoint(provider: 'openai', apiKey: 'sk-a', model: 'gpt-4o-mini'),
-        AiEndpoint(provider: 'gemini', apiKey: 'g-key', model: 'gemini-2.0-flash', baseUrl: 'https://example.test/v1'),
+        AiEndpoint(
+            provider: 'gemini',
+            apiKey: 'g-key',
+            model: 'gemini-2.0-flash',
+            baseUrl: 'https://example.test/v1'),
       ]
       ..bgPhoto = '/tmp/photo.jpg'
       ..bgBlur = 12
@@ -101,14 +107,16 @@ void main() {
     expect(back.bgBlur, 12);
     expect(back.bgDim, 0.4);
 
-    // основа по-прежнему «какао»; синяя — второй допустимый вариант
-    expect(Config().theme, 'cocoa');
-    expect(Config.fromJson(const {}).theme, 'cocoa');
+    // основа — VS Code Dark Modern; синяя — второй допустимый вариант
+    expect(Config().theme, 'dark');
+    expect(Config.fromJson(const {}).theme, 'dark');
     expect(themePresets, hasLength(2));
     expect(themePresets.any((p) => p.id == 'navy'), isTrue);
-    expect(themePresets.any((p) => p.id == 'cocoa'), isTrue);
+    expect(themePresets.any((p) => p.id == 'dark'), isTrue);
     expect(presetById('navy').title, 'Синий');
-    expect(presetById('cocoa').title, 'Какао');
+    expect(presetById('dark').title, 'Dark Modern');
+    expect(presetById('dark').bg, const Color(0xFF1F1F1F));
+    expect(presetById('dark').accent, const Color(0xFF0078D4));
 
     // осознанный выбор синей темы сохраняется, авто-тема — нет
     final chosen = Config()
