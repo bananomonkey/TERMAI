@@ -115,7 +115,7 @@ void main() {
     expect(themePresets.any((p) => p.id == 'dark'), isTrue);
     expect(presetById('navy').title, 'Синий');
     expect(presetById('dark').title, 'Dark Modern');
-    expect(presetById('dark').bg, const Color(0xFF1F1F1F));
+    expect(presetById('dark').bg, const Color(0xFF000000));
     expect(presetById('dark').accent, const Color(0xFF0078D4));
 
     // осознанный выбор синей темы сохраняется, авто-тема — нет

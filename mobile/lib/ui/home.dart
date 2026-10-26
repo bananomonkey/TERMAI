@@ -217,7 +217,7 @@ void _showCourseActions(BuildContext context, int courseIdx) {
         child: StatefulBuilder(
           builder: (ctx, setSheet) {
             final idx = controller.courses.indexWhere((x) => x.id == cid);
-            if (idx < 0) return cardBox(child: const Text('Курс удалён'));
+            if (idx < 0) return const SizedBox.shrink();
             final c = controller.courses[idx];
             return Container(
               width: 300,
