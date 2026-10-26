@@ -1,14 +1,14 @@
-// firebase_options.dart — ЗАГЛУШКА.
+// firebase_options.dart — конфигурация Firebase для TERMAI.
 //
-// Замените значения ниже данными из Firebase Console:
-// Project settings → Your apps → Android → firebaseConfig.
-// Подробная инструкция — в mobile/README.md.
+// ВАЖНО: ключ ниже — клиентский Firebase API key, а не серверный секрет.
+// Он поставляется внутри APK и нужен Auth/Firestore. GitHub Secret Scanning
+// помечает формат AIza… автоматически. Чтобы ключ нельзя было использовать
+// в чужих приложениях, ограничьте его в Google Cloud Console
+// (Android app com.vlad.termai + SHA-1, только нужные API).
+// Подробная инструкция — SECURITY.md в корне репозитория.
 //
-// Можно вместо этого выполнить `flutterfire configure`: он перезапишет файл,
-// но также добавит google-services.json и Gradle-плагин (файл не коммитить).
-//
-// Пока стоят заглушки, синхронизация в приложении отключена и локальный
-// прогресс работает как обычно.
+// Если ключ скомпрометирован/его нужно заменить: создайте новый в Firebase
+// Console, обновите android-блок ниже, старый ключ отзовите.
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;

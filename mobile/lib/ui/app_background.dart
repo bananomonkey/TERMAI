@@ -186,8 +186,26 @@ class _AppBackdropState extends State<AppBackdrop> {
   @override
   Widget build(BuildContext context) {
     if (_path.isEmpty) {
-      // ровный цвет темы, без градиента и тумана
-      return ColoredBox(color: C.bg, child: widget.child);
+      // ровный цвет темы + очень лёгкая матовая текстура (без градиента)
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: C.bg),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/noise.png'),
+                    repeat: ImageRepeat.repeat,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          widget.child,
+        ],
+      );
     }
     return Stack(
       fit: StackFit.expand,

@@ -19,9 +19,20 @@ def rounded(draw, box, r, fill, outline=None, width=1):
     draw.rounded_rectangle(box, radius=r, fill=fill, outline=outline, width=width)
 
 
-def draw_monitor(size, transparent=False, scale=0.92):
+def draw_monitor(size, transparent=False, scale=0.92, disc=False):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0) if transparent else (10, 10, 10, 255))
     d = ImageDraw.Draw(img)
+
+    if disc:
+        # круглая подложка: иконка читается круглой даже под squircle-маской
+        r = size * 0.455
+        c = size / 2
+        d.ellipse([c - r, c - r, c + r, c + r],
+                  fill=(34, 26, 21, 255), outline=(120, 86, 66, 255),
+                  width=max(3, size // 90))
+        r2 = r - size * 0.018
+        d.ellipse([c - r2, c - r2, c + r2, c + r2],
+                  outline=(74, 56, 43, 255), width=max(2, size // 220))
 
     margin = int(size * (1 - scale) / 2)
     x0, y0 = margin, margin
@@ -80,15 +91,15 @@ def draw_monitor(size, transparent=False, scale=0.92):
     pixel_eye(sx0 + sw * 0.69, eye_y, sw * 0.145)
 
     # улыбка: треугольная U/V из пикселей (края выше, центр ниже)
-    cell = sw * 0.032
-    gap = cell * 0.22
+    cell = sw * 0.022
+    gap = cell * 0.24
     stepv = cell + gap
-    top_y = sy0 + sh * 0.70
-    depth = sh * 0.105
-    n = 13
+    top_y = sy0 + sh * 0.73
+    depth = sh * 0.050
+    n = 11
     for i in range(n):
         t = i / (n - 1)
-        x = sx0 + sw * (0.28 + 0.44 * t)
+        x = sx0 + sw * (0.39 + 0.22 * t)
         y = top_y + depth * (1 - abs(2 * t - 1))
         d.rectangle([x - cell / 2, y - cell / 2, x + cell / 2, y + cell / 2], fill=BLACK)
 
@@ -130,6 +141,6 @@ def draw_monitor(size, transparent=False, scale=0.92):
 
 
 if __name__ == "__main__":
-    draw_monitor(1024, transparent=False, scale=0.94).convert("RGB").save("assets/icon/termai.png")
-    draw_monitor(1024, transparent=True, scale=0.84).save("assets/icon/termai_fg.png")
+    draw_monitor(1024, transparent=True, scale=0.62, disc=True).convert("RGBA").save("assets/icon/termai.png")
+    draw_monitor(1024, transparent=True, scale=0.62, disc=True).save("assets/icon/termai_fg.png")
     print("icons written")
