@@ -12,6 +12,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'app_actions.dart';
 import 'navigation.dart';
 import 'store.dart';
+import 'theme_refresh.dart';
 import 'ui/app_background.dart';
 import 'ui/dock.dart';
 import 'ui/theme.dart';
@@ -114,6 +115,7 @@ class _BootScreenState extends State<BootScreen>
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
     C.p = presetById(controller.config.theme);
+    C.buttonBrightness = controller.config.buttonBrightness.clamp(0.6, 1.4);
     _scheduleReminder();
     // диагностика: авто-открытие урока на слайде терминала
     if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) diagAutoLesson = true;
@@ -216,7 +218,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> implements PreserveOnTheme {
   @override
   void initState() {
     super.initState();
@@ -230,59 +232,88 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 56,
-        actions: [
-          ListenableBuilder(
-            listenable: controller,
-            builder: (_, __) => Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: C.card,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: C.border),
+    return ValueListenableBuilder<int>(
+      valueListenable: themeRevision,
+      builder: (_, __, ___) => Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 56,
+          leadingWidth: 60,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 10, top: 8, bottom: 8),
+            child: Material(
+              color: C.button,
+              shape: CircleBorder(side: BorderSide(color: C.buttonBorder)),
+              clipBehavior: Clip.antiAlias,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints.tightFor(width: 40, height: 40),
+                iconSize: 21,
+                tooltip: C.isLight ? 'Тёмная тема' : 'Светлая тема',
+                icon: Icon(
+                  C.isLight
+                      ? Icons.dark_mode_outlined
+                      : Icons.light_mode_outlined,
+                  color: C.text,
+                ),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  controller.toggleLightTheme();
+                },
+              ),
+            ),
+          ),
+          actions: [
+            ListenableBuilder(
+              listenable: controller,
+              builder: (_, __) => Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: C.card,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: C.border),
+                    ),
+                    child: Text(
+                        'ур.${controller.prog.level} · ${controller.prog.xp} XP',
+                        style: TextStyle(fontSize: 11, color: C.muted)),
                   ),
-                  child: Text(
-                      'ур.${controller.prog.level} · ${controller.prog.xp} XP',
-                      style: TextStyle(fontSize: 11, color: C.muted)),
                 ),
               ),
             ),
-          ),
-          IconButton(
-              icon: const Icon(Icons.more_horiz),
-              onPressed: () => showMoreSheet(context)),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: AppBackdrop(
-        child: Stack(children: [
-          const Positioned.fill(child: CourseGraphView()),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 14, bottom: 8),
-                    child: MentorLauncher(),
-                  ),
-                  const Center(child: GlassDock()),
-                ],
+            IconButton(
+                icon: const Icon(Icons.more_horiz),
+                onPressed: () => showMoreSheet(context)),
+            const SizedBox(width: 4),
+          ],
+        ),
+        body: AppBackdrop(
+          child: Stack(children: [
+            const Positioned.fill(child: CourseGraphView()),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 14, bottom: 8),
+                      child: MentorLauncher(),
+                    ),
+                    const Center(child: GlassDock()),
+                  ],
+                ),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }

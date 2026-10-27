@@ -407,8 +407,12 @@ class Config {
   /// Размытие фонового фото, 0–40.
   double bgBlur;
 
-  /// Затемнение фонового фото, 0–0.9 (чтобы текст читался).
+  /// Вуаль фонового фото, 0–0.9: затемнение в тёмных темах,
+  /// осветление в светлой (чтобы текст читался).
   double bgDim;
+
+  /// Яркость кнопок: 1.0 — обычная, 0.6–1.4 — темнее/светлее.
+  double buttonBrightness;
   Config({
     this.apiKey = '',
     this.provider = 'deepseek',
@@ -422,6 +426,7 @@ class Config {
     this.bgPhoto = '',
     this.bgBlur = 24,
     this.bgDim = 0.55,
+    this.buttonBrightness = 1.0,
   }) : fallbacks = fallbacks ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
@@ -439,6 +444,9 @@ class Config {
         bgPhoto: j['bg_photo'] as String? ?? '',
         bgBlur: (j['bg_blur'] as num?)?.toDouble() ?? 24,
         bgDim: (j['bg_dim'] as num?)?.toDouble() ?? 0.55,
+        buttonBrightness: ((j['button_brightness'] as num?)?.toDouble() ?? 1.0)
+            .clamp(0.6, 1.4)
+            .toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -454,6 +462,7 @@ class Config {
         'bg_photo': bgPhoto,
         'bg_blur': bgBlur,
         'bg_dim': bgDim,
+        'button_brightness': buttonBrightness,
       };
 }
 

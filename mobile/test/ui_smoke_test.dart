@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termai/main.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/app_background.dart';
 import 'package:termai/ui/home.dart';
 import 'package:termai/ui/lesson.dart';
+import 'package:termai/ui/mentor_launcher.dart';
 import 'package:termai/ui/onboarding.dart';
 import 'package:termai/ui/settings_screen.dart';
 import 'package:termai/ui/theme.dart';
@@ -47,6 +51,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('home theme button switches the whole app to light',
+      (tester) async {
+    final temp = Directory.systemTemp.createTempSync('termai-test-');
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathChannel, (call) async {
+      if (call.method == 'getApplicationDocumentsDirectory') return temp.path;
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathChannel, null);
+      temp.deleteSync(recursive: true);
+      C.p = presetById('dark');
+      C.buttonBrightness = 1.0;
+    });
+    controller.config = Config()..onboarded = true;
+    C.p = presetById('dark');
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const HomeScreen(),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Светлая тема'));
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+    }
+    await tester.pumpAndSettle();
+
+    expect(controller.config.theme, 'light');
+    expect(C.isLight, isTrue);
+    expect(find.byTooltip('Тёмная тема'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mentor avatar opens a compact quick-ask panel', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const Scaffold(
+        body: Stack(children: [
+          Positioned(left: 14, bottom: 100, child: MentorLauncher()),
+        ]),
+      ),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Быстрый вопрос'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Быстрый вопрос'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Закрыть'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Быстрый вопрос'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('settings scrolls to the very bottom', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -57,6 +125,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('ОФОРМЛЕНИЕ'), findsOneWidget);
+    expect(find.text('Яркость кнопок'), findsOneWidget);
     expect(find.byType(ListView), findsOneWidget);
 
     // нижний блок должен доскролливаться, а не обрезаться

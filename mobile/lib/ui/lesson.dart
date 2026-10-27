@@ -428,7 +428,7 @@ MarkdownStyleSheet mdStyle() => MarkdownStyleSheet(
           fontFamily: 'monospace',
           backgroundColor: C.card2),
       codeblockDecoration: BoxDecoration(
-        color: const Color(0xFF101318),
+        color: C.termBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: C.border),
       ),

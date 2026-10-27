@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 class ThemePreset {
   final String id, title;
+  final Brightness brightness;
   final Color bg; // 60%
   final Color surface, card, card2, border; // 30%: поверхности
   final Color secondary; // 30%: элементы, префикс терминала, черты ИИ
@@ -15,6 +16,7 @@ class ThemePreset {
   const ThemePreset({
     required this.id,
     required this.title,
+    required this.brightness,
     required this.bg,
     required this.surface,
     required this.card,
@@ -38,6 +40,7 @@ const themePresets = <ThemePreset>[
   ThemePreset(
     id: 'dark',
     title: 'Dark Modern',
+    brightness: Brightness.dark,
     bg: Color(0xFF000000),
     surface: Color(0xFF0B0B0B),
     card: Color(0xFF121212),
@@ -58,6 +61,7 @@ const themePresets = <ThemePreset>[
   ThemePreset(
     id: 'navy',
     title: 'Синий',
+    brightness: Brightness.dark,
     bg: Color(0xFF16233D),
     surface: Color(0xFF1D2C4A),
     card: Color(0xFF243553),
@@ -74,6 +78,27 @@ const themePresets = <ThemePreset>[
     termBg: Color(0xFF101B2E),
     termText: Color(0xFFC5D5EC),
   ),
+  // Светлая — быстрый дневной режим для яркого солнца и светлых помещений.
+  ThemePreset(
+    id: 'light',
+    title: 'Светлая',
+    brightness: Brightness.light,
+    bg: Color(0xFFF3F5F8),
+    surface: Color(0xFFFFFFFF),
+    card: Color(0xFFFFFFFF),
+    card2: Color(0xFFE9EEF5),
+    secondary: Color(0xFF3B6EA8),
+    accent: Color(0xFF0078D4),
+    accentDark: Color(0xFF0063B1),
+    text: Color(0xFF1B2430),
+    muted: Color(0xFF5C6B7D),
+    good: Color(0xFF1F8A5B),
+    warn: Color(0xFF9A6B00),
+    danger: Color(0xFFC0392B),
+    border: Color(0xFFD5DDE8),
+    termBg: Color(0xFFF0F3F7),
+    termText: Color(0xFF1B2430),
+  ),
 ];
 
 ThemePreset presetById(String id) => themePresets.firstWhere((p) => p.id == id,
@@ -83,6 +108,11 @@ ThemePreset presetById(String id) => themePresets.firstWhere((p) => p.id == id,
 /// перекрашивает всё приложение (MaterialApp перестраивается от notifyListeners).
 class C {
   static ThemePreset p = themePresets.first;
+
+  /// Яркость кнопок: 1.0 — как в палитре, больше — светлее, меньше — темнее.
+  static double buttonBrightness = 1.0;
+
+  static bool get isLight => p.brightness == Brightness.light;
   static Color get bg => p.bg;
   static Color get surface => p.surface;
   static Color get card => p.card;
@@ -99,19 +129,36 @@ class C {
   static Color get termBg => p.termBg;
   static Color get termText => p.termText;
 
+  /// Отдельные цвета для кнопок и быстрых панелей: ползунок яркости
+  /// не должен перекрашивать фоновые секции и текст.
+  static Color get button => _tone(p.card, buttonBrightness);
+  static Color get button2 => _tone(p.card2, buttonBrightness);
+  static Color get buttonBorder => _tone(p.border, buttonBrightness);
+  static Color get buttonAccent => _tone(p.accentDark, buttonBrightness);
+
+  static Color _tone(Color base, double value) {
+    final delta = (value - 1.0).clamp(-0.5, 0.5);
+    if (delta.abs() < 0.001) return base;
+    final target = delta > 0 ? Colors.white : Colors.black;
+    return Color.lerp(base, target, delta.abs() * 0.7)!;
+  }
+
   /// Свечение активного элемента под карточкой.
   static Color glow({Color? color, int alpha = 70}) =>
       (color ?? p.good).withAlpha(alpha);
 }
 
 ThemeData buildTheme() {
-  final base = ThemeData.dark(useMaterial3: true);
+  final base = ThemeData(useMaterial3: true, brightness: C.p.brightness);
   return base.copyWith(
     scaffoldBackgroundColor: C.bg,
+    cardColor: C.card,
     colorScheme: base.colorScheme.copyWith(
       primary: C.accent,
+      onPrimary: Colors.white,
       secondary: C.accent,
       surface: C.surface,
+      onSurface: C.text,
       error: C.danger,
     ),
     textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text),
@@ -122,7 +169,8 @@ ThemeData buildTheme() {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      systemOverlayStyle:
+          C.isLight ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
     ),
     dividerColor: C.border,
     dividerTheme: DividerThemeData(color: C.border, thickness: 1, space: 1),
@@ -154,7 +202,7 @@ ThemeData buildTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: C.accentDark,
+        backgroundColor: C.buttonAccent,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(50),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -164,7 +212,7 @@ ThemeData buildTheme() {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,
-        side: BorderSide(color: C.border),
+        side: BorderSide(color: C.buttonBorder),
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),

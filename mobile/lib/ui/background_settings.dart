@@ -80,18 +80,19 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                           )
                         else
                           ColoredBox(color: C.bg),
-                        // затемнение — ровно как на реальном экране
-                        ColoredBox(
-                          color: C.bg.withAlpha(
-                              (cfg.bgDim * 255).round().clamp(0, 242)),
-                        ),
+                        // вуаль — ровно как на реальном экране
+                        if (has)
+                          ColoredBox(
+                            color: (C.isLight ? Colors.white : C.bg).withAlpha(
+                                (cfg.bgDim * 255).round().clamp(0, 242)),
+                          ),
                         Center(
                           child: has
                               ? Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 7),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withAlpha(90),
+                                    color: C.card.withAlpha(210),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
@@ -176,7 +177,8 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                         : 'Фон сейчас ровный. Выбери фото, чтобы включить размытие.',
                     style: TextStyle(fontSize: 11.5, color: C.muted)),
                 const SizedBox(height: 18),
-                caption('Затемнение', color: C.accent),
+                caption(C.isLight ? 'Осветление' : 'Затемнение',
+                    color: C.accent),
                 Row(children: [
                   Expanded(
                     child: Slider(
@@ -203,8 +205,12 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                 ]),
                 Text(
                     has
-                        ? 'Затемнение приглушает фото, чтобы карточки и текст читались.'
-                        : 'Затемнение включится вместе с фото.',
+                        ? (C.isLight
+                            ? 'Светлая вуаль осветляет фото, чтобы тёмный текст читался.'
+                            : 'Затемнение приглушает фото, чтобы карточки и текст читались.')
+                        : (C.isLight
+                            ? 'Осветление включится вместе с фото.'
+                            : 'Затемнение включится вместе с фото.'),
                     style: TextStyle(fontSize: 11.5, color: C.muted)),
                 const SizedBox(height: 20),
                 Text(

@@ -1,5 +1,5 @@
 // app_background.dart — фон приложения: ровный цвет темы или своё фото.
-// Никакого тумана и градиентов: чёткий коричневый/синий фон по выбору.
+// Никакого тумана и градиентов: ровный цвет темы или чёткое фото.
 // Размытие фото считается один раз в ui.Image, а не в каждом кадре.
 import 'dart:async';
 import 'dart:io';
@@ -11,6 +11,10 @@ import '../main.dart';
 import 'theme.dart';
 
 /// BackdropImage — фото фона, размытое один раз и отрисованное как картинка.
+///
+/// Готовые картинки кэшируются между экранами. Иначе при переходе новая
+/// страница успевала показать чёрный прямоугольник, пока снова читала файл
+/// с диска и размывала его — особенно заметно на своём фото.
 class BackdropImage extends StatefulWidget {
   final String path;
   final double blur;
@@ -32,26 +36,93 @@ class BackdropImage extends StatefulWidget {
 }
 
 class _BackdropImageState extends State<BackdropImage> {
+  static final Map<String, ui.Image> _cache = <String, ui.Image>{};
+  static const int _cacheLimit = 4;
+
   ui.Image? _img;
   String _key = '';
   int _token = 0;
   Timer? _debounce;
 
+  static String _cacheKey(BackdropImage w) =>
+      '${w.path}|${w.blur.round()}|${w.maxWidth}';
+
+  /// Клонируем картинку: кэш владеет оригиналом, виджет — своей копией.
+  static ui.Image? _cached(String key) {
+    final image = _cache[key];
+    if (image == null) return null;
+    try {
+      return image.clone();
+    } catch (_) {
+      final broken = _cache.remove(key);
+      broken?.dispose();
+      return null;
+    }
+  }
+
+  static void _remember(String key, ui.Image image) {
+    final old = _cache.remove(key);
+    old?.dispose();
+    _cache[key] = image;
+    while (_cache.length > _cacheLimit) {
+      final first = _cache.keys.first;
+      final evicted = _cache.remove(first);
+      evicted?.dispose();
+    }
+  }
+
+  void _disposeLater(ui.Image? image) {
+    if (image == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => image.dispose());
+  }
+
+  void _useCachedOrLoad({bool rebuild = true}) {
+    final key = _cacheKey(widget);
+    final cached = _cached(key);
+    if (cached != null) {
+      final old = _img;
+      if (rebuild) {
+        setState(() {
+          _img = cached;
+          _key = key;
+        });
+      } else {
+        _img = cached;
+        _key = key;
+      }
+      _disposeLater(old);
+      return;
+    }
+    _load();
+  }
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _useCachedOrLoad(rebuild: false);
   }
 
   @override
   void didUpdateWidget(BackdropImage old) {
     super.didUpdateWidget(old);
     if (old.path != widget.path) {
-      _load();
+      _debounce?.cancel();
+      _useCachedOrLoad();
     } else if (old.blur.round() != widget.blur.round()) {
       // слайдер двигают часто — не размываем на каждый тик
       _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 140), _load);
+      final key = _cacheKey(widget);
+      final cached = _cached(key);
+      if (cached != null) {
+        final previous = _img;
+        setState(() {
+          _img = cached;
+          _key = key;
+        });
+        _disposeLater(previous);
+      } else {
+        _debounce = Timer(const Duration(milliseconds: 140), _load);
+      }
     }
   }
 
@@ -65,24 +136,38 @@ class _BackdropImageState extends State<BackdropImage> {
 
   Future<void> _load() async {
     final token = ++_token;
+    final syncKey = _cacheKey(widget);
+    if (_img != null && _key == syncKey) return;
+
+    final cached = _cached(syncKey);
+    if (cached != null) {
+      if (!mounted || token != _token) {
+        cached.dispose();
+        return;
+      }
+      final old = _img;
+      setState(() {
+        _img = cached;
+        _key = syncKey;
+      });
+      _disposeLater(old);
+      return;
+    }
+
     try {
       final f = File(widget.path);
       if (!await f.exists()) {
         if (mounted && token == _token) setState(() => _img = null);
         return;
       }
-      final mtime = (await f.lastModified()).millisecondsSinceEpoch;
-      final blur = widget.blur.round();
-      final key = '${widget.path}|$mtime|$blur';
-      if (key == _key && _img != null) return;
-
       final bytes = await f.readAsBytes();
       final codec =
           await ui.instantiateImageCodec(bytes, targetWidth: widget.maxWidth);
       final frame = await codec.getNextFrame();
+      codec.dispose();
       var image = frame.image;
 
-      if (blur > 0) {
+      if (widget.blur > 0) {
         final recorder = ui.PictureRecorder();
         final canvas = Canvas(recorder);
         canvas.drawImage(
@@ -90,8 +175,8 @@ class _BackdropImageState extends State<BackdropImage> {
           Offset.zero,
           Paint()
             ..imageFilter = ui.ImageFilter.blur(
-              sigmaX: blur * 1.4,
-              sigmaY: blur * 1.4,
+              sigmaX: widget.blur * 1.4,
+              sigmaY: widget.blur * 1.4,
               tileMode: TileMode.clamp,
             ),
         );
@@ -106,15 +191,16 @@ class _BackdropImageState extends State<BackdropImage> {
         image.dispose();
         return;
       }
-      // старую картинку освобождаем после кадра: без утечек
+
+      // Оригинал остаётся в кэше, а экран получает лёгкую копию.
+      _remember(syncKey, image);
+      final display = image.clone();
       final old = _img;
       setState(() {
-        _img = image;
-        _key = key;
+        _img = display;
+        _key = syncKey;
       });
-      if (old != null && old != image) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-      }
+      _disposeLater(old);
     } catch (_) {
       if (mounted && token == _token) setState(() => _img = null);
     }
@@ -123,7 +209,9 @@ class _BackdropImageState extends State<BackdropImage> {
   @override
   Widget build(BuildContext context) {
     final img = _img;
-    if (img == null) return ColoredBox(color: C.bg);
+    // Прозрачная заглушка вместо чёрного прямоугольника: во время перехода
+    // под новой страницей остаётся виден фон предыдущей.
+    if (img == null) return const SizedBox.expand();
     return SizedBox.expand(
       child: RawImage(
         image: img,
@@ -189,6 +277,9 @@ class _AppBackdropState extends State<AppBackdrop> {
       // ровный цвет темы, без градиентов и текстур
       return ColoredBox(color: C.bg, child: widget.child);
     }
+    // В тёмных темах фото приглушаем чёрной вуалью, в светлой — белой:
+    // иначе тёмный текст на затемнённом фото становится нечитаемым.
+    final veil = C.isLight ? Colors.white : C.bg;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -196,7 +287,7 @@ class _AppBackdropState extends State<AppBackdrop> {
           child: BackdropImage(path: _path, blur: _blur),
         ),
         ColoredBox(
-          color: C.bg.withAlpha((_dim.clamp(0.0, 0.95) * 255).round()),
+          color: veil.withAlpha((_dim.clamp(0.0, 0.95) * 255).round()),
         ),
         widget.child,
       ],

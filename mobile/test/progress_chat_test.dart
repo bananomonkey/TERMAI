@@ -95,7 +95,8 @@ void main() {
       ]
       ..bgPhoto = '/tmp/photo.jpg'
       ..bgBlur = 12
-      ..bgDim = 0.4;
+      ..bgDim = 0.4
+      ..buttonBrightness = 1.25;
 
     final back = Config.fromJson(cfg.toJson());
 
@@ -106,17 +107,26 @@ void main() {
     expect(back.bgPhoto, '/tmp/photo.jpg');
     expect(back.bgBlur, 12);
     expect(back.bgDim, 0.4);
+    expect(back.buttonBrightness, 1.25);
 
-    // основа — VS Code Dark Modern; синяя — второй допустимый вариант
+    // основа — VS Code Dark Modern; синяя и светлая — допустимые варианты
     expect(Config().theme, 'dark');
     expect(Config.fromJson(const {}).theme, 'dark');
-    expect(themePresets, hasLength(2));
+    expect(themePresets, hasLength(3));
     expect(themePresets.any((p) => p.id == 'navy'), isTrue);
     expect(themePresets.any((p) => p.id == 'dark'), isTrue);
+    expect(themePresets.any((p) => p.id == 'light'), isTrue);
     expect(presetById('navy').title, 'Синий');
     expect(presetById('dark').title, 'Dark Modern');
+    expect(presetById('light').title, 'Светлая');
     expect(presetById('dark').bg, const Color(0xFF000000));
     expect(presetById('dark').accent, const Color(0xFF0078D4));
+    expect(presetById('light').brightness, Brightness.light);
+    expect(Config.fromJson(const {}).buttonBrightness, 1.0);
+    expect(
+        Config.fromJson(const <String, dynamic>{'button_brightness': 2.0})
+            .buttonBrightness,
+        1.4);
 
     // осознанный выбор синей темы сохраняется, авто-тема — нет
     final chosen = Config()

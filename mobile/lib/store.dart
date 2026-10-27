@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
@@ -30,6 +29,9 @@ class AppController extends ChangeNotifier {
   Config config = Config();
   Progress prog = Progress();
   AIClient? ai;
+
+  /// Тема, из которой включили светлую: быстрый тумблер возвращает её.
+  String _themeBeforeLight = 'dark';
 
   /// Исполнитель MCP-подобных действий, регистрируется в main().
   AppActionExecutor? actionExecutor;
@@ -106,6 +108,7 @@ class AppController extends ChangeNotifier {
     }
     _migrateTheme();
     C.p = presetById(config.theme);
+    C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
     _initAI();
 
     if (!prog.genCleaned) {
@@ -245,6 +248,7 @@ class AppController extends ChangeNotifier {
     _migrateTheme();
     final oldTheme = C.p.id;
     C.p = presetById(config.theme);
+    C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
     if (oldTheme != C.p.id) themeRevision.value++;
     final dir = await _dataDir();
     await io.File('$dir/termai.json')
@@ -252,6 +256,33 @@ class AppController extends ChangeNotifier {
     _initAI();
     notifyListeners();
     if (autofill) autoFillAll();
+  }
+
+  /// toggleLightTheme — быстрый тумблер на главной: тёмная/синяя ↔ светлая.
+  /// Запоминаем палитру, из которой пришли, чтобы вернуть её повторным нажатием.
+  Future<void> toggleLightTheme() async {
+    if (C.isLight) {
+      config.theme = _themeBeforeLight == 'light' ? 'dark' : _themeBeforeLight;
+    } else {
+      _themeBeforeLight = C.p.id;
+      config.theme = 'light';
+    }
+    config.themeAuto = false;
+    await saveConfig(autofill: false);
+  }
+
+  /// setButtonBrightness — ползунок в настройках. Во время перетаскивания
+  /// обновляем только цвета, а на отпускании сохраняем и пересобираем экраны.
+  Future<void> setButtonBrightness(double value, {bool persist = false}) async {
+    config.buttonBrightness = value.clamp(0.6, 1.4);
+    C.buttonBrightness = config.buttonBrightness;
+    if (persist) {
+      themeRevision.value++;
+      final dir = await _dataDir();
+      await io.File('$dir/termai.json')
+          .writeAsString(jsonEncode(config.toJson()));
+    }
+    notifyListeners();
   }
 
   // ---------- фоновое фото ----------

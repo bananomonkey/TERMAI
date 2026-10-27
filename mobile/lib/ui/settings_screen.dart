@@ -91,6 +91,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _ThemePicker(
                           selected: controller.config.theme,
                           onPick: _pickTheme),
+                      const SizedBox(height: 16),
+                      Text('Яркость кнопок',
+                          style: TextStyle(fontSize: 12.5, color: C.muted)),
+                      Row(children: [
+                        Expanded(
+                          child: Slider(
+                            value: controller.config.buttonBrightness,
+                            min: 0.6,
+                            max: 1.4,
+                            divisions: 16,
+                            label:
+                                '${(controller.config.buttonBrightness * 100).round()}%',
+                            onChanged: (v) {
+                              controller.setButtonBrightness(v);
+                            },
+                            onChangeEnd: (v) {
+                              controller.setButtonBrightness(v, persist: true);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 44,
+                          child: Text(
+                              '${(controller.config.buttonBrightness * 100).round()}%',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(fontSize: 13, color: C.muted)),
+                        ),
+                      ]),
+                      Text(
+                          'Док, быстрые кнопки и основные действия: темнее или светлее.',
+                          style: TextStyle(
+                              fontSize: 11.5, color: C.muted, height: 1.35)),
                       const SizedBox(height: 14),
                       _LinkRow(
                         icon: Icons.wallpaper_outlined,
@@ -350,7 +382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.15.8',
+                child: Text('версия 1.15.9',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -498,7 +530,7 @@ class _LinkRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: C.card2,
+      color: C.button2,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -530,7 +562,7 @@ class _LinkRow extends StatelessWidget {
   }
 }
 
-/// _ThemePicker — только две палитры: Dark Modern и «Синий».
+/// _ThemePicker — три палитры: Dark Modern, «Синий» и «Светлая».
 class _ThemePicker extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onPick;
@@ -551,7 +583,7 @@ class _ThemePicker extends StatelessWidget {
                 color: p.card,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: selected == p.id ? p.accent : Colors.transparent,
+                  color: selected == p.id ? p.accent : p.border,
                   width: 2,
                 ),
               ),

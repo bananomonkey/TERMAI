@@ -56,6 +56,7 @@ const knownAppActions = <String>{
   'set_theme',
   'toggle_theme',
   'set_background',
+  'set_button_brightness',
   'set_ai',
   'reset_usage',
   'open_more',
@@ -106,9 +107,10 @@ const appActionsPrompt = '''
 - show_solution: загрузить решение текущей задачи.
 - open_terminal: открыть урок на слайде терминала.
 - toggle_bookmark: добавить/убрать закладку текущей задачи.
-- set_theme {theme}: dark (чёрная) или navy (синяя).
-- toggle_theme: переключить тему.
+- set_theme {theme}: dark (чёрная), light (светлая/дневная) или navy (синяя).
+- toggle_theme: переключить светлую/тёмную тему.
 - set_background {blur?, dim?}: размытие 0–40 и затемнение 0–0.9.
+- set_button_brightness {value}: яркость кнопок 0.6–1.4 (1.0 — обычная).
 - set_ai {provider?, model?, api_key?, base_url?}: изменить ИИ-подключение.
 - reset_usage: обнулить счётчик токенов.
 - open_more: открыть меню «Ещё».

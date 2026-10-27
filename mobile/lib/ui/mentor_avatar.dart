@@ -73,7 +73,10 @@ class _MentorAvatarState extends State<MentorAvatar> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: C.card,
-            boxShadow: widget.glow || widget.speaking
+            // Свечение — только там, где его явно просят (чат/пустой экран).
+            // В плавающей панели и индикаторе набора оно выглядело грязным
+            // пятном под аватаром, особенно на своём фото.
+            boxShadow: widget.glow
                 ? [
                     BoxShadow(
                       color: C.good.withAlpha(widget.speaking ? 95 : 55),

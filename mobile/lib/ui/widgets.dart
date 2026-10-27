@@ -13,12 +13,13 @@ Widget glass({
   EdgeInsets padding = const EdgeInsets.all(0),
   Color? glow,
   Color? tint,
+  Color? background,
   bool lens = true,
 }) {
   return Container(
     padding: padding,
     decoration: BoxDecoration(
-      color: C.card.withAlpha(228),
+      color: (background ?? C.card).withAlpha(228),
       borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         if (glow != null)

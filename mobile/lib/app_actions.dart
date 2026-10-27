@@ -226,9 +226,17 @@ class AppActions {
       case 'set_theme':
         return _setTheme(_str(args, 'theme'));
       case 'toggle_theme':
-        return _setTheme(c.config.theme == 'navy' ? 'dark' : 'navy');
+        await c.toggleLightTheme();
+        return '';
       case 'set_background':
         return _setBackground(args);
+      case 'set_button_brightness':
+        final value = _num(args, 'value') ?? _num(args, 'brightness');
+        if (value == null) return 'не указана яркость';
+        await c.setButtonBrightness(value.clamp(0.6, 1.4).toDouble(),
+            persist: true);
+        _toast('Яркость кнопок: ${(c.config.buttonBrightness * 100).round()}%');
+        return '';
       case 'set_ai':
         return _setAi(args);
       case 'reset_usage':
@@ -586,8 +594,15 @@ class AppActions {
       id = 'dark';
     }
     if (id == 'blue' || id == 'синяя' || id == 'голубая') id = 'navy';
+    if (id == 'light' ||
+        id == 'day' ||
+        id == 'светлая' ||
+        id == 'дневная' ||
+        id == 'белая') {
+      id = 'light';
+    }
     if (!themePresets.any((p) => p.id == id)) {
-      return 'неизвестная тема «$raw» (доступны dark и navy)';
+      return 'неизвестная тема «$raw» (доступны dark, light и navy)';
     }
     c.config.theme = id;
     c.config.themeAuto = false;

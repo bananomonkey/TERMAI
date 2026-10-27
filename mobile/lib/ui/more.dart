@@ -194,7 +194,7 @@ class _SheetButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: C.card,
+      color: C.button,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
