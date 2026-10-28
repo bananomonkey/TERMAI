@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
-class ScreenObserver extends NavigatorObserver {
+class ScreenObserver extends NavigatorObserver with ChangeNotifier {
   static final List<String> _stack = <String>[];
 
   static List<String> get stack => List.unmodifiable(_stack);
@@ -21,11 +21,13 @@ class ScreenObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     _stack.add(_name(route));
+    notifyListeners();
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (_stack.isNotEmpty) _stack.removeLast();
+    notifyListeners();
   }
 
   @override
@@ -36,12 +38,14 @@ class ScreenObserver extends NavigatorObserver {
     } else {
       _stack[_stack.length - 1] = _name(newRoute);
     }
+    notifyListeners();
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     final i = _stack.lastIndexOf(_name(route));
     if (i >= 0) _stack.removeAt(i);
+    notifyListeners();
   }
 }
 

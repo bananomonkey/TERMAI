@@ -1,6 +1,7 @@
 // chat.dart — чат с ИИ-наставником: сохранённые беседы по задачам,
 // пузыри сообщений, переименование/удаление и выбор истории.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../main.dart';
 import '../models.dart';
@@ -14,10 +15,18 @@ class ChatScreen extends StatefulWidget implements PreserveOnTheme {
   final String? autoQuestion;
   final bool interview;
 
+  /// general — отдельный чат Термая, task — чат текущей задачи.
+  final ChatScope scope;
+
   /// resume — открыть уже выбранную беседу, не привязываясь заново к задаче.
   final bool resume;
-  const ChatScreen({super.key, this.autoQuestion, this.interview = false,
-      this.resume = false});
+  const ChatScreen({
+    super.key,
+    this.autoQuestion,
+    this.interview = false,
+    this.scope = ChatScope.general,
+    this.resume = false,
+  });
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -41,8 +50,12 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       } else {
         controller.stopInterview();
-        if (!widget.resume || controller.activeChat == null) {
+        if (widget.resume && controller.activeChat != null) {
+          // Открываем именно выбранную беседу.
+        } else if (widget.scope == ChatScope.task) {
           controller.ensureChatForCurrentTask();
+        } else {
+          controller.ensureGeneralChat();
         }
       }
       if (_asked) return;
@@ -85,8 +98,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _newChat() async {
     if (widget.interview) {
       controller.createInterviewChat(force: true);
-    } else {
+    } else if (widget.scope == ChatScope.task) {
       controller.createChatForCurrentTask();
+    } else {
+      controller.createGeneralChat();
     }
     _scrollDown();
   }
@@ -255,6 +270,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final parts = <String>[];
     if (c.taskId == '__interview__') {
       parts.add('Собеседование');
+    } else if (c.isGeneral) {
+      parts.add('Общий чат');
     } else {
       final course = _courseName(c.courseId);
       if (course.isNotEmpty) parts.add(course);
@@ -300,9 +317,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                         widget.interview
                             ? 'Собеседование · ИИ-интервьюер'
-                            : ((chat?.taskTitle ?? '').isNotEmpty
-                                ? chat!.taskTitle
-                                : (chat?.title ?? 'ИИ-наставник')),
+                            : (chat?.isGeneral ?? true)
+                                ? 'Общий чат · ИИ-наставник'
+                                : ((chat?.taskTitle ?? '').isNotEmpty
+                                    ? chat!.taskTitle
+                                    : (chat?.title ?? 'ИИ-наставник')),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -364,7 +383,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               Text(
                                   widget.interview
                                       ? 'ИИ-интервьюер TERMAI'
-                                      : 'ИИ-наставник TERMAI',
+                                      : (chat?.isGeneral ?? true)
+                                          ? 'Общий чат · ${controller.userNameOrFriend}'
+                                          : 'ИИ-наставник TERMAI',
                                   style: TextStyle(
                                       fontSize: 12,
                                       letterSpacing: 0.5,
@@ -459,6 +480,8 @@ class _Bubble extends StatelessWidget {
               child: Text('· ${msg.text}',
                   style: TextStyle(color: C.muted, fontSize: 12.5))),
         );
+      case 'error':
+        return _errorBubble(context);
       case 'user':
         return Align(
           alignment: Alignment.centerRight,
@@ -481,6 +504,57 @@ class _Bubble extends StatelessWidget {
           ),
         );
     }
+  }
+
+  Widget _errorBubble(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        constraints: const BoxConstraints(maxWidth: 330),
+        padding: const EdgeInsets.fromLTRB(13, 11, 11, 9),
+        decoration: BoxDecoration(
+          color: C.danger.withAlpha(C.isLight ? 22 : 30),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.danger.withAlpha(100)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.error_outline, size: 18, color: C.danger),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Ошибка',
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: C.danger)),
+              ),
+              IconButton(
+                tooltip: 'Скопировать ошибку',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: () async {
+                  final text = msg.details.isNotEmpty ? msg.details : msg.text;
+                  await Clipboard.setData(ClipboardData(text: text));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ошибка скопирована')),
+                  );
+                },
+                icon: Icon(Icons.copy_rounded, size: 17, color: C.danger),
+              ),
+            ]),
+            const SizedBox(height: 5),
+            Text(msg.text,
+                style: TextStyle(fontSize: 12.5, height: 1.4, color: C.text)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _wrap(String text, Color bg, {required bool isUser}) {

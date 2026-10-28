@@ -28,6 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _key;
   late final TextEditingController _model;
   late final TextEditingController _base;
+  late final TextEditingController _name;
   late String _provider;
 
   @override
@@ -37,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _key = TextEditingController(text: controller.config.apiKey);
     _model = TextEditingController(text: controller.config.model);
     _base = TextEditingController(text: controller.config.baseUrl);
+    _name = TextEditingController(text: controller.config.userName);
   }
 
   @override
@@ -44,7 +46,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _key.dispose();
     _model.dispose();
     _base.dispose();
+    _name.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveName() async {
+    await controller.setUserName(_name.text);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Имя сохранено')));
+  }
+
+  Future<void> _pickReminderTime() async {
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: controller.config.reminderHour,
+        minute: controller.config.reminderMinute,
+      ),
+      helpText: 'Время напоминания',
+    );
+    if (t == null) return;
+    await controller.setReminderTime(t.hour, t.minute);
   }
 
   Future<void> _saveAi() async {
@@ -134,6 +157,129 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             .push(pageRoute(const BackgroundSettingsScreen())),
                       ),
                     ]),
+              ),
+              const SizedBox(height: 18),
+
+              // ---------- профиль ----------
+              _SectionTitle('Профиль'),
+              _Panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _name,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      decoration:
+                          const InputDecoration(labelText: 'Как тебя зовут'),
+                      onSubmitted: (_) => _saveName(),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Термай обращается по имени в чате и уведомлениях. '
+                      'Можно оставить пустым.',
+                      style: TextStyle(
+                          fontSize: 11.5, color: C.muted, height: 1.35),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: _saveName,
+                      style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44)),
+                      child: const Text('Сохранить имя'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // ---------- уведомления ----------
+              _SectionTitle('Уведомления'),
+              _Panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Напоминания',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: C.text)),
+                      subtitle: Text(
+                        'Ежедневное напоминание и редкие сообщения от Термая',
+                        style: TextStyle(fontSize: 11.5, color: C.muted),
+                      ),
+                      value: controller.config.notificationsEnabled,
+                      activeThumbColor: C.accent,
+                      onChanged: (v) =>
+                          controller.setNotificationsEnabled(v),
+                    ),
+                    Divider(color: C.border, height: 1),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Ежедневное напоминание',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: C.text)),
+                      subtitle: Text(
+                        'Короткая готовая фраза в выбранное время',
+                        style: TextStyle(fontSize: 11.5, color: C.muted),
+                      ),
+                      value: controller.config.dailyReminderEnabled,
+                      activeThumbColor: C.accent,
+                      onChanged: controller.config.notificationsEnabled
+                          ? (v) => controller.setDailyReminderEnabled(v)
+                          : null,
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      enabled: controller.config.notificationsEnabled &&
+                          controller.config.dailyReminderEnabled,
+                      onTap: controller.config.notificationsEnabled &&
+                              controller.config.dailyReminderEnabled
+                          ? _pickReminderTime
+                          : null,
+                      title: Text('Время напоминания',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: C.text)),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(
+                          '${controller.config.reminderHour.toString().padLeft(2, '0')}:'
+                          '${controller.config.reminderMinute.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: C.accent),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.schedule_outlined,
+                            size: 18, color: C.muted),
+                      ]),
+                    ),
+                    Divider(color: C.border, height: 1),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Мотивация от ИИ',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: C.text)),
+                      subtitle: Text(
+                        'Иногда Термай заранее составит уникальное сообщение',
+                        style: TextStyle(fontSize: 11.5, color: C.muted),
+                      ),
+                      value: controller.config.aiMotivationEnabled,
+                      activeThumbColor: C.accent,
+                      onChanged: controller.config.notificationsEnabled
+                          ? (v) => controller.setAiMotivationEnabled(v)
+                          : null,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 18),
 
@@ -382,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.15.9',
+                child: Text('версия 1.16.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -508,11 +654,14 @@ class _Panel extends StatelessWidget {
   final Widget child;
   const _Panel({required this.child});
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-            color: C.card, borderRadius: BorderRadius.circular(16)),
-        child: child,
+  Widget build(BuildContext context) => Material(
+        color: C.card,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: child,
+        ),
       );
 }
 
@@ -577,7 +726,9 @@ class _ThemePicker extends StatelessWidget {
         for (final p in themePresets)
           GestureDetector(
             onTap: () => onPick(p.id),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
               decoration: BoxDecoration(
                 color: p.card,

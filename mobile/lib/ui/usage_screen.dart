@@ -1,5 +1,4 @@
-// usage_screen.dart — расход токенов и оценка стоимости в долларах.
-// Токены копятся по моделям, цены — из прайсов провайдеров (приблизительно).
+// usage_screen.dart — расход токенов по моделям, без оценки стоимости.
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -58,19 +57,6 @@ class UsageScreen extends StatelessWidget {
             ..sort((a, b) => (b.value.fold(0, (x, y) => x + y))
                 .compareTo(a.value.fold(0, (x, y) => x + y)));
 
-          double total = 0;
-          var known = true;
-          for (final e in rows) {
-            final p = e.value.isNotEmpty ? e.value[0] : 0;
-            final c = e.value.length > 1 ? e.value[1] : 0;
-            final cost = costFor(e.key, p, c);
-            if (cost == null) {
-              known = false;
-            } else {
-              total += cost;
-            }
-          }
-
           if (rows.isEmpty) {
             return Center(
               child: Padding(
@@ -116,15 +102,6 @@ class UsageScreen extends StatelessWidget {
                       const SizedBox(width: 18),
                       _stat('Выход', prettyTokens(controller.prog.tokensOut), C.accent),
                     ]),
-                    const SizedBox(height: 14),
-                    Divider(color: C.border, height: 1),
-                    const SizedBox(height: 14),
-                    Row(children: [
-                      Text('Оценка стоимости', style: TextStyle(fontSize: 12.5, color: C.muted)),
-                      const Spacer(),
-                      Text(money(total) + (known ? '' : ' и более'),
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: C.good)),
-                    ]),
                   ],
                 ),
               ),
@@ -137,8 +114,8 @@ class UsageScreen extends StatelessWidget {
               ],
               const SizedBox(height: 10),
               Text(
-                'Цены — публичные тарифы провайдеров на 1M токенов (USD): считаются приблизительно, '
-                'без учёта кэша и скидок. Если модели нет в таблице, стоимость не показывается.',
+                'Показаны только фактические токены из ответов провайдера. '
+                'Долларовая оценка убрана: тарифы меняются, а ручная таблица быстро устаревает.',
                 style: TextStyle(fontSize: 11.5, color: C.muted, height: 1.45),
               ),
             ],
@@ -166,7 +143,6 @@ class _ModelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cost = costFor(model, prompt, completion);
     return cardBox(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       child: Row(children: [
@@ -181,11 +157,11 @@ class _ModelRow extends StatelessWidget {
                 style: TextStyle(fontSize: 11.5, color: C.muted)),
           ]),
         ),
-        Text(cost == null ? '—' : money(cost),
+        Text(prettyTokens(prompt + completion),
             style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: cost == null ? C.muted : C.good)),
+                color: C.secondary)),
       ]),
     );
   }

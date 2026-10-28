@@ -1,21 +1,24 @@
-// mentor_launcher.dart — плавающая панель Термая на главном экране.
-// Слева снизу: лицо, имя и статус. Аватар открывает быстрый вопрос рядом
-// с панелью, а имя/статус — полноценный чат.
+// mentor_launcher.dart — плавающая панель Термая поверх экранов.
+// Лицо, имя и статус. Аватар открывает быстрый вопрос, а имя/статус —
+// отдельный общий чат, не привязанный к задаче.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart';
+import '../models.dart';
+import '../navigation.dart';
 import 'chat.dart';
 import 'mentor_avatar.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// showMentorQuickAsk — компактный ввод рядом с аватаром, без перехода
-/// в полноэкранный чат. После отправки вопрос открывается в обычном чате.
+/// showMentorQuickAsk — компактный ввод рядом с аватаром. После отправки
+/// вопрос открывается в отдельном общем чате, не привязанном к задаче.
 Future<void> showMentorQuickAsk(BuildContext context,
     {double anchorBottom = 146}) async {
+  final navCtx = rootNavigatorKey.currentContext ?? context;
   final question = await showGeneralDialog<String>(
-    context: context,
+    context: navCtx,
     barrierDismissible: true,
     barrierLabel: 'Быстрый вопрос',
     barrierColor: Colors.black.withAlpha(18),
@@ -33,9 +36,11 @@ Future<void> showMentorQuickAsk(BuildContext context,
       );
     },
   );
-  if (question == null || question.trim().isEmpty || !context.mounted) return;
-  Navigator.of(context)
-      .push(pageRoute(ChatScreen(autoQuestion: question.trim())));
+  if (question == null || question.trim().isEmpty || !navCtx.mounted) return;
+  Navigator.of(navCtx).push(pageRoute(ChatScreen(
+    scope: ChatScope.general,
+    autoQuestion: question.trim(),
+  )));
 }
 
 class MentorLauncher extends StatelessWidget {
@@ -43,7 +48,8 @@ class MentorLauncher extends StatelessWidget {
 
   void _openChat(BuildContext context) {
     HapticFeedback.selectionClick();
-    Navigator.of(context).push(pageRoute(const ChatScreen()));
+    final nav = rootNavigatorKey.currentState ?? Navigator.of(context);
+    nav.push(pageRoute(const ChatScreen(scope: ChatScope.general)));
   }
 
   void _openQuickAsk(BuildContext context) {
@@ -233,7 +239,7 @@ class _QuickAskDialogState extends State<_QuickAskDialog> {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  Text('Ответ откроется в чате — история сохранится.',
+                  Text('Ответ откроется в общем чате — история сохранится.',
                       style: TextStyle(fontSize: 10.5, color: C.muted)),
                 ],
               ),

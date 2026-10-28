@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:termai/ai.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/theme.dart';
 
@@ -141,5 +142,58 @@ void main() {
     final legacy = Config.fromJson({'theme': 'sage'});
     expect(legacy.fallbacks, isEmpty);
     expect(legacy.bgPhoto, isEmpty);
+  });
+
+  test('name and notification settings survive Config JSON round-trip', () {
+    final cfg = Config()
+      ..userName = 'Влад'
+      ..notificationsEnabled = false
+      ..dailyReminderEnabled = false
+      ..reminderHour = 9
+      ..reminderMinute = 30
+      ..aiMotivationEnabled = false
+      ..motivationQueue = ['Раз, два']
+      ..motivationGeneratedAt = '2026-10-29T09:00:00.000'
+      ..launcherX = 0.2
+      ..launcherY = 0.7;
+
+    final back = Config.fromJson(cfg.toJson());
+    expect(back.userName, 'Влад');
+    expect(back.notificationsEnabled, isFalse);
+    expect(back.dailyReminderEnabled, isFalse);
+    expect(back.reminderHour, 9);
+    expect(back.reminderMinute, 30);
+    expect(back.aiMotivationEnabled, isFalse);
+    expect(back.motivationQueue, ['Раз, два']);
+    expect(back.launcherX, 0.2);
+    expect(back.launcherY, 0.7);
+  });
+
+  test('general chat has no task binding and errors stay human-readable', () {
+    final chat = MentorChat(
+      id: 'chat-general',
+      courseId: '',
+      taskId: '',
+      taskTitle: '',
+      title: 'Термай',
+      createdAt: '2026-10-29T10:00:00.000',
+      updatedAt: '2026-10-29T10:00:00.000',
+    );
+    expect(chat.isGeneral, isTrue);
+    expect(chat.courseId, isEmpty);
+    expect(chat.taskId, isEmpty);
+
+    final error = ChatMsg('error', 'Модель или адрес не найдены.',
+        details: 'Ошибка ИИ 404: {"error":"not found"}');
+    final back = ChatMsg.fromJson(error.toJson());
+    expect(back.isError, isTrue);
+    expect(back.text, isNot(contains('404')));
+    expect(back.details, contains('404'));
+
+    expect(friendlyAiError(Exception('Ошибка ИИ 404: not found')),
+        contains('Модель или адрес не найдены'));
+    expect(friendlyAiError(Exception('Ошибка ИИ 401: unauthorized')),
+        contains('API-ключ'));
+    expect(rawError(Exception('Ошибка ИИ 404: not found')), contains('404'));
   });
 }

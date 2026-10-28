@@ -69,6 +69,7 @@ const knownAppActions = <String>{
   'open_background',
   'open_fallbacks',
   'open_review',
+  'open_progress',
   'open_home',
   'write_terminal',
   'solve_task',
@@ -88,12 +89,12 @@ const appActionsPrompt = '''
 Можно несколько вызовов подряд, но не больше трёх за ответ. В обычном тексте не показывай JSON и названия действий. Сначала одной короткой фразой скажи, что делаешь, затем вызов.
 
 Действия и аргументы:
-- open_screen {screen}: home, settings, archive, chats, usage, help, background, fallbacks, review, more, chat, interview, tasks, lesson.
+- open_screen {screen}: home, settings, archive, chats, usage, help, background, fallbacks, review, progress, more, chat, interview, tasks, lesson.
 - open_course {course}: открыть курс по названию или id.
 - open_lesson {course?, task?}: открыть урок; без аргументов — текущую задачу.
 - open_task {task, course?}: открыть конкретную задачу.
-- open_chat {chat?}: открыть беседу по названию/id; без аргумента — текущий чат.
-- new_chat: новый чат с текущей задачей.
+- open_chat {chat?}: открыть беседу по названию/id; без аргумента — общий чат.
+- new_chat: новый чат; в уроке — по текущей задаче, иначе общий.
 - open_interview: собеседование.
 - select_course {course}, select_task {task}, next_task, previous_task.
 - archive_course {course}, unarchive_course {course}, rename_course {course, title}, delete_course {course}.

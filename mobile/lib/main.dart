@@ -1,13 +1,11 @@
 // main.dart — TERMAI mobile (Flutter). Сплэш → плашка ключа → карта курсов.
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:convert';
-
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
-import 'package:timezone/timezone.dart' as tz;
 
 import 'app_actions.dart';
 import 'navigation.dart';
@@ -19,9 +17,9 @@ import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
 import 'ui/lesson.dart';
-import 'ui/mentor_launcher.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
+import 'ui/termai_overlay.dart';
 
 final AppController controller = AppController();
 bool diagAutoLesson = false;
@@ -86,6 +84,10 @@ class TermaiApp extends StatelessWidget {
         theme: buildTheme(),
         navigatorKey: rootNavigatorKey,
         navigatorObservers: [screenObserver],
+        // Свой слой нужен Tooltip-ам панели: builder находится выше
+        // навигатора, а Tooltip ищет Overlay-предка.
+        builder: (context, child) =>
+            TermaiHost(child: child ?? const SizedBox.shrink()),
         home: const BootScreen(),
       ),
     );
@@ -116,7 +118,7 @@ class _BootScreenState extends State<BootScreen>
     await controller.init();
     C.p = presetById(controller.config.theme);
     C.buttonBrightness = controller.config.buttonBrightness.clamp(0.6, 1.4);
-    _scheduleReminder();
+    unawaited(controller.scheduleNotifications());
     // диагностика: авто-открытие урока на слайде терминала
     if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) diagAutoLesson = true;
     await Future.delayed(const Duration(milliseconds: 900));
@@ -164,50 +166,6 @@ class _BootScreenState extends State<BootScreen>
         ),
       ),
     );
-  }
-}
-
-/// _scheduleReminder — ежедневное напоминание в 20:00 (Термай и серия).
-Future<void> _scheduleReminder() async {
-  try {
-    final plugin = FlutterLocalNotificationsPlugin();
-    await plugin.initialize(const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ));
-    final android = plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await android?.requestNotificationsPermission();
-    tzdata.initializeTimeZones();
-    try {
-      tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
-    } catch (_) {
-      tz.setLocalLocation(tz.getLocation('Europe/Moscow'));
-    }
-    final now = tz.TZDateTime.now(tz.local);
-    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, 20);
-    if (when.isBefore(now)) when = when.add(const Duration(days: 1));
-    await plugin.cancel(1);
-    await plugin.zonedSchedule(
-      1,
-      'TERMAI — Термай ждёт',
-      controller.prog.streak > 0
-          ? 'Серия ' +
-              controller.prog.streak.toString() +
-              ' дн. под угрозой — реши задачу дня!'
-          : 'Заходи на задачу дня — начнём серию!',
-      when,
-      const NotificationDetails(
-        android: AndroidNotificationDetails('reminders', 'Напоминания',
-            importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority),
-      ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  } catch (_) {
-    // уведомления не критичны
   }
 }
 
@@ -299,17 +257,7 @@ class _HomeScreenState extends State<HomeScreen> implements PreserveOnTheme {
               bottom: 0,
               child: SafeArea(
                 top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 14, bottom: 8),
-                      child: MentorLauncher(),
-                    ),
-                    const Center(child: GlassDock()),
-                  ],
-                ),
+                child: const Center(child: GlassDock()),
               ),
             ),
           ]),

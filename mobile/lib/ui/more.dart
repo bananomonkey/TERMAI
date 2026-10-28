@@ -84,7 +84,8 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Спроси о задаче, синтаксисе, ошибке',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context).push(pageRoute(const ChatScreen()));
+              Navigator.of(context)
+                  .push(pageRoute(const ChatScreen(scope: ChatScope.general)));
             },
           ),
           const SizedBox(height: 8),

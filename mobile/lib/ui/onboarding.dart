@@ -15,6 +15,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
   final _key = TextEditingController(text: controller.config.apiKey);
+  final _name = TextEditingController(text: controller.config.userName);
   int _idx = 0;
   bool _starting = false;
 
@@ -22,6 +23,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _page.dispose();
     _key.dispose();
+    _name.dispose();
     super.dispose();
   }
 
@@ -29,10 +31,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_starting) return;
     setState(() => _starting = true);
     if (saveKey) controller.config.apiKey = _key.text.trim();
+    controller.config.userName = _name.text.trim();
     controller.config.onboarded = true;
     // даже если запись файла не удалась — пользователь не должен застрять
     try {
       await controller.saveConfig();
+      await controller.scheduleNotifications();
     } catch (_) {}
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
@@ -63,7 +67,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           PageView(
             controller: _page,
             onPageChanged: (i) => setState(() => _idx = i),
-            children: [_intro(), _setup()],
+            children: [_intro(), _nameStep(), _setup()],
           ),
           // Кнопки поверх PageView: раньше «Пропустить» лежала ПОД ним
           // и не получала нажатия.
@@ -92,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _dots() => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (var i = 0; i < 2; i++)
+          for (var i = 0; i < 3; i++)
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -176,13 +180,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Widget _nameStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 52, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          caption('Шаг 2 из 3', color: C.accent),
+          const SizedBox(height: 10),
+          Text('Как тебя зовут?',
+              style: TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w900, color: C.text)),
+          const SizedBox(height: 8),
+          Text(
+            'Термай будет обращаться по имени в чате и напоминаниях. '
+            'Это необязательно — можно пропустить и изменить позже в настройках.',
+            style: TextStyle(fontSize: 14, height: 1.45, color: C.muted),
+          ),
+          const SizedBox(height: 22),
+          TextField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(hintText: 'Например, Влад'),
+            onSubmitted: (_) => _next(),
+          ),
+          const SizedBox(height: 26),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _next,
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
+              child: const Text('Далее'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: _next,
+              child: Text('Пропустить', style: TextStyle(color: C.muted)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(child: _dots()),
+        ],
+      ),
+    );
+  }
+
   Widget _setup() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 52, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          caption('Шаг 2 из 2', color: C.accent),
+          caption('Шаг 3 из 3', color: C.accent),
           const SizedBox(height: 10),
           Text('Подключи ИИ',
               style: TextStyle(

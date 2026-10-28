@@ -13,7 +13,7 @@
 
 ## Android: релиз
 
-Версия задаётся в `mobile/pubspec.yaml` (`version: 1.14.0+26`).
+Версия задаётся в `mobile/pubspec.yaml` (`version: 1.16.0+37`).
 
 1. Секреты GitHub (Settings → Secrets → Actions):
    - `ANDROID_KEYSTORE_BASE64`
@@ -24,8 +24,8 @@
 3. Запушить тег:
 
 ```bash
-git tag v1.14.0
-git push origin v1.14.0
+git tag v1.16.0
+git push origin v1.16.0
 ```
 
 Workflow `Release` соберёт:

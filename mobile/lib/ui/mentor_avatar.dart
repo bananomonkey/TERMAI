@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../theme_refresh.dart';
 import 'theme.dart';
 
 class MentorAvatar extends StatefulWidget {
@@ -62,6 +63,13 @@ class _MentorAvatarState extends State<MentorAvatar> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: themeRevision,
+      builder: (context, _, __) => _buildAvatar(),
+    );
+  }
+
+  Widget _buildAvatar() {
     final size = widget.size;
     return RepaintBoundary(
       child: Semantics(

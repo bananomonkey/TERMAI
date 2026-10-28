@@ -8,7 +8,6 @@ import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
 import 'lesson.dart';
-import 'mentor_launcher.dart';
 import 'review.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -359,17 +358,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
           body: AppBackdrop(
-            child: Stack(children: [
-              const Positioned.fill(child: _TaskGroups()),
-              Positioned(
-                left: 14,
-                bottom: 14,
-                child: SafeArea(
-                  top: false,
-                  child: const MentorLauncher(),
-                ),
-              ),
-            ]),
+            child: const _TaskGroups(),
           ),
         );
       },
@@ -484,12 +473,12 @@ class _TaskRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: cardBox(
+        accent: current ? C.accent.withAlpha(C.isLight ? 90 : 110) : null,
+        duration: const Duration(milliseconds: 240),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: statusGlyph(done, current)),
+            statusGlyph(done, current),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

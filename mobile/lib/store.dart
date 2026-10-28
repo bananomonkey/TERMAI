@@ -10,6 +10,7 @@ import 'ai.dart';
 import 'app_action.dart';
 import 'models.dart';
 import 'navigation.dart';
+import 'notifications.dart';
 import 'sandbox.dart';
 import 'sync_service.dart';
 import 'theme_refresh.dart';
@@ -283,6 +284,100 @@ class AppController extends ChangeNotifier {
           .writeAsString(jsonEncode(config.toJson()));
     }
     notifyListeners();
+  }
+
+  // ---------- профиль и уведомления ----------
+
+  Future<void> setUserName(String value) async {
+    config.userName = value.trim();
+    await saveConfig(autofill: false);
+    if (config.notificationsEnabled && config.aiMotivationEnabled) {
+      unawaited(refreshMotivationNotifications(force: true));
+    }
+  }
+
+  Future<void> setLauncherPosition(double x, double y) async {
+    config.launcherX = x.clamp(0.0, 1.0);
+    config.launcherY = y.clamp(0.0, 1.0);
+    await saveConfig(autofill: false);
+  }
+
+  Future<void> setNotificationsEnabled(bool value) async {
+    config.notificationsEnabled = value;
+    await saveConfig(autofill: false);
+    if (!value) {
+      await notificationService.cancelAll();
+      return;
+    }
+    await notificationService.requestPermission();
+    await scheduleNotifications();
+  }
+
+  Future<void> setDailyReminderEnabled(bool value) async {
+    config.dailyReminderEnabled = value;
+    await saveConfig(autofill: false);
+    await scheduleNotifications();
+  }
+
+  Future<void> setAiMotivationEnabled(bool value) async {
+    config.aiMotivationEnabled = value;
+    await saveConfig(autofill: false);
+    if (!value) {
+      await notificationService.cancelAll();
+      await scheduleNotifications();
+    } else {
+      await refreshMotivationNotifications(force: true);
+    }
+  }
+
+  Future<void> setReminderTime(int hour, int minute) async {
+    config.reminderHour = hour.clamp(0, 23);
+    config.reminderMinute = minute.clamp(0, 59);
+    await saveConfig(autofill: false);
+    await scheduleNotifications();
+  }
+
+  /// scheduleNotifications — пересобрать локальное расписание.
+  Future<void> scheduleNotifications() async {
+    if (!config.onboarded) return;
+    await notificationService.apply(
+      config,
+      userName: userNameOrFriend,
+      streak: prog.streak,
+    );
+    if (config.notificationsEnabled && config.aiMotivationEnabled) {
+      unawaited(refreshMotivationNotifications());
+    }
+  }
+
+  /// refreshMotivationNotifications — заранее подготовить уникальные
+  /// сообщения. При ошибке остаётся старый кэш/готовые фразы.
+  Future<void> refreshMotivationNotifications({bool force = false}) async {
+    if (!config.notificationsEnabled || !config.aiMotivationEnabled) return;
+    if (ai == null || !ai!.ready) return;
+    final generated = DateTime.tryParse(config.motivationGeneratedAt);
+    final fresh = generated != null &&
+        DateTime.now().difference(generated).inDays < 7 &&
+        config.motivationQueue.isNotEmpty;
+    if (!force && fresh) return;
+    try {
+      final messages = await ai!.motivationalNotifications(
+        userName: userNameOrFriend,
+        appContext: appContextForAI,
+        count: 3,
+      );
+      if (messages.isEmpty) return;
+      config.motivationQueue = messages;
+      config.motivationGeneratedAt = DateTime.now().toIso8601String();
+      await saveConfig(autofill: false);
+      await notificationService.apply(
+        config,
+        userName: userNameOrFriend,
+        streak: prog.streak,
+      );
+    } catch (_) {
+      // без сети/ключа остаются готовые фразы ежедневного напоминания
+    }
   }
 
   // ---------- фоновое фото ----------
@@ -847,6 +942,12 @@ extension AppCourses on AppController {
 
   // ---------- ментор ----------
 
+  /// userNameOrFriend — имя для ИИ и уведомлений.
+  String get userNameOrFriend {
+    final n = config.userName.trim();
+    return n.isEmpty ? 'Друг' : n;
+  }
+
   /// appContextForAI — компактная карта приложения для решений Термая.
   String get appContextForAI {
     final visible = courses.take(14).map((c) => c.title).join('; ');
@@ -867,12 +968,17 @@ extension AppCourses on AppController {
       'BackgroundSettingsScreen' => 'фон',
       'AiFallbacksScreen' => 'резервные модели',
       'ReviewScreen' => 'повторение',
+      'ProgressMapScreen' => 'карта прогресса',
       _ => screen,
     };
     final chat = activeChat;
     final isInterview = chat?.taskId == '__interview__';
-    return 'Экран: $screenLabel. '
-        'Чат: ${chat?.title ?? '—'}${isInterview ? ' (собеседование)' : ''}. '
+    final chatLabel = chat == null
+        ? '—'
+        : (chat.isGeneral ? 'общий чат' : chat.title);
+    return 'Имя пользователя: ${userNameOrFriend}. '
+        'Экран: $screenLabel. '
+        'Чат: $chatLabel${isInterview ? ' (собеседование)' : ''}. '
         'Тема: ${C.p.title}. '
         'Курсы: ${visible.isEmpty ? '—' : visible}. '
         'Архив: ${archived.isEmpty ? '—' : archived}. '
@@ -885,14 +991,15 @@ extension AppCourses on AppController {
 
   Future<String> sendChat(String question) async {
     if (mentorBusy) return '';
-    if (courses.isEmpty) {
+    final chat = activeChat ?? ensureGeneralChat();
+    final general = chat.isGeneral;
+    if (!general && courses.isEmpty) {
       chatMsgs = [
         ChatMsg('system', 'Нет доступных курсов — верни курс из архива.'),
       ];
       notifyListeners();
       return '';
     }
-    final chat = this.activeChat ?? this.createChatForCurrentTask();
     final echo = question.trim().isEmpty ? '(вложение)' : question;
     chat.messages.add(ChatMsg('user', echo));
     chatMsgs = chat.messages;
@@ -913,10 +1020,17 @@ extension AppCourses on AppController {
               lastSolvedHist +
               '\n'
           : '';
-      final answer = await ai!.mentor(cur, currentTask, state, _lastHist(8),
-          this.chatLogForAI, solvedCtx + question,
-          interview: chat.taskId == '__interview__',
-          appContext: appContextForAI);
+      final answer = general
+          ? await ai!.generalMentor(
+              solvedCtx + question,
+              chatLog: this.chatLogForAI,
+              appContext: appContextForAI,
+              userName: userNameOrFriend,
+            )
+          : await ai!.mentor(cur, currentTask, state, _lastHist(8),
+              this.chatLogForAI, solvedCtx + question,
+              interview: chat.taskId == '__interview__',
+              appContext: appContextForAI);
       if (lastSolvedTitle.isNotEmpty) {
         lastSolvedTitle = '';
         lastSolvedHist = '';
@@ -937,7 +1051,7 @@ extension AppCourses on AppController {
       // проверка задачи и терминал внутри проверяют флаг busy.
       await _executeAppActions(parsed.actions);
     } catch (e) {
-      this.addChatMessage('system', 'Наставник недоступен: ${_errMsg(e)}');
+      addChatError('Наставник недоступен', e);
       mentorBusy = false;
       notifyListeners();
     }
@@ -959,7 +1073,7 @@ extension AppCourses on AppController {
         err = _errMsg(e);
       }
       if (err.isNotEmpty) {
-        addChatMessage('system', 'Не удалось выполнить ${action.name}: $err');
+        addChatError('Не удалось выполнить ${action.name}', err);
       }
     }
   }
@@ -986,7 +1100,7 @@ extension AppCourses on AppController {
         await saveProgress();
       }
     } catch (e) {
-      addChatMessage('system', 'Не удалось получить решение: ${_errMsg(e)}');
+      addChatError('Не удалось получить решение', e);
     }
     solutionLoad = false;
     notifyListeners();
@@ -1351,18 +1465,35 @@ extension AppMentorChats on AppController {
   MentorChat? get activeChat => chatById(prog.activeChatId);
 
   List<MentorChat> chatsForTask(String courseId, String taskId) {
+    if (courseId.isEmpty || taskId.isEmpty) return const [];
     final out = prog.mentorChats
-        .where((c) => c.courseId == courseId && c.taskId == taskId)
+        .where((c) =>
+            !c.isGeneral && c.courseId == courseId && c.taskId == taskId)
         .toList();
     out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return out;
   }
 
+  List<MentorChat> get generalChats {
+    final out = prog.mentorChats.where((c) => c.isGeneral).toList();
+    out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return out;
+  }
+
+  MentorChat? get latestGeneralChat =>
+      generalChats.isEmpty ? null : generalChats.first;
+
   /// bindChatForCurrentTask — выбирает последний чат текущей задачи.
   /// create=false: новый чат не создаётся, активный просто очищается.
   void bindChatForCurrentTask({bool create = false, bool notify = false}) {
-    final taskId = currentTask?.id ?? '';
-    final found = chatsForTask(cur.id, taskId);
+    final task = currentTask;
+    if (task == null) {
+      prog.activeChatId = '';
+      chatMsgs = [];
+      if (notify) notifyListeners();
+      return;
+    }
+    final found = chatsForTask(cur.id, task.id);
     if (found.isNotEmpty) {
       _activateChat(found.first, save: false, notify: notify);
     } else if (create) {
@@ -1375,27 +1506,61 @@ extension AppMentorChats on AppController {
   }
 
   /// ensureChatForCurrentTask — открыть существующий чат задачи или создать новый.
+  /// Без активной задачи общий чат не подмешивается: это разные контексты.
   MentorChat ensureChatForCurrentTask() {
     interviewMode = false;
-    if (courses.isEmpty) {
-      return activeChat ?? createChatForCurrentTask();
+    if (currentTask == null || courses.isEmpty) {
+      return ensureGeneralChat();
     }
-    bindChatForCurrentTask();
+    bindChatForCurrentTask(notify: true);
     return activeChat ?? createChatForCurrentTask();
   }
 
+  /// ensureGeneralChat — открыть последний общий чат или создать его.
+  MentorChat ensureGeneralChat() {
+    interviewMode = false;
+    final existing = latestGeneralChat;
+    if (existing != null) {
+      _activateChat(existing, save: false, notify: true);
+      return existing;
+    }
+    return createGeneralChat();
+  }
+
+  /// createGeneralChat — отдельный чат Термая, не привязанный к курсу/задаче.
+  MentorChat createGeneralChat({String? title}) {
+    interviewMode = false;
+    final now = DateTime.now().toIso8601String();
+    final c = MentorChat(
+      id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
+      courseId: '',
+      taskId: '',
+      taskTitle: '',
+      title: (title ?? '').trim().isEmpty ? 'Термай' : title!.trim(),
+      createdAt: now,
+      updatedAt: now,
+    );
+    prog.mentorChats.add(c);
+    _activateChat(c, save: true);
+    return c;
+  }
+
+  /// createChatForCurrentTask — явный чат задачи. Если задачи нет,
+  /// создаётся общий чат: «новый чат» не должен приписывать к задаче.
   MentorChat createChatForCurrentTask({String? title}) {
+    interviewMode = false;
     final now = DateTime.now().toIso8601String();
     final task = currentTask;
+    if (task == null || courses.isEmpty) {
+      return createGeneralChat(title: title);
+    }
     final t = (title ?? '').trim();
     final c = MentorChat(
       id: 'chat-${DateTime.now().microsecondsSinceEpoch}',
-      courseId: courses.isEmpty ? '' : cur.id,
-      taskId: task?.id ?? '',
-      taskTitle: task?.title ?? '',
-      title: t.isNotEmpty
-          ? t
-          : ((task?.title ?? '').isNotEmpty ? task!.title : 'Новый чат'),
+      courseId: cur.id,
+      taskId: task.id,
+      taskTitle: task.title,
+      title: t.isNotEmpty ? t : task.title,
       createdAt: now,
       updatedAt: now,
     );
@@ -1431,19 +1596,20 @@ extension AppMentorChats on AppController {
       interviewMode = true;
     } else {
       interviewMode = false;
-      final ci = courses.indexWhere((x) => x.id == c.courseId);
-      if (ci >= 0) {
-        if (ci != courseIdx) {
-          courseIdx = ci;
-          prog.lastCourse = cur.id;
-        }
-        final ti = cur.tasks.indexWhere((t) => t.id == c.taskId);
-        if (ti >= 0) {
-          viewIdx = ti;
-          ensureStateForTask(cur.tasks[ti]);
+      if (!c.isGeneral) {
+        final ci = courses.indexWhere((x) => x.id == c.courseId);
+        if (ci >= 0) {
+          if (ci != courseIdx) {
+            courseIdx = ci;
+            prog.lastCourse = cur.id;
+          }
+          final ti = cur.tasks.indexWhere((t) => t.id == c.taskId);
+          if (ti >= 0) {
+            viewIdx = ti;
+            ensureStateForTask(cur.tasks[ti]);
+          }
         }
       }
-      interviewMode = false;
     }
     _activateChat(c);
     saveProgress();
@@ -1466,11 +1632,14 @@ extension AppMentorChats on AppController {
   }
 
   void deleteChat(String id) {
+    final deleted = chatById(id);
     prog.mentorChats.removeWhere((c) => c.id == id);
     if (prog.activeChatId == id) {
       prog.activeChatId = '';
       chatMsgs = [];
-      final left = chatsForTask(cur.id, currentTask?.id ?? '');
+      final left = deleted != null && deleted.isGeneral
+          ? generalChats
+          : chatsForTask(cur.id, currentTask?.id ?? '');
       if (left.isNotEmpty) {
         prog.activeChatId = left.first.id;
         chatMsgs = left.first.messages;
@@ -1480,10 +1649,22 @@ extension AppMentorChats on AppController {
     notifyListeners();
   }
 
-  /// addChatMessage — добавить сообщение в активную беседу (создав её при необходимости).
+  /// addChatMessage — добавить сообщение в активную беседу.
   void addChatMessage(String role, String text) {
-    final c = activeChat ?? createChatForCurrentTask();
-    c.messages.add(ChatMsg(role, text));
+    final c = activeChat ?? ensureGeneralChat();
+    _appendChat(c, ChatMsg(role, text));
+  }
+
+  /// addChatError — человеческая ошибка без сырого лога в чате.
+  void addChatError(String prefix, Object error) {
+    final c = activeChat ?? ensureGeneralChat();
+    final friendly = friendlyAiError(error);
+    final text = prefix.trim().isEmpty ? friendly : '$prefix. $friendly';
+    _appendChat(c, ChatMsg('error', text, details: rawError(error)));
+  }
+
+  void _appendChat(MentorChat c, ChatMsg message) {
+    c.messages.add(message);
     chatMsgs = c.messages;
     c.updatedAt = DateTime.now().toIso8601String();
     saveProgress();
@@ -1495,7 +1676,7 @@ extension AppMentorChats on AppController {
     final msgs = activeChat?.messages ?? chatMsgs;
     final tail = msgs.length <= 8 ? msgs : msgs.sublist(msgs.length - 8);
     return tail
-        .where((m) => m.role != 'system')
+        .where((m) => m.role != 'system' && m.role != 'error')
         .map((m) => (m.role == 'user' ? 'Студент: ' : 'Наставник: ') + m.text)
         .toList();
   }

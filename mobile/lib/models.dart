@@ -281,17 +281,35 @@ class HistEntry {
 // ---------- чат с ментором ----------
 
 class ChatMsg {
-  final String role; // user | mentor | system
+  final String role; // user | mentor | system | error
   final String text;
-  ChatMsg(this.role, this.text);
 
-  Map<String, dynamic> toJson() => {'role': role, 'text': text};
-  factory ChatMsg.fromJson(Map<String, dynamic> j) =>
-      ChatMsg(j['role'] as String? ?? 'mentor', j['text'] as String? ?? '');
+  /// Технические детали ошибки. В чате не показываются — только в буфере
+  /// обмена по кнопке «Скопировать».
+  final String details;
+
+  ChatMsg(this.role, this.text, {this.details = ''});
+
+  bool get isError => role == 'error';
+
+  Map<String, dynamic> toJson() => {
+        'role': role,
+        'text': text,
+        if (details.isNotEmpty) 'details': details,
+      };
+  factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
+        j['role'] as String? ?? 'mentor',
+        j['text'] as String? ?? '',
+        details: j['details'] as String? ?? '',
+      );
 }
 
-/// MentorChat — отдельная беседа с ментором, привязанная к задаче.
+/// ChatScope — к чему привязана беседа.
+enum ChatScope { general, task, interview }
+
+/// MentorChat — отдельная беседа с ментором.
 /// taskId == '__interview__' — беседа в режиме собеседования.
+/// Пустые courseId и taskId — общий чат Термая.
 class MentorChat {
   String id, courseId, taskId, taskTitle, title, createdAt, updatedAt;
   List<ChatMsg> messages;
@@ -306,6 +324,8 @@ class MentorChat {
     required this.updatedAt,
     List<ChatMsg>? messages,
   }) : messages = messages ?? [];
+
+  bool get isGeneral => courseId.isEmpty && taskId.isEmpty;
 
   factory MentorChat.fromJson(Map<String, dynamic> j) => MentorChat(
         id: j['id'] as String? ?? '',
@@ -394,6 +414,25 @@ class Config {
   bool ambient;
   bool onboarded;
 
+  /// Как обращаться к пользователю. Пусто — «Друг».
+  String userName;
+
+  /// Уведомления: общий выключатель, ежедневное напоминание и мотивация.
+  bool notificationsEnabled;
+  bool dailyReminderEnabled;
+  int reminderHour;
+  int reminderMinute;
+  bool aiMotivationEnabled;
+
+  /// Кэш сгенерированных мотивационных сообщений и дата генерации.
+  List<String> motivationQueue;
+  String motivationGeneratedAt;
+
+  /// Позиция плавающей панели Термая: 0..1 от свободной области экрана.
+  /// -1 — позиция по умолчанию (слева внизу).
+  double launcherX;
+  double launcherY;
+
   /// true — тему ещё не выбирали вручную; такую тему можно безопасно
   /// вернуть на «какао» при обновлении.
   bool themeAuto;
@@ -421,13 +460,24 @@ class Config {
     this.theme = 'dark',
     this.ambient = true,
     this.onboarded = false,
+    this.userName = '',
+    this.notificationsEnabled = true,
+    this.dailyReminderEnabled = true,
+    this.reminderHour = 12,
+    this.reminderMinute = 0,
+    this.aiMotivationEnabled = true,
+    List<String>? motivationQueue,
+    this.motivationGeneratedAt = '',
+    this.launcherX = -1,
+    this.launcherY = -1,
     this.themeAuto = true,
     List<AiEndpoint>? fallbacks,
     this.bgPhoto = '',
     this.bgBlur = 24,
     this.bgDim = 0.55,
     this.buttonBrightness = 1.0,
-  }) : fallbacks = fallbacks ?? [];
+  }) : motivationQueue = motivationQueue ?? [],
+       fallbacks = fallbacks ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -437,6 +487,22 @@ class Config {
         theme: j['theme'] as String? ?? 'dark',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
+        userName: j['user_name'] as String? ?? '',
+        notificationsEnabled: j['notifications_enabled'] as bool? ?? true,
+        dailyReminderEnabled: j['daily_reminder_enabled'] as bool? ?? true,
+        reminderHour: ((j['reminder_hour'] as num?)?.toInt() ?? 12)
+            .clamp(0, 23)
+            .toInt(),
+        reminderMinute: ((j['reminder_minute'] as num?)?.toInt() ?? 0)
+            .clamp(0, 59)
+            .toInt(),
+        aiMotivationEnabled: j['ai_motivation_enabled'] as bool? ?? true,
+        motivationQueue:
+            (j['motivation_queue'] as List?)?.cast<String>() ?? [],
+        motivationGeneratedAt:
+            j['motivation_generated_at'] as String? ?? '',
+        launcherX: (j['launcher_x'] as num?)?.toDouble() ?? -1,
+        launcherY: (j['launcher_y'] as num?)?.toDouble() ?? -1,
         themeAuto: j['theme_auto'] as bool? ?? true,
         fallbacks: ((j['fallbacks'] as List?) ?? [])
             .map((e) => AiEndpoint.fromJson(e as Map<String, dynamic>))
@@ -457,6 +523,16 @@ class Config {
         'theme': theme,
         'ambient': ambient,
         'onboarded': onboarded,
+        'user_name': userName,
+        'notifications_enabled': notificationsEnabled,
+        'daily_reminder_enabled': dailyReminderEnabled,
+        'reminder_hour': reminderHour,
+        'reminder_minute': reminderMinute,
+        'ai_motivation_enabled': aiMotivationEnabled,
+        'motivation_queue': motivationQueue,
+        'motivation_generated_at': motivationGeneratedAt,
+        'launcher_x': launcherX,
+        'launcher_y': launcherY,
         'theme_auto': themeAuto,
         'fallbacks': fallbacks.map((e) => e.toJson()).toList(),
         'bg_photo': bgPhoto,

@@ -51,6 +51,45 @@ String formatHist(List<HistEntry> hist, int maxOut) {
   return b.toString();
 }
 
+/// rawError — техническая ошибка для буфера обмена, без префикса Exception.
+String rawError(Object e) {
+  var s = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+  return s.trim();
+}
+
+/// friendlyAiError — короткое объяснение вместо сырого лога в чате.
+String friendlyAiError(Object e) {
+  final raw = rawError(e);
+  final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
+  switch (status) {
+    case '401':
+    case '403':
+      return 'Неверный API-ключ или нет доступа к модели.';
+    case '404':
+      return 'Модель или адрес не найдены. Проверь модель и Base URL в настройках.';
+    case '408':
+    case '504':
+      return 'Провайдер не ответил вовремя. Попробуй ещё раз.';
+    case '429':
+      return 'Слишком много запросов. Подожди немного и повтори.';
+    case '500':
+    case '502':
+    case '503':
+      return 'Провайдер временно недоступен. Попробуй ещё раз позже.';
+  }
+  if (raw.toLowerCase().contains('timeout') ||
+      raw.toLowerCase().contains('timed out')) {
+    return 'Превышено время ожидания ответа. Попробуй ещё раз.';
+  }
+  if (raw.toLowerCase().contains('все модели недоступны')) {
+    return 'Все подключения к ИИ недоступны. Проверь ключ и сеть.';
+  }
+  if (raw.toLowerCase().contains('нет настроенных')) {
+    return 'ИИ не настроен. Добавь API-ключ в настройках.';
+  }
+  return 'Не удалось получить ответ. Попробуй ещё раз.';
+}
+
 class AIClient {
   /// endpoints — основное подключение + резервные, по порядку перебора.
   final List<AiEndpoint> _endpoints;
@@ -258,6 +297,7 @@ class AIClient {
   static const _sysMentorTerminal =
       'Тебя зовут Термай. Ты — ИИ-наставник в тренажёре по терминалу и инфраструктуре (Docker/Linux/Git и смежное). Стиль: тепло, по-человечески, кратко.\n'
       '- Отвечай по-русски, обычно до 120 слов. Без эмодзи.\n'
+      '- Если в состоянии приложения указано имя пользователя — обращайся по имени.\n'
       '- Видишь задачу, состояние песочницы и историю команд студента — отвечай в этом контексте.\n'
       '- Сначала подтолкни к решению: идея, наводящий вопрос. Полное решение — только по прямой просьбе («дай решение»). Просто «покажи решение» — тоже просьба показать решение.\n'
       '- Используй markdown умеренно: **жирный**, `код`, списки.\n'
@@ -266,6 +306,7 @@ class AIClient {
   static const _sysMentorTheory =
       'Тебя зовут Термай. Ты — ИИ-наставник в учебном тренажёре по разным навыкам: языки, школьные и вузовские предметы, профессии, soft skills.\n'
       '- Отвечай по-русски, обычно до 120 слов, тепло и по делу. Без эмодзи.\n'
+      '- Если в состоянии приложения указано имя пользователя — обращайся по имени.\n'
       '- Опирайся на материал курса и текущую задачу. Приводи примеры, аналогии и маленькие упражнения.\n'
       '- Сначала подтолкни к ответу: идея, наводящий вопрос. Готовый ответ — только по прямой просьбе.\n'
       '- Не говори про терминал, команды и песочницу, если студент сам не спросил.\n'
@@ -273,6 +314,7 @@ class AIClient {
 
   static const _sysInterviewer =
       'Тебя зовут Термай. Ты — интервьюер по материалу курса и смежным темам. Неважно, какой это навык: язык, профессия или технология.\n'
+      '- Если в состоянии приложения указано имя пользователя — обращайся по имени.\n'
       '- По одному вопросу за раз; после ответа студента — коротко оцени его и задай следующий, чуть сложнее.\n'
       '- В конце (после 6–8 вопросов) дай разбор: что отвечено хорошо, что подтянуть, и вердикт.\n'
       '- Отвечай по-русски, кратко, без markdown-заголовков.';
@@ -292,6 +334,57 @@ class AIClient {
     b.write('\nВопрос студента: $question');
     final base = interview ? _sysInterviewer : (c.isTheory ? _sysMentorTheory : _sysMentorTerminal);
     return chatText(allowActions ? base + appActionsPrompt : base, b.toString(), 0.7);
+  }
+
+  static const _sysMentorGeneral =
+      'Тебя зовут Термай. Ты — общий ИИ-наставник приложения TERMAI, не привязанный к конкретному курсу или задаче. '
+      'Помогаешь учиться, разбираться в темах, составлять планы и отвечать на вопросы. '
+      'Стиль: тепло, по-человечески, кратко, по-русски, обычно до 120 слов. Без эмодзи. '
+      'Если в контексте есть имя пользователя — обращайся по имени. '
+      'Не выдумывай факты и не давай опасных инструкций. '
+      'Используй markdown умеренно.';
+
+  /// generalMentor — ответ в общем чате без привязки к задаче.
+  Future<String> generalMentor(
+    String question, {
+    List<String> chatLog = const [],
+    String appContext = '',
+    String userName = '',
+  }) {
+    final b = StringBuffer();
+    if (userName.trim().isNotEmpty) b.writeln('Имя пользователя: $userName');
+    if (appContext.isNotEmpty) {
+      b.writeln('Состояние приложения (для выбора действий):\n$appContext');
+    }
+    if (chatLog.isNotEmpty) {
+      b.writeln('Недавний диалог:\n${chatLog.join('\n')}');
+    }
+    b.writeln('Вопрос студента: $question');
+    return chatText(_sysMentorGeneral + appActionsPrompt, b.toString(), 0.7);
+  }
+
+  /// motivationalNotifications — короткие уникальные сообщения для push.
+  Future<List<String>> motivationalNotifications({
+    required String userName,
+    required String appContext,
+    int count = 3,
+  }) async {
+    const sys = 'Ты — Термай, ИИ-наставник TERMAI. '
+        'Составь короткие мотивационные push-уведомления на русском. '
+        'Правила: 1-2 предложения, без эмодзи, без давления и чувства вины, '
+        'без обещаний и выдуманных фактов. Обращайся по имени, если оно есть. '
+        'Учитывай прогресс, серию и текущую задачу. '
+        'Верни только JSON: {"messages":["...","..."]}.';
+    final user = 'Имя: $userName\n'
+        'Данные пользователя: $appContext\n'
+        'Сгенерируй ровно $count разных сообщений.';
+    final j = await chatJSON(sys, user, 0.85);
+    final list = (j['messages'] as List?) ?? const [];
+    return list
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .take(count)
+        .toList();
   }
 
   // ---------- роль 4: генератор задач ----------

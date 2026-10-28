@@ -509,8 +509,10 @@ class _TaskSlide extends StatelessWidget {
                 final q = controller.cur.isTheory
                     ? 'Объясни тему «${t.title}»: главную идею, примеры и на что обратить внимание. Не давай сразу готовый ответ — сначала подсказку.'
                     : 'Объясни задачу «${t.title}»: что требуется, на что обратить внимание и в каком порядке действовать. Не давай сразу готовых команд — сначала идея.';
-                Navigator.of(context)
-                    .push(pageRoute(ChatScreen(autoQuestion: q)));
+                Navigator.of(context).push(pageRoute(ChatScreen(
+                  scope: ChatScope.task,
+                  autoQuestion: q,
+                )));
               },
               icon: Icon(Icons.emoji_objects_outlined, color: C.accent),
               label:
@@ -753,8 +755,8 @@ class _TermSlideState extends State<_TermSlide> {
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Чат с ментором',
-                    onPressed: () => Navigator.of(context)
-                        .push(pageRoute(const ChatScreen())),
+                    onPressed: () => Navigator.of(context).push(pageRoute(
+                        const ChatScreen(scope: ChatScope.task))),
                     icon: Icon(Icons.chat_bubble_outline,
                         size: 17, color: C.secondary),
                   ),
@@ -837,8 +839,8 @@ class _TermSlideState extends State<_TermSlide> {
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).push(pageRoute(const ChatScreen())),
+                onPressed: () => Navigator.of(context).push(
+                    pageRoute(const ChatScreen(scope: ChatScope.task))),
                 icon: Icon(Icons.chat_bubble_outline,
                     size: 17, color: C.secondary),
                 label: Text('Ментор',

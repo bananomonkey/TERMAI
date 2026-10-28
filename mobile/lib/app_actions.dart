@@ -16,6 +16,7 @@ import 'ui/help.dart';
 import 'ui/home.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';
+import 'ui/progress_map.dart';
 import 'ui/review.dart';
 import 'ui/settings_screen.dart';
 import 'ui/theme.dart';
@@ -126,6 +127,8 @@ class AppActions {
         return _run('open_screen', {'screen': 'fallbacks'});
       case 'open_review':
         return _run('open_screen', {'screen': 'review'});
+      case 'open_progress':
+        return _run('open_screen', {'screen': 'progress'});
       case 'open_home':
         return _run('open_screen', {'screen': 'home'});
       case 'write_terminal':
@@ -163,10 +166,24 @@ class AppActions {
           c.createInterviewChat(force: true);
           return '';
         }
-        c.createChatForCurrentTask();
+        final active = c.activeChat;
+        final taskContext = ScreenObserver.current == 'LessonScreen' ||
+            (ScreenObserver.current == 'ChatScreen' &&
+                active != null &&
+                !active.isGeneral);
+        if (taskContext) {
+          c.createChatForCurrentTask();
+        } else {
+          c.createGeneralChat();
+        }
         if (ScreenObserver.current != 'ChatScreen') {
           await _openNamed(
-              'ChatScreen', () => const ChatScreen(resume: true));
+            'ChatScreen',
+            () => ChatScreen(
+              scope: taskContext ? ChatScope.task : ChatScope.general,
+              resume: true,
+            ),
+          );
         }
         return '';
       case 'open_interview':
@@ -266,6 +283,9 @@ class AppActions {
       'фон': 'background',
       'резервные модели': 'fallbacks',
       'повторение': 'review',
+      'карта': 'progress',
+      'карта прогресса': 'progress',
+      'маршрут': 'progress',
       'ещё': 'more',
       'еще': 'more',
       'чат': 'chat',
@@ -305,14 +325,20 @@ class AppActions {
       case 'review':
         await _openNamed('ReviewScreen', () => const ReviewScreen());
         return '';
+      case 'progress':
+        await _openNamed('ProgressMapScreen', () => const ProgressMapScreen());
+        return '';
       case 'more':
         final ctx = _ctx;
         if (ctx == null) return 'меню недоступно';
         showMoreSheet(ctx);
         return '';
       case 'chat':
-        c.ensureChatForCurrentTask();
-        await _openNamed('ChatScreen', () => const ChatScreen(resume: true));
+        c.ensureGeneralChat();
+        await _openNamed(
+          'ChatScreen',
+          () => const ChatScreen(scope: ChatScope.general, resume: true),
+        );
         return '';
       case 'interview':
         return _openInterview();
@@ -417,8 +443,11 @@ class AppActions {
     }
     if (found == null) {
       if (q.isNotEmpty) return 'чат не найден';
-      c.ensureChatForCurrentTask();
-      await _openNamed('ChatScreen', () => const ChatScreen(resume: true));
+      c.ensureGeneralChat();
+      await _openNamed(
+        'ChatScreen',
+        () => const ChatScreen(scope: ChatScope.general, resume: true),
+      );
       return '';
     }
     if (found.taskId == '__interview__') {
@@ -427,11 +456,18 @@ class AppActions {
       await _openNamed('InterviewScreen',
           () => const ChatScreen(interview: true, resume: true));
     } else {
-      if (!c.courses.any((x) => x.id == found!.courseId)) {
+      if (!found.isGeneral &&
+          !c.courses.any((x) => x.id == found!.courseId)) {
         return 'курс этого чата в архиве — сначала верни его';
       }
       c.openChat(found.id);
-      await _openNamed('ChatScreen', () => const ChatScreen(resume: true));
+      await _openNamed(
+        'ChatScreen',
+        () => ChatScreen(
+          scope: found!.isGeneral ? ChatScope.general : ChatScope.task,
+          resume: true,
+        ),
+      );
     }
     return '';
   }

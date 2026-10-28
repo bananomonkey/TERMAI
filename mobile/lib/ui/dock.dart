@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'archive.dart';
-import 'chats.dart';
+import 'progress_map.dart';
 import 'theme.dart';
 import 'usage_screen.dart';
 import 'widgets.dart';
@@ -26,10 +26,10 @@ class GlassDock extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _DockButton(
-              icon: Icons.forum_outlined,
-              tooltip: 'Чат с Термаем',
-              onTap: () =>
-                  Navigator.of(context).push(pageRoute(const ChatsScreen())),
+              icon: Icons.route_outlined,
+              tooltip: 'Карта прогресса',
+              onTap: () => Navigator.of(context)
+                  .push(pageRoute(const ProgressMapScreen())),
             ),
             const SizedBox(width: 6),
             _DockButton(

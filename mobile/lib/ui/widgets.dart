@@ -52,8 +52,11 @@ Widget chevron({double size = 26, Color? color}) => Icon(
 Widget cardBox(
     {required Widget child,
     Color? accent,
-    EdgeInsets padding = const EdgeInsets.all(14)}) {
-  return Container(
+    EdgeInsets padding = const EdgeInsets.all(14),
+    Duration duration = Duration.zero}) {
+  return AnimatedContainer(
+    duration: duration,
+    curve: Curves.easeOutCubic,
     decoration: BoxDecoration(
       color: C.card,
       borderRadius: BorderRadius.circular(16),
@@ -76,15 +79,45 @@ extension TextColorX on Text {
   }
 }
 
-/// statusGlyph — ✓ / ▶ / ○ для статуса задачи (монохромные иконки,
-/// как и остальные символы интерфейса).
-Widget statusGlyph(bool done, bool current, {double size = 15}) {
-  final (icon, color) = done
-      ? (Icons.check_circle_outline, C.good)
+/// statusGlyph — аккуратный круглый статус задачи:
+/// ✓ выполнено, ▶ текущая, ○ впереди. Фиксированный размер не даёт
+/// иконке «плавать» относительно заголовка.
+Widget statusGlyph(bool done, bool current, {double size = 24}) {
+  final color = done
+      ? C.good
       : current
-          ? (Icons.play_circle_outline, C.accent)
-          : (Icons.radio_button_unchecked, C.muted);
-  return Icon(icon, size: size + 2, color: color);
+          ? C.accent
+          : C.muted;
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: color.withAlpha(done || current ? 34 : 12),
+      border: Border.all(
+        color: color.withAlpha(done || current ? 150 : 80),
+        width: 1.2,
+      ),
+      boxShadow: current
+          ? [
+              BoxShadow(
+                color: color.withAlpha(45),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ]
+          : null,
+    ),
+    child: Icon(
+      done
+          ? Icons.check_rounded
+          : current
+              ? Icons.play_arrow_rounded
+              : Icons.circle_outlined,
+      size: size * 0.62,
+      color: color,
+    ),
+  );
 }
 
 /// dots — полоска сложности ●●●○○.
@@ -100,8 +133,8 @@ Widget difficultyDots(int d, {Color? color}) {
 PageRouteBuilder<T> pageRoute<T>(Widget page, {String? name}) {
   return PageRouteBuilder<T>(
     settings: RouteSettings(name: name ?? page.runtimeType.toString()),
-    transitionDuration: const Duration(milliseconds: 260),
-    reverseTransitionDuration: const Duration(milliseconds: 200),
+    transitionDuration: const Duration(milliseconds: 280),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
     // Обёртка перекрашивает страницу при смене темы, не сбрасывая стек
     // навигации. Ключ меняется только вместе с палитрой.
     pageBuilder: (_, __, ___) => ValueListenableBuilder<int>(
@@ -115,7 +148,7 @@ PageRouteBuilder<T> pageRoute<T>(Widget page, {String? name}) {
       ),
     ),
     transitionsBuilder: (_, anim, __, child) {
-      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutQuint);
       return FadeTransition(
         opacity: curved,
         child: SlideTransition(

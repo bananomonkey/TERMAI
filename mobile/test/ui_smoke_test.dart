@@ -10,6 +10,7 @@ import 'package:termai/ui/home.dart';
 import 'package:termai/ui/lesson.dart';
 import 'package:termai/ui/mentor_launcher.dart';
 import 'package:termai/ui/onboarding.dart';
+import 'package:termai/ui/progress_map.dart';
 import 'package:termai/ui/settings_screen.dart';
 import 'package:termai/ui/theme.dart';
 
@@ -157,6 +158,30 @@ void main() {
     expect(find.text('Пропустить'), findsNothing);
     expect(find.text('Linux'), findsOneWidget);
     expect(controller.config.onboarded, isTrue);
+  });
+
+  testWidgets('progress map shows the route and stats', (tester) async {
+    controller.config = Config()..onboarded = true;
+    controller.courses = [
+      Course(id: 'linux', title: 'Linux', tasks: [
+        Task(id: 't1', title: 'Первая команда', goal: 'ls'),
+        Task(id: 't2', title: 'Вторая команда', goal: 'pwd'),
+      ]),
+    ];
+    controller.courseIdx = 0;
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const ProgressMapScreen(),
+    ));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Карта прогресса'), findsOneWidget);
+    expect(find.text('МАРШРУТ'), findsOneWidget);
+    expect(find.text('Первая команда'), findsOneWidget);
+    expect(find.text('Вторая команда'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('lesson switches slides without errors', (tester) async {

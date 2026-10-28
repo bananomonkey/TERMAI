@@ -64,14 +64,18 @@ class ChatsScreen extends StatelessWidget {
     Navigator.of(context).push(pageRoute(
       interview
           ? const ChatScreen(interview: true, resume: true)
-          : const ChatScreen(resume: true),
+          : ChatScreen(
+              scope: c.isGeneral ? ChatScope.general : ChatScope.task,
+              resume: true,
+            ),
       name: interview ? 'InterviewScreen' : 'ChatScreen',
     ));
   }
 
   void _new(BuildContext context) {
-    controller.ensureChatForCurrentTask();
-    Navigator.of(context).push(pageRoute(const ChatScreen()));
+    controller.createGeneralChat();
+    Navigator.of(context)
+        .push(pageRoute(const ChatScreen(scope: ChatScope.general)));
   }
 
   @override
@@ -189,6 +193,8 @@ class ChatsScreen extends StatelessWidget {
     final parts = <String>[];
     if (c.taskId == '__interview__') {
       parts.add('Собеседование');
+    } else if (c.isGeneral) {
+      parts.add('Общий чат');
     } else {
       final course = _courseName(c.courseId);
       if (course.isNotEmpty) parts.add(course);
