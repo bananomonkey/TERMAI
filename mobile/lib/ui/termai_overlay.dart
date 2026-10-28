@@ -168,7 +168,7 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
         );
       } else {
         // По умолчанию — слева внизу, над доком/полем ввода.
-        _pos = Offset(minLeft + 6, (maxTop - 70).clamp(minTop, maxTop));
+        _pos = Offset(minLeft + 6, (maxTop - 86).clamp(minTop, maxTop));
       }
     } else {
       _pos = Offset(
