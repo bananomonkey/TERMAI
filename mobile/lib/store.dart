@@ -509,6 +509,34 @@ class AppController extends ChangeNotifier {
 
   // ---------- Google-синхронизация ----------
 
+  /// syncConfig — синхронизирует конфиг (ключи + фолбэки) с Google-облаком.
+  /// Работает только если config.syncKeysToCloud == true и пользователь вошёл.
+  Future<String> syncConfig({bool pullFirst = true}) async {
+    if (!config.syncKeysToCloud) return 'Синхронизация ключей отключена.';
+    if (!sync.signedIn) return 'Сначала войди через Google.';
+    if (pullFirst) {
+      final cloud = await sync.pullConfig();
+      if (cloud != null) {
+        try {
+          final remoteCfg = Config.fromJson(
+              jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+          // Если в облаке есть ключи, а у пользователя нет — подхватим их.
+          if (config.apiKey.isEmpty && remoteCfg.apiKey.isNotEmpty) {
+            config.apiKey = remoteCfg.apiKey;
+            config.provider = remoteCfg.provider;
+            config.model = remoteCfg.model;
+            config.baseUrl = remoteCfg.baseUrl;
+            config.fallbacks = remoteCfg.fallbacks;
+            await saveConfig(autofill: false);
+            notifyListeners();
+          }
+        } catch (_) {}
+      }
+    }
+    final err = await sync.pushConfig(jsonEncode(config.toJson()));
+    return err.isEmpty ? 'Ключи синхронизированы с облаком' : err;
+  }
+
   Future<String> signInSync() async {
     final err = await sync.signIn();
     if (err.isNotEmpty) return err;
@@ -524,9 +552,11 @@ class AppController extends ChangeNotifier {
       } catch (_) {}
     }
     final pushErr = await sync.push(jsonEncode(prog.toJson()));
-    return pushErr.isEmpty
-        ? 'Вход выполнен — прогресс сохранён в облако'
-        : pushErr;
+    // Ключи уходят в облако только если пользователь не выключил опцию.
+    final cfgErr = config.syncKeysToCloud ? await syncConfig(pullFirst: false) : '';
+    return pushErr.isEmpty && cfgErr.isEmpty
+        ? 'Вход выполнен — прогресс и ключи сохранены в облако'
+        : (pushErr.isEmpty ? cfgErr : pushErr);
   }
 
   Future<String> syncNow() async {
@@ -543,7 +573,10 @@ class AppController extends ChangeNotifier {
       } catch (_) {}
     }
     final err = await sync.push(jsonEncode(prog.toJson()));
-    return err.isEmpty ? 'Прогресс сохранён в облако' : err;
+    final cfgErr = config.syncKeysToCloud ? await syncConfig(pullFirst: false) : '';
+    return err.isEmpty && cfgErr.isEmpty
+        ? 'Прогресс и ключи сохранены в облако'
+        : (err.isEmpty ? cfgErr : err);
   }
 
   Future<void> signOutSync() => sync.signOut();

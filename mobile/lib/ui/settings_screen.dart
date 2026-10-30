@@ -420,6 +420,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ]),
                           const SizedBox(height: 10),
+                          // Переключатель отправки ключей в облако.
+                          // По умолчанию включено: ключи и фолбэки уходят в
+                          // Google-облако вместе с прогрессом. Можно выключить,
+                          // тогда ключи останутся только на этом устройстве.
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('Синхронизировать ключи ИИ в облако',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: C.text)),
+                            subtitle: Text(
+                              'apiKey и резервные модели будут доступны на '
+                              'других устройствах после входа в аккаунт.',
+                              style: TextStyle(
+                                  fontSize: 11.5, color: C.muted, height: 1.3),
+                            ),
+                            value: controller.config.syncKeysToCloud,
+                            activeColor: C.accent,
+                            onChanged: (v) async {
+                              controller.config.syncKeysToCloud = v;
+                              await controller.saveConfig(autofill: false);
+                              if (v && controller.sync.signedIn) {
+                                final msg =
+                                    await controller.syncConfig();
+                                if (context.mounted && msg.isNotEmpty) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                          SnackBar(content: Text(msg)));
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 10),
                           // Кнопки в столбик: на узких экранах длинная подпись
                           // «Синхронизировать» не влезала в половину ширины.
                           SizedBox(

@@ -452,6 +452,10 @@ class Config {
 
   /// Яркость кнопок: 1.0 — обычная, 0.6–1.4 — темнее/светлее.
   double buttonBrightness;
+
+  /// Отправлять ли ключи ИИ (apiKey + фолбэки) в Google-облако.
+  /// По умолчанию включено; пользователь может выключить в настройках.
+  bool syncKeysToCloud;
   Config({
     this.apiKey = '',
     this.provider = 'deepseek',
@@ -476,6 +480,7 @@ class Config {
     this.bgBlur = 24,
     this.bgDim = 0.55,
     this.buttonBrightness = 1.0,
+    this.syncKeysToCloud = true,
   }) : motivationQueue = motivationQueue ?? [],
        fallbacks = fallbacks ?? [];
 
@@ -513,6 +518,7 @@ class Config {
         buttonBrightness: ((j['button_brightness'] as num?)?.toDouble() ?? 1.0)
             .clamp(0.6, 1.4)
             .toDouble(),
+        syncKeysToCloud: j['sync_keys_to_cloud'] as bool? ?? true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -539,6 +545,7 @@ class Config {
         'bg_blur': bgBlur,
         'bg_dim': bgDim,
         'button_brightness': buttonBrightness,
+        'sync_keys_to_cloud': syncKeysToCloud,
       };
 }
 

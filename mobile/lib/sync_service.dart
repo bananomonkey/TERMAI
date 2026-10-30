@@ -186,6 +186,52 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// pushConfig — сохраняет JSON конфига (ключи, фолбэки) в отдельную
+  /// коллекцию users_config/{uid}. Работает только если syncKeysToCloud = true.
+  Future<String> pushConfig(String json) async {
+    final u = _user;
+    if (!_ready || u == null) return '';
+    try {
+      await FirebaseFirestore.instance
+          .collection('users_config')
+          .doc(u.uid)
+          .set({
+        'config': json,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+        'email': u.email ?? '',
+      });
+      return '';
+    } catch (e) {
+      _error = _msg(e);
+      notifyListeners();
+      return _msg(e);
+    }
+  }
+
+  /// pullConfig — читает облачный конфиг пользователя.
+  Future<Map<String, dynamic>?> pullConfig() async {
+    final u = _user;
+    if (!_ready || u == null) return null;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users_config')
+          .doc(u.uid)
+          .get();
+      if (!doc.exists) return null;
+      final data = doc.data();
+      final json = data?['config'] as String?;
+      if (json == null || json.isEmpty) return null;
+      return {
+        'json': json,
+        'updated_at': (data?['updated_at'] as num?)?.toInt() ?? 0,
+      };
+    } catch (e) {
+      _error = _msg(e);
+      notifyListeners();
+      return null;
+    }
+  }
+
   /// deleteCloudData — удалить облачную копию прогресса текущего пользователя.
   Future<String> deleteCloudData() async {
     final u = _user;
