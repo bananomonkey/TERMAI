@@ -392,6 +392,45 @@ class AIClient {
       final mime = a.mime.isNotEmpty
           ? a.mime
           : (a.isImage ? 'image/jpeg' : 'application/octet-stream');
+      final lower = a.name.toLowerCase();
+      final textLike = !a.isImage &&
+          (mime.startsWith('text/') ||
+              mime == 'application/json' ||
+              mime == 'text/csv' ||
+              const [
+                '.txt',
+                '.md',
+                '.csv',
+                '.json',
+                '.log',
+                '.yaml',
+                '.yml',
+                '.xml',
+                '.html',
+                '.dart',
+                '.py',
+                '.js',
+                '.ts',
+                '.java',
+                '.kt',
+                '.c',
+                '.cpp',
+                '.go',
+                '.rs',
+                '.sh',
+                '.sql',
+              ].any(lower.endsWith));
+      if (textLike) {
+        var text = utf8.decode(bytes, allowMalformed: true);
+        if (text.length > 120000) {
+          text = '${text.substring(0, 120000)}\n…';
+        }
+        parts.add({
+          'type': 'text',
+          'text': 'Документ «${a.name}»:\n$text',
+        });
+        continue;
+      }
       final b64 = base64Encode(bytes);
       if (a.isImage) {
         parts.add({

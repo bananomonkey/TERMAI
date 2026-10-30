@@ -18,6 +18,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _name = TextEditingController(text: controller.config.userName);
   int _idx = 0;
   bool _starting = false;
+  bool _showKey = false;
 
   @override
   void dispose() {
@@ -251,14 +252,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 8),
           Text(
             'Вставь API-ключ провайдера — например, DeepSeek. Ключ нужен для ментора, '
-            'проверки задач и генерации курсов. Он хранится только на этом устройстве.',
+            'проверки задач и генерации курсов. Он хранится на устройстве и, если '
+            'включена синхронизация, в твоём Google-облаке.',
             style: TextStyle(fontSize: 14, height: 1.45, color: C.muted),
           ),
           const SizedBox(height: 18),
           TextField(
             controller: _key,
-            obscureText: true,
-            decoration: const InputDecoration(hintText: 'sk-…'),
+            obscureText: !_showKey,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              hintText: 'sk-…',
+              suffixIcon: IconButton(
+                tooltip: _showKey ? 'Скрыть ключ' : 'Показать ключ',
+                icon: Icon(
+                  _showKey
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: C.muted,
+                ),
+                onPressed: () => setState(() => _showKey = !_showKey),
+              ),
+            ),
           ),
           const SizedBox(height: 18),
           ListenableBuilder(

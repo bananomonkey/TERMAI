@@ -1,5 +1,7 @@
 // settings_screen.dart — единый экран настроек: оформление, ИИ, резервные
 // модели, синхронизация и прогресс. Один полноценный скролл, без дублей.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../ai.dart';
@@ -33,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _name;
   late String _provider;
   bool _showKey = false;
+  Timer? _nameTimer;
 
   @override
   void initState() {
@@ -46,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _nameTimer?.cancel();
     _key.dispose();
     _model.dispose();
     _base.dispose();
@@ -337,6 +341,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       textInputAction: TextInputAction.done,
                       decoration:
                           const InputDecoration(labelText: 'Как тебя зовут'),
+                      onChanged: (v) {
+                        // автосохранение: не нужно каждый раз жать кнопку
+                        _nameTimer?.cancel();
+                        _nameTimer = Timer(const Duration(milliseconds: 800),
+                            () => controller.setUserName(v));
+                      },
                       onSubmitted: (_) => _saveName(),
                     ),
                     const SizedBox(height: 6),
@@ -768,7 +778,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.17.0',
+                child: Text('версия 1.17.1',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
