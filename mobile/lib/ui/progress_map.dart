@@ -56,6 +56,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
   }
 
   void _fit() {
+    if (controller.courses.isEmpty) return;
     final size = _viewport;
     if (size == Size.zero) return;
     final graph = _buildGraph(controller.cur);
@@ -385,7 +386,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       nodes: nodes,
       edges: edges,
       width: taskX + taskW + 60,
-      height: (y + 60).clamp(240.0, 6000.0).toDouble(),
+      height: (y + 60) < 240 ? 240 : (y + 60),
     );
   }
 }

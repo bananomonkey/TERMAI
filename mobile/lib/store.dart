@@ -307,7 +307,11 @@ class AppController extends ChangeNotifier {
     client.onEndpointResult = (ep, ok, err, latency) {
       final isPrimary =
           client.endpoints.isNotEmpty && identical(ep, client.endpoints.first);
+      var changed = false;
       if (isPrimary) {
+        changed = config.primaryFailStreak != ep.failStreak ||
+            config.primaryPenaltyUntil != ep.penaltyUntil ||
+            config.primaryLastError != ep.lastError;
         config.primaryFailStreak = ep.failStreak;
         config.primaryLastErrorAt = ep.lastErrorAt;
         config.primaryPenaltyUntil = ep.penaltyUntil;
@@ -318,6 +322,9 @@ class AppController extends ChangeNotifier {
           if (f.provider == ep.provider &&
               f.model == ep.model &&
               f.baseUrl == ep.baseUrl) {
+            changed = f.failStreak != ep.failStreak ||
+                f.penaltyUntil != ep.penaltyUntil ||
+                f.lastError != ep.lastError;
             f.failStreak = ep.failStreak;
             f.lastErrorAt = ep.lastErrorAt;
             f.penaltyUntil = ep.penaltyUntil;
@@ -328,12 +335,12 @@ class AppController extends ChangeNotifier {
         }
       }
       notifyListeners();
-      unawaited(saveConfig(autofill: false));
+      if (changed) unawaited(saveConfig(autofill: false));
     };
     ai = client.ready ? client : null;
   }
 
-  /// recordUsage — копим токены по моделям; экран «Расход» считает доллары.
+  /// recordUsage — копим фактические токены по моделям.
   void recordUsage(String model, int prompt, int completion) {
     if (model.trim().isEmpty || (prompt <= 0 && completion <= 0)) return;
     final cur0 = prog.aiUsage[model] ?? [0, 0];
@@ -1585,6 +1592,9 @@ extension AppCourses on AppController {
           .toList();
       final tasks = await ai!.generateContinuation(course, count,
           completedTitles: completed);
+      if (tasks.isEmpty) {
+        throw Exception('ИИ не предложил новых задач — попробуй ещё раз.');
+      }
       var seq = 0;
       for (final t in tasks) {
         if (course.tasks.any((x) => x.id == t.id)) {

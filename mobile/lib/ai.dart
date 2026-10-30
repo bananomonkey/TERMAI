@@ -63,6 +63,8 @@ String friendlyAiError(Object e) {
   final raw = rawError(e);
   final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
   switch (status) {
+    case '400':
+      return 'Модель не приняла запрос. Проверь вложение: возможно, эта модель не поддерживает такой формат.';
     case '401':
     case '403':
       return 'Неверный API-ключ или нет доступа к модели.';

@@ -216,7 +216,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       if (open == true) {
         final url = info.apkUrl.isNotEmpty ? info.apkUrl : info.releaseUrl;
-        await UpdateService.open(url);
+        final ok = await UpdateService.open(url);
+        if (!ok && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Не удалось открыть браузер для скачивания')));
+        }
       }
     } catch (e) {
       if (!context.mounted) return;
@@ -790,7 +794,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.17.2',
+                child: Text('версия 1.17.3',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),

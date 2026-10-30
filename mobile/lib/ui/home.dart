@@ -497,7 +497,7 @@ class _TaskRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          statusGlyph(done, current || isExam),
+          statusGlyph(done, current),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

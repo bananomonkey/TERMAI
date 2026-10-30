@@ -6,9 +6,13 @@
 //     updated_at: <millisecondsSinceEpoch>,
 //     email: '...',
 //   }
+//   users_config/{uid} = {
+//     config: '<JSON настроек>', // ключи — только при syncKeysToCloud
+//     updated_at: <millisecondsSinceEpoch>,
+//     email: '...',
+//   }
 //
-// Пока firebase_options.dart содержит заглушки, сервис ничего не делает:
-// приложение полностью работает на локальном файле.
+// Правила доступа: firestore.rules (только владелец uid).
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
