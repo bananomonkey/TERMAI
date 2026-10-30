@@ -31,6 +31,9 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
   void initState() {
     super.initState();
     _tc.addListener(_onTransform);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fit();
+    });
   }
 
   @override

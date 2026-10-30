@@ -133,6 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+    ctrl.dispose();
     if (prompt == null || prompt.isEmpty || !context.mounted) return;
     showDialog<void>(
       context: context,
@@ -652,6 +653,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                               ? 'Настройки и ключи сохранены в облако'
                                               : msg)));
                                 }
+                              } else if (controller.sync.signedIn) {
+                                // Сразу перезаписываем облако конфигом без ключей.
+                                final msg =
+                                    await controller.syncConfig(pullFirst: false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(msg.isEmpty
+                                              ? 'Ключи удалены из облака и больше не отправляются'
+                                              : msg)));
+                                }
                               } else if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -778,7 +790,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.17.1',
+                child: Text('версия 1.17.2',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -796,8 +808,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: C.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Удалить облачные данные?'),
-        content: const Text('Из Firestore будет удалён прогресс, чаты и email. '
-            'Локальная копия останется.'),
+        content: const Text('Из Firestore будет удалён прогресс, чаты, '
+            'настройки и email. Локальная копия останется.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dctx, false),

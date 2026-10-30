@@ -165,8 +165,8 @@ class AIClient {
     if (content is List) {
       return content
           .map((p) {
-            if (p is Map) {
-              return (p['text'] ?? p['file'] ?? p['image_url'] ?? '').toString();
+            if (p is Map && p['type'] == 'text') {
+              return (p['text'] ?? '').toString();
             }
             return '';
           })
@@ -789,8 +789,15 @@ class AIClient {
       'Запрос пользователя: $prompt\nВерни палитру. Ответ — только JSON.',
       0.7,
     );
-    final colors = ((j['colors'] as Map?) ?? {})
-        .map((k, v) => MapEntry(k.toString(), v.toString()));
+    final rawColors = (j['colors'] as Map?) ?? j;
+    final colors = <String, String>{};
+    rawColors.forEach((k, v) {
+      final key = k.toString();
+      if (key == 'title' || key == 'brightness') return;
+      if (v is String && RegExp(r'^#?[0-9a-fA-F]{6,8}$').hasMatch(v.trim())) {
+        colors[key] = v.trim();
+      }
+    });
     final brightness = (j['brightness'] as String?)?.toLowerCase();
     if (brightness == 'light' || brightness == 'dark') {
       colors['brightness'] = brightness!;

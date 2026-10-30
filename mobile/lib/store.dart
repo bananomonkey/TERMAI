@@ -156,6 +156,13 @@ class AppController extends ChangeNotifier {
   /// _mergeCloudConfig — при старте подтягивает имя/тему/уведомления из
   /// облака, если там более свежая версия. Ключи — только при включённом
   /// тумблере и только если локально их нет.
+  DateTime? _cloudConfigTime(Map<String, dynamic> cloud, Config remote) {
+    final parsed = DateTime.tryParse(remote.updatedAt);
+    if (parsed != null) return parsed;
+    final ms = (cloud['updated_at'] as num?)?.toInt() ?? 0;
+    return ms > 0 ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+  }
+
   Future<void> _mergeCloudConfig() async {
     final cloud = await sync.pullConfig();
     if (cloud == null) {
@@ -171,7 +178,7 @@ class AppController extends ChangeNotifier {
     } catch (_) {
       return;
     }
-    final remoteAt = DateTime.tryParse(remote.updatedAt);
+    final remoteAt = _cloudConfigTime(cloud, remote);
     final localAt = DateTime.tryParse(config.updatedAt);
     final cloudNewer = remoteAt != null &&
         (localAt == null || remoteAt.isAfter(localAt));
@@ -198,12 +205,16 @@ class AppController extends ChangeNotifier {
     config.launcherX = remote.launcherX;
     config.launcherY = remote.launcherY;
     // Ключи: только если пользователь разрешил синхронизацию и локально пусто.
-    if (config.syncKeysToCloud && config.apiKey.isEmpty) {
-      config.apiKey = remote.apiKey;
-      config.provider = remote.provider;
-      config.model = remote.model;
-      config.baseUrl = remote.baseUrl;
-      config.fallbacks = remote.fallbacks;
+    if (config.syncKeysToCloud) {
+      if (config.apiKey.isEmpty) {
+        config.apiKey = remote.apiKey;
+        config.provider = remote.provider;
+        config.model = remote.model;
+        config.baseUrl = remote.baseUrl;
+      }
+      if (config.fallbacks.isEmpty && remote.fallbacks.isNotEmpty) {
+        config.fallbacks = remote.fallbacks;
+      }
     }
     config.updatedAt = remote.updatedAt;
     await saveConfig(autofill: false);
@@ -758,7 +769,7 @@ class AppController extends ChangeNotifier {
         try {
           final remoteCfg = Config.fromJson(
               jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
-          final remoteAt = DateTime.tryParse(remoteCfg.updatedAt);
+          final remoteAt = _cloudConfigTime(cloud, remoteCfg);
           final localAt = DateTime.tryParse(config.updatedAt);
           final cloudNewer = remoteAt != null &&
               (localAt == null || remoteAt.isAfter(localAt));
@@ -778,12 +789,17 @@ class AppController extends ChangeNotifier {
             config.bgDim = remoteCfg.bgDim;
             config.launcherX = remoteCfg.launcherX;
             config.launcherY = remoteCfg.launcherY;
-            if (config.syncKeysToCloud && config.apiKey.isEmpty) {
-              config.apiKey = remoteCfg.apiKey;
-              config.provider = remoteCfg.provider;
-              config.model = remoteCfg.model;
-              config.baseUrl = remoteCfg.baseUrl;
-              config.fallbacks = remoteCfg.fallbacks;
+            if (config.syncKeysToCloud) {
+              if (config.apiKey.isEmpty) {
+                config.apiKey = remoteCfg.apiKey;
+                config.provider = remoteCfg.provider;
+                config.model = remoteCfg.model;
+                config.baseUrl = remoteCfg.baseUrl;
+              }
+              if (config.fallbacks.isEmpty &&
+                  remoteCfg.fallbacks.isNotEmpty) {
+                config.fallbacks = remoteCfg.fallbacks;
+              }
             }
             config.updatedAt = remoteCfg.updatedAt;
             await saveConfig(autofill: false);

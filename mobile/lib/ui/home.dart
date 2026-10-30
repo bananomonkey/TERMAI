@@ -541,31 +541,58 @@ class _TaskRow extends StatelessWidget {
     );
     return GestureDetector(
       onTap: onTap,
-      child: isExam
-          ? TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.25, end: 1),
-              duration: const Duration(milliseconds: 1300),
-              curve: Curves.easeInOut,
-              builder: (context, v, child) => Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: C.warn.withAlpha((70 + 120 * v).round()),
-                    width: 1.6,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: C.warn.withAlpha((18 + 40 * v).round()),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: child,
+      child: isExam ? _ExamGlow(child: card) : card,
+    );
+  }
+}
+
+/// _ExamGlow — мягкая пульсирующая жёлтая рамка экзамена.
+class _ExamGlow extends StatefulWidget {
+  final Widget child;
+  const _ExamGlow({required this.child});
+
+  @override
+  State<_ExamGlow> createState() => _ExamGlowState();
+}
+
+class _ExamGlowState extends State<_ExamGlow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final v = Curves.easeInOut.transform(_c.value);
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: C.warn.withAlpha((70 + 120 * v).round()),
+              width: 1.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: C.warn.withAlpha((18 + 40 * v).round()),
+                blurRadius: 12,
+                spreadRadius: 1,
               ),
-              child: card,
-            )
-          : card,
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }
