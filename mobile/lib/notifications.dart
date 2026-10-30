@@ -5,6 +5,7 @@
 // уведомление не умеет вызывать сеть в момент доставки, поэтому текст
 // готовится при открытии приложения и ставится в расписание.
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -37,11 +38,54 @@ class NotificationService {
     );
     tzdata.initializeTimeZones();
     try {
-      tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
+      final info = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(info.identifier));
     } catch (_) {
-      tz.setLocalLocation(tz.getLocation('Europe/Moscow'));
+      try {
+        tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
+      } catch (_) {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      }
     }
     _initialized = true;
+  }
+
+  /// showTest — мгновенное уведомление для проверки разрешений и каналов.
+  Future<bool> showTest() async {
+    try {
+      await init();
+      final ok = await requestPermission();
+      if (!ok) return false;
+      await _plugin.show(
+        999,
+        'TERMAI — проверка',
+        'Уведомления работают. Термай на связи.',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'reminders',
+            'Напоминания',
+            channelDescription: 'Ежедневное напоминание о занятии',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> areEnabled() async {
+    try {
+      await init();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.areNotificationsEnabled() ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> requestPermission() async {

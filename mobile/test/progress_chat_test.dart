@@ -196,4 +196,49 @@ void main() {
         contains('API-ключ'));
     expect(rawError(Exception('Ошибка ИИ 404: not found')), contains('404'));
   });
+
+  test('cloud config keeps non-secret fields and strips keys on opt-out', () {
+    final cfg = Config()
+      ..userName = 'Влад'
+      ..theme = 'navy'
+      ..apiKey = 'sk-main'
+      ..fallbacks = [
+        AiEndpoint(provider: 'openai', apiKey: 'sk-fb', model: 'gpt-4o-mini'),
+      ];
+    final withKeys = cfg.toCloudJson(includeKeys: true);
+    expect(withKeys['api_key'], 'sk-main');
+    expect(((withKeys['fallbacks'] as List).first as Map)['api_key'], 'sk-fb');
+    expect(withKeys.containsKey('bg_photo'), isFalse);
+
+    final without = cfg.toCloudJson(includeKeys: false);
+    expect(without.containsKey('api_key'), isFalse);
+    expect(
+        ((without['fallbacks'] as List).first as Map).containsKey('api_key'),
+        isFalse);
+    expect(without['user_name'], 'Влад');
+    expect(without['theme'], 'navy');
+  });
+
+  test('chat attachments survive JSON round-trip', () {
+    final msg = ChatMsg('user', 'смотри', attachments: [
+      ChatAttachment(
+        type: 'image',
+        path: '/tmp/a.jpg',
+        name: 'a.jpg',
+        mime: 'image/jpeg',
+        size: 123,
+      ),
+    ]);
+    final back = ChatMsg.fromJson(msg.toJson());
+    expect(back.attachments, hasLength(1));
+    expect(back.attachments.first.isImage, isTrue);
+    expect(back.attachments.first.name, 'a.jpg');
+  });
+
+  test('exam task kind survives JSON round-trip', () {
+    final t = Task(id: 'e1', title: 'Экзамен', goal: 'проверка', kind: 'exam');
+    final back = Task.fromJson(t.toJson());
+    expect(back.isExam, isTrue);
+    expect(back.isQuiz, isFalse);
+  });
 }

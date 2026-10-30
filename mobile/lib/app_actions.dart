@@ -613,7 +613,8 @@ class AppActions {
     if (task == null) return 'нет активной задачи';
     await _openNamed('LessonScreen', () => const LessonScreen());
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    c.requestLessonSlide(c.cur.isTheory ? 2 : 3);
+    c.requestLessonSlide(
+        (c.cur.isTheory || (c.currentTask?.isExam ?? false)) ? 2 : 3);
     await c.loadSolution(task);
     return '';
   }

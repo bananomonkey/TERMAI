@@ -33,6 +33,8 @@ class AiFallbacksScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, color: C.muted, height: 1.45),
               ),
               const SizedBox(height: 16),
+              const _PrimaryModelCard(),
+              const SizedBox(height: 10),
               if (list.isEmpty)
                 cardBox(
                   child: Column(children: [
@@ -46,11 +48,13 @@ class AiFallbacksScreen extends StatelessWidget {
                   ]),
                 )
               else
-                for (var i = 0; i < list.length; i++) ...[
+                for (final entry in _sorted(list).asMap().entries) ...[
                   _FallbackTile(
-                    index: i,
+                    key: ValueKey('${entry.value.key}-${entry.value.value.provider}-${entry.value.value.model}'),
+                    index: entry.value.key,
+                    rank: entry.key,
                     total: list.length,
-                    ep: list[i],
+                    ep: entry.value.value,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -62,7 +66,8 @@ class AiFallbacksScreen extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                'Ключи хранятся только на устройстве и в облачной копии прогресса — как и основной ключ.',
+                'Ключи синхронизируются с Google-облаком, если включён тумблер '
+                '«Синхронизировать ключи ИИ». Иначе остаются только на этом устройстве.',
                 style: TextStyle(fontSize: 11.5, color: C.muted, height: 1.45),
               ),
             ],
@@ -73,6 +78,22 @@ class AiFallbacksScreen extends StatelessWidget {
     );
   }
 
+  /// _sorted — показываем здоровые модели выше, пониженные — ниже.
+  /// Индекс для редактирования остаётся исходным.
+  static List<MapEntry<int, AiEndpoint>> _sorted(List<AiEndpoint> list) {
+    final entries = list.asMap().entries.toList();
+    entries.sort((a, b) {
+      final pa = a.value.penalized ? 1 : 0;
+      final pb = b.value.penalized ? 1 : 0;
+      if (pa != pb) return pa.compareTo(pb);
+      final fa = a.value.failStreak;
+      final fb = b.value.failStreak;
+      if (fa != fb) return fa.compareTo(fb);
+      return a.key.compareTo(b.key);
+    });
+    return entries;
+  }
+
   static Future<void> _edit(BuildContext context, int? index) async {
     final cfg = controller.config;
     final existing = index == null ? null : cfg.fallbacks[index];
@@ -80,6 +101,7 @@ class AiFallbacksScreen extends StatelessWidget {
     final keyCtrl = TextEditingController(text: existing?.apiKey ?? '');
     final modelCtrl = TextEditingController(text: existing?.model ?? '');
     final baseCtrl = TextEditingController(text: existing?.baseUrl ?? '');
+    bool obscure = true;
 
     await showModalBottomSheet(
       context: context,
@@ -119,8 +141,23 @@ class AiFallbacksScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   TextField(
                     controller: keyCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'API-ключ (sk-…)'),
+                    obscureText: obscure,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText: 'API-ключ (sk-…)',
+                      suffixIcon: IconButton(
+                        tooltip: obscure ? 'Показать ключ' : 'Скрыть ключ',
+                        icon: Icon(
+                          obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 20,
+                          color: C.muted,
+                        ),
+                        onPressed: () => setSheet(() => obscure = !obscure),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -197,13 +234,134 @@ class AiFallbacksScreen extends StatelessWidget {
   }
 }
 
-class _FallbackTile extends StatelessWidget {
-  final int index, total;
-  final AiEndpoint ep;
-  const _FallbackTile({required this.index, required this.total, required this.ep});
+class _PrimaryModelCard extends StatefulWidget {
+  const _PrimaryModelCard();
+
+  @override
+  State<_PrimaryModelCard> createState() => _PrimaryModelCardState();
+}
+
+class _PrimaryModelCardState extends State<_PrimaryModelCard> {
+  bool _testing = false;
+  bool? _ok;
+  int _ms = 0;
+
+  Future<void> _test() async {
+    setState(() => _testing = true);
+    final r = await controller.testEndpoint(-1);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _ok = r.ok;
+      _ms = r.latencyMs;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(r.ok
+          ? 'Основная модель отвечает · ${r.latencyMs} мс'
+          : 'Основная модель не ответила: ${r.error}'),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cfg = controller.config;
+    final p = findProvider(cfg.provider);
+    final model = cfg.model.trim().isEmpty ? p.defaultModel : cfg.model;
+    final penalized = cfg.primaryPenaltyUntil >
+        DateTime.now().millisecondsSinceEpoch;
+    return cardBox(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: C.accent.withAlpha(40),
+          child: Icon(Icons.star_rounded, size: 18, color: C.accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${p.title} · основная',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: C.text)),
+            const SizedBox(height: 2),
+            Text(model,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, color: C.muted)),
+            if (penalized || cfg.primaryFailStreak > 0)
+              Text(
+                penalized
+                    ? 'Временно понижена после ошибки'
+                    : 'Ошибок подряд: ${cfg.primaryFailStreak}',
+                style: TextStyle(fontSize: 10.5, color: C.warn),
+              ),
+            if (_ok != null)
+              Text(
+                _ok! ? 'Тест: отвечает · $_ms мс' : 'Тест: ошибка',
+                style:
+                    TextStyle(fontSize: 10.5, color: _ok! ? C.good : C.danger),
+              ),
+          ]),
+        ),
+        IconButton(
+          tooltip: 'Тест основной модели',
+          visualDensity: VisualDensity.compact,
+          icon: _testing
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: C.accent))
+              : Icon(Icons.network_check,
+                  size: 20,
+                  color: _ok == null ? C.muted : (_ok! ? C.good : C.danger)),
+          onPressed: _testing ? null : _test,
+        ),
+      ]),
+    );
+  }
+}
+
+class _FallbackTile extends StatefulWidget {
+  final int index, rank, total;
+  final AiEndpoint ep;
+  const _FallbackTile(
+      {super.key,
+      required this.index,
+      required this.rank,
+      required this.total,
+      required this.ep});
+
+  @override
+  State<_FallbackTile> createState() => _FallbackTileState();
+}
+
+class _FallbackTileState extends State<_FallbackTile> {
+  bool _testing = false;
+  bool? _ok;
+  int _ms = 0;
+
+  Future<void> _test() async {
+    setState(() => _testing = true);
+    final r = await controller.testEndpoint(widget.index);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _ok = r.ok;
+      _ms = r.latencyMs;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(r.ok
+          ? 'Модель отвечает · ${r.latencyMs} мс'
+          : 'Модель не ответила: ${r.error}'),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final index = widget.index, total = widget.total, ep = widget.ep;
     final p = findProvider(ep.provider);
     final model = ep.model.trim().isEmpty ? p.defaultModel : ep.model;
     return cardBox(
@@ -212,7 +370,7 @@ class _FallbackTile extends StatelessWidget {
         CircleAvatar(
           radius: 16,
           backgroundColor: C.card2,
-          child: Text('${index + 1}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
+          child: Text('${widget.rank + 1}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -221,7 +379,51 @@ class _FallbackTile extends StatelessWidget {
             const SizedBox(height: 2),
             Text(model, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 11.5, color: C.muted)),
+            if (ep.penalized || ep.failStreak > 0)
+              Text(
+                ep.penalized
+                    ? 'Временно понижена после ошибки'
+                    : 'Ошибок подряд: ${ep.failStreak}',
+                style: TextStyle(fontSize: 10.5, color: C.warn),
+              ),
+            if (_ok != null)
+              Text(
+                _ok! ? 'Тест: отвечает · $_ms мс' : 'Тест: ошибка',
+                style: TextStyle(
+                    fontSize: 10.5,
+                    color: _ok! ? C.good : C.danger),
+              ),
           ]),
+        ),
+        IconButton(
+          tooltip: 'Тест модели',
+          visualDensity: VisualDensity.compact,
+          icon: _testing
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: C.accent))
+              : Icon(
+                  Icons.network_check,
+                  size: 20,
+                  color: _ok == null
+                      ? C.muted
+                      : (_ok! ? C.good : C.danger),
+                ),
+          onPressed: _testing ? null : _test,
+        ),
+        IconButton(
+          tooltip: 'Сделать основной',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(Icons.swap_vert, size: 21, color: C.accent),
+          onPressed: () async {
+            final msg = await controller.swapPrimaryWithFallback(index);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(msg)));
+            }
+          },
         ),
         IconButton(
           tooltip: 'Выше',

@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models.dart';
+
 class ThemePreset {
   final String id, title;
   final Brightness brightness;
@@ -101,8 +103,81 @@ const themePresets = <ThemePreset>[
   ),
 ];
 
-ThemePreset presetById(String id) => themePresets.firstWhere((p) => p.id == id,
-    orElse: () => themePresets.first);
+/// Пользовательские палитры, собранные из Config.customThemes.
+/// Заполняется контроллером при загрузке/сохранении конфига.
+final List<ThemePreset> customThemePresets = [];
+
+ThemePreset presetById(String id) {
+  for (final p in customThemePresets) {
+    if (p.id == id) return p;
+  }
+  return themePresets.firstWhere((p) => p.id == id,
+      orElse: () => themePresets.first);
+}
+
+Color _hexColor(String? raw, Color fallback) {
+  if (raw == null) return fallback;
+  var s = raw.trim().replaceFirst('#', '');
+  if (s.length == 8) s = s.substring(2); // ARGB -> RGB
+  if (s.length != 6) return fallback;
+  final v = int.tryParse(s, radix: 16);
+  return v == null ? fallback : Color(0xFF000000 | v);
+}
+
+/// presetFromCustom — превращает сохранённую ИИ-палитру в ThemePreset.
+ThemePreset presetFromCustom(CustomThemeData data) {
+  final darkBase = themePresets.first;
+  final lightBase = themePresets.last;
+  final bg = _hexColor(data.colors['bg'], darkBase.bg);
+  final isLight = (data.colors['brightness'] ?? '').toLowerCase() == 'light' ||
+      bg.computeLuminance() > 0.55;
+  final base = isLight ? lightBase : darkBase;
+  Color fallback(String key) => switch (key) {
+        'surface' => base.surface,
+        'card' => base.card,
+        'card2' => base.card2,
+        'secondary' => base.secondary,
+        'accent' => base.accent,
+        'accentDark' => base.accentDark,
+        'text' => base.text,
+        'muted' => base.muted,
+        'good' => base.good,
+        'warn' => base.warn,
+        'danger' => base.danger,
+        'border' => base.border,
+        'termBg' => base.termBg,
+        'termText' => base.termText,
+        _ => base.bg,
+      };
+  Color c(String key) => _hexColor(data.colors[key], fallback(key));
+  return ThemePreset(
+    id: data.id,
+    title: data.title,
+    brightness: isLight ? Brightness.light : Brightness.dark,
+    bg: bg,
+    surface: c('surface'),
+    card: c('card'),
+    card2: c('card2'),
+    secondary: c('secondary'),
+    accent: c('accent'),
+    accentDark: c('accentDark'),
+    text: c('text'),
+    muted: c('muted'),
+    good: c('good'),
+    warn: c('warn'),
+    danger: c('danger'),
+    border: c('border'),
+    termBg: c('termBg'),
+    termText: c('termText'),
+  );
+}
+
+/// rebuildCustomThemePresets — вызывается после загрузки/сохранения Config.
+void rebuildCustomThemePresets(List<CustomThemeData> themes) {
+  customThemePresets
+    ..clear()
+    ..addAll(themes.where((t) => t.id.isNotEmpty).map(presetFromCustom));
+}
 
 /// C — живые цвета: все виджеты читают их отсюда, смена пресета в настройках
 /// перекрашивает всё приложение (MaterialApp перестраивается от notifyListeners).
@@ -149,7 +224,11 @@ class C {
 }
 
 ThemeData buildTheme() {
-  final base = ThemeData(useMaterial3: true, brightness: C.p.brightness);
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: C.p.brightness,
+    fontFamily: 'Inter',
+  );
   return base.copyWith(
     scaffoldBackgroundColor: C.bg,
     cardColor: C.card,
@@ -161,7 +240,11 @@ ThemeData buildTheme() {
       onSurface: C.text,
       error: C.danger,
     ),
-    textTheme: base.textTheme.apply(bodyColor: C.text, displayColor: C.text),
+    textTheme: base.textTheme.apply(
+      fontFamily: 'Inter',
+      bodyColor: C.text,
+      displayColor: C.text,
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: C.bg,
       foregroundColor: C.text,

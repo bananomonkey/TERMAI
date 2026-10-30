@@ -57,7 +57,10 @@ class _LessonScreenState extends State<LessonScreen>
     }
     if (controller.lessonSlideSeq != _lastSlideSeq) {
       _lastSlideSeq = controller.lessonSlideSeq;
-      final last = controller.cur.isTheory ? 2 : 3;
+      final last = (controller.cur.isTheory ||
+              (controller.currentTask?.isExam ?? false))
+          ? 2
+          : 3;
       final req = controller.lessonSlideRequest.clamp(0, last).toInt();
       controller.lessonSlideRequest = -1;
       if (mounted) setState(() => _tabIdx = req);
@@ -251,7 +254,7 @@ class _LessonScreenState extends State<LessonScreen>
             }
             // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку.
             // В курсах-теориях терминал не нужен — остаются справка, задача и решение.
-            final theory = controller.cur.isTheory;
+            final theory = controller.cur.isTheory || t.isExam;
             final slideNames = theory
                 ? ['Справка', 'Задача', 'Решение']
                 : ['Справка', 'Задача', 'Терминал', 'Решение'];
@@ -480,9 +483,11 @@ class _TaskSlide extends StatelessWidget {
           ),
         Row(children: [
           Text(
-              controller.cur.isTheory
-                  ? 'урок'
-                  : (t.isQuiz ? 'тест' : 'практика'),
+              t.isExam
+                  ? 'экзамен'
+                  : (controller.cur.isTheory
+                      ? 'урок'
+                      : (t.isQuiz ? 'тест' : 'практика')),
               style: TextStyle(fontSize: 12, color: C.muted)),
           const SizedBox(width: 10),
           difficultyDots(t.difficulty),
@@ -538,7 +543,7 @@ class _TaskSlide extends StatelessWidget {
           _QuizBlock(
               t: t, answers: answers, onAnswer: onAnswer, onSnack: onSnack),
         ],
-        if (controller.cur.isTheory &&
+        if ((controller.cur.isTheory || t.isExam) &&
             controller.quizDone(t) &&
             !controller.isDone(t)) ...[
           const SizedBox(height: 12),
@@ -616,7 +621,7 @@ class _QuizBlock extends StatelessWidget {
             final err = await controller.checkQuiz(t, answers);
             if (!context.mounted) return;
             onSnack(err.isEmpty
-                ? (controller.cur.isTheory
+                ? ((controller.cur.isTheory || t.isExam)
                     ? '✓ Тест пройден — задача завершена'
                     : '✓ Тест пройден — практика открыта')
                 : err);

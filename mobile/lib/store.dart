@@ -69,6 +69,7 @@ class AppController extends ChangeNotifier {
   bool mentorBusy = false;
   bool solutionLoad = false;
   bool generating = false;
+  bool examBusy = false;
   int fillTotal = 0, fillDone = 0;
   String fillCurrent = '';
   bool ready = false;
@@ -107,6 +108,7 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
+    rebuildCustomThemePresets(config.customThemes);
     _migrateTheme();
     C.p = presetById(config.theme);
     C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
@@ -139,15 +141,73 @@ class AppController extends ChangeNotifier {
     final cloud = await sync.pull();
     if (cloud == null) {
       await sync.push(jsonEncode(prog.toJson()));
+    } else {
+      try {
+        final remote = Progress.fromJson(
+            jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+        if (_cloudIsBetter(remote)) {
+          await _applyProgress(remote);
+        }
+      } catch (_) {}
+    }
+    await _mergeCloudConfig();
+  }
+
+  /// _mergeCloudConfig — при старте подтягивает имя/тему/уведомления из
+  /// облака, если там более свежая версия. Ключи — только при включённом
+  /// тумблере и только если локально их нет.
+  Future<void> _mergeCloudConfig() async {
+    final cloud = await sync.pullConfig();
+    if (cloud == null) {
+      sync.scheduleConfigPush(jsonEncode(
+        config.toCloudJson(includeKeys: config.syncKeysToCloud),
+      ));
       return;
     }
+    Config? remote;
     try {
-      final remote = Progress.fromJson(
+      remote = Config.fromJson(
           jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
-      if (_cloudIsBetter(remote)) {
-        await _applyProgress(remote);
-      }
-    } catch (_) {}
+    } catch (_) {
+      return;
+    }
+    final remoteAt = DateTime.tryParse(remote.updatedAt);
+    final localAt = DateTime.tryParse(config.updatedAt);
+    final cloudNewer = remoteAt != null &&
+        (localAt == null || remoteAt.isAfter(localAt));
+    if (!cloudNewer) {
+      sync.scheduleConfigPush(jsonEncode(
+        config.toCloudJson(includeKeys: config.syncKeysToCloud),
+      ));
+      return;
+    }
+    // Несекретные настройки: облако побеждает, если оно новее.
+    config.userName = remote.userName;
+    config.theme = remote.theme;
+    config.themeAuto = remote.themeAuto;
+    config.notificationsEnabled = remote.notificationsEnabled;
+    config.dailyReminderEnabled = remote.dailyReminderEnabled;
+    config.reminderHour = remote.reminderHour;
+    config.reminderMinute = remote.reminderMinute;
+    config.aiMotivationEnabled = remote.aiMotivationEnabled;
+    config.mascotVisible = remote.mascotVisible;
+    config.customThemes = remote.customThemes;
+    config.buttonBrightness = remote.buttonBrightness;
+    config.bgBlur = remote.bgBlur;
+    config.bgDim = remote.bgDim;
+    config.launcherX = remote.launcherX;
+    config.launcherY = remote.launcherY;
+    // Ключи: только если пользователь разрешил синхронизацию и локально пусто.
+    if (config.syncKeysToCloud && config.apiKey.isEmpty) {
+      config.apiKey = remote.apiKey;
+      config.provider = remote.provider;
+      config.model = remote.model;
+      config.baseUrl = remote.baseUrl;
+      config.fallbacks = remote.fallbacks;
+    }
+    config.updatedAt = remote.updatedAt;
+    await saveConfig(autofill: false);
+    await scheduleNotifications();
   }
 
   /// _cloudIsBetter — облако полезнее локальной копии (больше решено/чатов).
@@ -210,10 +270,17 @@ class AppController extends ChangeNotifier {
   /// _migrateTheme — старые конфиги и авто-тема возвращаются на «какао».
   /// Если тему выбирали руками (themeAuto=false), не трогаем.
   void _migrateTheme() {
-    // удалённые палитры (какао, sage, emerald и т.п.) → Dark Modern
-    if (!themePresets.any((p) => p.id == config.theme)) config.theme = 'dark';
+    // удалённые палитры → Dark Modern; кастомные темы не трогаем
+    if (!themePresets.any((p) => p.id == config.theme) &&
+        !customThemePresets.any((p) => p.id == config.theme)) {
+      config.theme = 'dark';
+    }
     // авто-тему возвращаем на основную; осознанный выбор синей сохраняем
-    if (config.themeAuto && config.theme != 'dark') config.theme = 'dark';
+    if (config.themeAuto &&
+        config.theme != 'dark' &&
+        !config.theme.startsWith('custom:')) {
+      config.theme = 'dark';
+    }
   }
 
   /// _initAI — собирает клиент из основного и резервных подключений.
@@ -225,6 +292,32 @@ class AppController extends ChangeNotifier {
       if (lastAiFallback == msg) return;
       lastAiFallback = msg;
       notifyListeners();
+    };
+    client.onEndpointResult = (ep, ok, err, latency) {
+      final isPrimary =
+          client.endpoints.isNotEmpty && identical(ep, client.endpoints.first);
+      if (isPrimary) {
+        config.primaryFailStreak = ep.failStreak;
+        config.primaryLastErrorAt = ep.lastErrorAt;
+        config.primaryPenaltyUntil = ep.penaltyUntil;
+        config.primaryLastOkAt = ep.lastOkAt;
+        config.primaryLastError = ep.lastError;
+      } else {
+        for (final f in config.fallbacks) {
+          if (f.provider == ep.provider &&
+              f.model == ep.model &&
+              f.baseUrl == ep.baseUrl) {
+            f.failStreak = ep.failStreak;
+            f.lastErrorAt = ep.lastErrorAt;
+            f.penaltyUntil = ep.penaltyUntil;
+            f.lastOkAt = ep.lastOkAt;
+            f.lastError = ep.lastError;
+            break;
+          }
+        }
+      }
+      notifyListeners();
+      unawaited(saveConfig(autofill: false));
     };
     ai = client.ready ? client : null;
   }
@@ -246,16 +339,24 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveConfig({bool autofill = true}) async {
+    config.updatedAt = DateTime.now().toIso8601String();
+    rebuildCustomThemePresets(config.customThemes);
     _migrateTheme();
     final oldTheme = C.p.id;
     C.p = presetById(config.theme);
     C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
-    if (oldTheme != C.p.id) themeRevision.value++;
+    if (oldTheme != C.p.id || config.theme.startsWith('custom:')) {
+      themeRevision.value++;
+    }
     final dir = await _dataDir();
-    await io.File('$dir/termai.json')
-        .writeAsString(jsonEncode(config.toJson()));
+    final localJson = jsonEncode(config.toJson());
+    await io.File('$dir/termai.json').writeAsString(localJson);
     _initAI();
     notifyListeners();
+    // Автосохранение в облако: имя, тема, уведомления и (по тумблеру) ключи.
+    sync.scheduleConfigPush(jsonEncode(
+      config.toCloudJson(includeKeys: config.syncKeysToCloud),
+    ));
     if (autofill) autoFillAll();
   }
 
@@ -300,6 +401,142 @@ class AppController extends ChangeNotifier {
     config.launcherX = x.clamp(0.0, 1.0);
     config.launcherY = y.clamp(0.0, 1.0);
     await saveConfig(autofill: false);
+  }
+
+  Future<void> setMascotVisible(bool value) async {
+    config.mascotVisible = value;
+    await saveConfig(autofill: false);
+  }
+
+  /// swapPrimaryWithFallback — мгновенно меняет основную и резервную модели.
+  Future<String> swapPrimaryWithFallback(int index) async {
+    if (index < 0 || index >= config.fallbacks.length) {
+      return 'Резервная модель не найдена';
+    }
+    final f = config.fallbacks[index];
+    final primary = AiEndpoint(
+      provider: config.provider,
+      apiKey: config.apiKey,
+      model: config.model,
+      baseUrl: config.baseUrl,
+    );
+    config.provider = f.provider;
+    config.apiKey = f.apiKey;
+    config.model = f.model;
+    config.baseUrl = f.baseUrl;
+    config.fallbacks[index] = primary;
+    await saveConfig(autofill: false);
+    return 'Модели поменялись местами';
+  }
+
+  /// reorderCourses — drag-and-drop курсов на главном экране.
+  Future<void> reorderCourses(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= courses.length) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex < 0 || newIndex >= courses.length) return;
+    final activeId = courses.isEmpty ? '' : cur.id;
+    final item = courses.removeAt(oldIndex);
+    courses.insert(newIndex, item);
+    prog.courseOrder = courses.map((c) => c.id).toList();
+    final active = courses.indexWhere((c) => c.id == activeId);
+    if (active >= 0) courseIdx = active;
+    await saveProgress();
+    notifyListeners();
+  }
+
+  /// testEndpoint — тест конкретной модели; не меняет основной выбор.
+  Future<TestResult> testEndpoint(int index) async {
+    final client = AIClient(config);
+    AiEndpoint ep;
+    if (index < 0) {
+      final p = findProvider(config.provider);
+      final model = config.model.trim().isEmpty ? p.defaultModel : config.model.trim();
+      final base = config.baseUrl.trim().isEmpty ? p.baseUrl : config.baseUrl.trim();
+      var key = config.apiKey.trim();
+      if (key.isEmpty &&
+          (p.id == 'ollama' ||
+              base.contains('localhost') ||
+              base.contains('127.0.0.1'))) {
+        key = 'local';
+      }
+      ep = AiEndpoint(
+          provider: p.id, apiKey: key, model: model, baseUrl: base);
+    } else {
+      if (index >= config.fallbacks.length) {
+        return TestResult(false, 0, '', 'Модель не найдена');
+      }
+      final f = config.fallbacks[index];
+      final p = findProvider(f.provider);
+      final model = f.model.trim().isEmpty ? p.defaultModel : f.model.trim();
+      final base = f.baseUrl.trim().isEmpty ? p.baseUrl : f.baseUrl.trim();
+      var key = f.apiKey.trim();
+      if (key.isEmpty &&
+          (p.id == 'ollama' ||
+              base.contains('localhost') ||
+              base.contains('127.0.0.1'))) {
+        key = 'local';
+      }
+      ep = AiEndpoint(
+          provider: p.id, apiKey: key, model: model, baseUrl: base);
+    }
+    final r = await client.testEndpoint(ep);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (index < 0) {
+      if (r.ok) {
+        config.primaryFailStreak = 0;
+        config.primaryPenaltyUntil = 0;
+        config.primaryLastOkAt = now;
+        config.primaryLastError = '';
+      } else {
+        config.primaryFailStreak += 1;
+        config.primaryLastErrorAt = now;
+        config.primaryLastError = r.error;
+        config.primaryPenaltyUntil = now + 2 * 60 * 1000;
+      }
+    } else {
+      final f = config.fallbacks[index];
+      if (r.ok) {
+        f.failStreak = 0;
+        f.penaltyUntil = 0;
+        f.lastOkAt = now;
+        f.lastError = '';
+      } else {
+        f.failStreak += 1;
+        f.lastErrorAt = now;
+        f.lastError = r.error;
+        f.penaltyUntil = now + 2 * 60 * 1000;
+      }
+    }
+    await saveConfig(autofill: false);
+    return r;
+  }
+
+  /// generateCustomTheme — ИИ собирает палитру по текстовому запросу.
+  Future<String> generateCustomTheme(String prompt) async {
+    if (ai == null || !ai!.ready) {
+      return 'Нет API-ключа — настрой ИИ в разделе «ИИ-провайдер».';
+    }
+    try {
+      final theme = await ai!.generateTheme(prompt);
+      if (theme.colors.isEmpty) return 'ИИ вернул пустую палитру';
+      config.customThemes.add(theme);
+      config.theme = theme.id;
+      config.themeAuto = false;
+      await saveConfig(autofill: false);
+      return '';
+    } catch (e) {
+      return _errMsg(e);
+    }
+  }
+
+  Future<String> deleteCustomTheme(String id) async {
+    config.customThemes.removeWhere((t) => t.id == id);
+    if (config.theme == id) {
+      config.theme = 'dark';
+      config.themeAuto = false;
+    }
+    await saveConfig(autofill: false);
+    return '';
   }
 
   Future<void> setNotificationsEnabled(bool value) async {
@@ -509,10 +746,11 @@ class AppController extends ChangeNotifier {
 
   // ---------- Google-синхронизация ----------
 
-  /// syncConfig — синхронизирует конфиг (ключи + фолбэки) с Google-облаком.
-  /// Работает только если config.syncKeysToCloud == true и пользователь вошёл.
+  /// syncConfig — синхронизирует настройки с Google-облаком.
+  /// Несекретные поля уходят всегда; ключи и фолбэки — только при
+  /// включённом syncKeysToCloud. Если локальных ключей нет, они
+  /// подтягиваются из облака (например, на новом устройстве).
   Future<String> syncConfig({bool pullFirst = true}) async {
-    if (!config.syncKeysToCloud) return 'Синхронизация ключей отключена.';
     if (!sync.signedIn) return 'Сначала войди через Google.';
     if (pullFirst) {
       final cloud = await sync.pullConfig();
@@ -520,63 +758,99 @@ class AppController extends ChangeNotifier {
         try {
           final remoteCfg = Config.fromJson(
               jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
-          // Если в облаке есть ключи, а у пользователя нет — подхватим их.
-          if (config.apiKey.isEmpty && remoteCfg.apiKey.isNotEmpty) {
-            config.apiKey = remoteCfg.apiKey;
-            config.provider = remoteCfg.provider;
-            config.model = remoteCfg.model;
-            config.baseUrl = remoteCfg.baseUrl;
-            config.fallbacks = remoteCfg.fallbacks;
+          final remoteAt = DateTime.tryParse(remoteCfg.updatedAt);
+          final localAt = DateTime.tryParse(config.updatedAt);
+          final cloudNewer = remoteAt != null &&
+              (localAt == null || remoteAt.isAfter(localAt));
+          if (cloudNewer) {
+            config.userName = remoteCfg.userName;
+            config.theme = remoteCfg.theme;
+            config.themeAuto = remoteCfg.themeAuto;
+            config.notificationsEnabled = remoteCfg.notificationsEnabled;
+            config.dailyReminderEnabled = remoteCfg.dailyReminderEnabled;
+            config.reminderHour = remoteCfg.reminderHour;
+            config.reminderMinute = remoteCfg.reminderMinute;
+            config.aiMotivationEnabled = remoteCfg.aiMotivationEnabled;
+            config.mascotVisible = remoteCfg.mascotVisible;
+            config.customThemes = remoteCfg.customThemes;
+            config.buttonBrightness = remoteCfg.buttonBrightness;
+            config.bgBlur = remoteCfg.bgBlur;
+            config.bgDim = remoteCfg.bgDim;
+            config.launcherX = remoteCfg.launcherX;
+            config.launcherY = remoteCfg.launcherY;
+            if (config.syncKeysToCloud && config.apiKey.isEmpty) {
+              config.apiKey = remoteCfg.apiKey;
+              config.provider = remoteCfg.provider;
+              config.model = remoteCfg.model;
+              config.baseUrl = remoteCfg.baseUrl;
+              config.fallbacks = remoteCfg.fallbacks;
+            }
+            config.updatedAt = remoteCfg.updatedAt;
             await saveConfig(autofill: false);
             notifyListeners();
           }
         } catch (_) {}
       }
     }
-    final err = await sync.pushConfig(jsonEncode(config.toJson()));
-    return err.isEmpty ? 'Ключи синхронизированы с облаком' : err;
+    config.updatedAt = DateTime.now().toIso8601String();
+    return await sync.pushConfig(jsonEncode(
+      config.toCloudJson(includeKeys: config.syncKeysToCloud),
+    ));
   }
 
   Future<String> signInSync() async {
     final err = await sync.signIn();
     if (err.isNotEmpty) return err;
     final cloud = await sync.pull();
+    var loaded = false;
     if (cloud != null) {
       try {
         final remote = Progress.fromJson(
             jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
         if (_cloudIsBetter(remote)) {
           await _applyProgress(remote);
-          return 'Загружено из облака: ${prog.solvedTotal} задач';
+          loaded = true;
         }
       } catch (_) {}
     }
-    final pushErr = await sync.push(jsonEncode(prog.toJson()));
-    // Ключи уходят в облако только если пользователь не выключил опцию.
-    final cfgErr = config.syncKeysToCloud ? await syncConfig(pullFirst: false) : '';
-    return pushErr.isEmpty && cfgErr.isEmpty
+    final pushErr =
+        loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
+    // Настройки уходят всегда; ключи — только если пользователь не выключил опцию.
+    final cfgErr = await syncConfig(pullFirst: loaded);
+    if (pushErr.isNotEmpty) return pushErr;
+    if (cfgErr.isNotEmpty) return cfgErr;
+    if (loaded) {
+      return 'Загружено из облака: ${prog.solvedTotal} задач';
+    }
+    return config.syncKeysToCloud
         ? 'Вход выполнен — прогресс и ключи сохранены в облако'
-        : (pushErr.isEmpty ? cfgErr : pushErr);
+        : 'Вход выполнен — прогресс сохранён, ключи не отправлялись';
   }
 
   Future<String> syncNow() async {
     if (!sync.signedIn) return 'Сначала войди через Google.';
     final cloud = await sync.pull();
+    var loaded = false;
     if (cloud != null) {
       try {
         final remote = Progress.fromJson(
             jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
         if (_cloudIsBetter(remote)) {
           await _applyProgress(remote);
-          return 'Загружено из облака: ${prog.solvedTotal} задач';
+          loaded = true;
         }
       } catch (_) {}
     }
-    final err = await sync.push(jsonEncode(prog.toJson()));
-    final cfgErr = config.syncKeysToCloud ? await syncConfig(pullFirst: false) : '';
-    return err.isEmpty && cfgErr.isEmpty
+    final err = loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
+    if (err.isNotEmpty) return err;
+    final cfgErr = await syncConfig(pullFirst: loaded);
+    if (cfgErr.isNotEmpty) return cfgErr;
+    if (loaded) {
+      return 'Загружено из облака: ${prog.solvedTotal} задач';
+    }
+    return config.syncKeysToCloud
         ? 'Прогресс и ключи сохранены в облако'
-        : (err.isEmpty ? cfgErr : err);
+        : 'Прогресс сохранён; ключи не отправлялись';
   }
 
   Future<void> signOutSync() => sync.signOut();
@@ -808,7 +1082,7 @@ extension AppCourses on AppController {
 
   /// completeTheoryTask — страховка, если тест уже пройден, а задача не закрыта.
   Future<void> completeTheoryTask(Task t) async {
-    if (cur.isTheory && !isDone(t)) {
+    if ((cur.isTheory || t.isExam) && !isDone(t)) {
       await _completeTask(t, 'Тест по теории пройден', t.difficulty);
     }
   }
@@ -828,8 +1102,8 @@ extension AppCourses on AppController {
     if (right == t.quiz.length) {
       if (tries[t.id] == 1) grant('quiz-perfect');
       _markQuizDone(t);
-      // В курсах без терминала тест — это и есть завершение задачи.
-      if (cur.isTheory && !isDone(t)) {
+      // В курсах без терминала и на экзаменах тест — это завершение задачи.
+      if ((cur.isTheory || t.isExam) && !isDone(t)) {
         await _completeTask(t, 'Тест по теории пройден', t.difficulty);
         return '';
       }
@@ -940,6 +1214,34 @@ extension AppCourses on AppController {
     // следующая задача
     final next = cur.tasks.indexWhere((x) => !isDone(x));
     selectTask(next >= 0 ? next : 0);
+    unawaited(_maybeGenerateExam());
+  }
+
+  /// _maybeGenerateExam — раз в 5 пройденных задач добавляет экзамен.
+  Future<void> _maybeGenerateExam() async {
+    if (examBusy || generating || ai == null || !ai!.ready) return;
+    final course = cur;
+    final done = course.tasks
+        .where((t) => prog.completed[course.id]?[t.id] ?? false)
+        .map((t) => t.title)
+        .toList();
+    final examCount = course.tasks.where((t) => t.isExam).length;
+    if (done.length < 5 || done.length ~/ 5 <= examCount) return;
+    examBusy = true;
+    try {
+      final exam = await ai!.generateExam(course, done);
+      if (course.tasks.any((x) => x.id == exam.id)) {
+        exam.id = 'exam-${DateTime.now().millisecondsSinceEpoch % 100000}';
+      }
+      course.tasks.add(exam);
+      (prog.generated[course.id] ??= []).add(exam);
+      await saveProgress();
+      notifyListeners();
+    } catch (_) {
+      // экзамен не критичен: добавится при следующем завершении
+    } finally {
+      examBusy = false;
+    }
   }
 
   void _bumpStreak() {
@@ -1022,7 +1324,8 @@ extension AppCourses on AppController {
         'ИИ: ${config.provider}/${ai?.model ?? 'не настроен'}.';
   }
 
-  Future<String> sendChat(String question) async {
+  Future<String> sendChat(String question,
+      {List<ChatAttachment> attachments = const []}) async {
     if (mentorBusy) return '';
     final chat = activeChat ?? ensureGeneralChat();
     final general = chat.isGeneral;
@@ -1034,7 +1337,7 @@ extension AppCourses on AppController {
       return '';
     }
     final echo = question.trim().isEmpty ? '(вложение)' : question;
-    chat.messages.add(ChatMsg('user', echo));
+    chat.messages.add(ChatMsg('user', echo, attachments: attachments));
     chatMsgs = chat.messages;
     chat.updatedAt = DateTime.now().toIso8601String();
     await saveProgress();
@@ -1059,11 +1362,13 @@ extension AppCourses on AppController {
               chatLog: this.chatLogForAI,
               appContext: appContextForAI,
               userName: userNameOrFriend,
+              attachments: attachments,
             )
           : await ai!.mentor(cur, currentTask, state, _lastHist(8),
               this.chatLogForAI, solvedCtx + question,
               interview: chat.taskId == '__interview__',
-              appContext: appContextForAI);
+              appContext: appContextForAI,
+              attachments: attachments);
       if (lastSolvedTitle.isNotEmpty) {
         lastSolvedTitle = '';
         lastSolvedHist = '';
@@ -1122,7 +1427,7 @@ extension AppCourses on AppController {
     solutionLoad = true;
     notifyListeners();
     try {
-      final ask = cur.isTheory
+      final ask = (cur.isTheory || task.isExam)
           ? 'Дай разбор этой темы: главные идеи, примеры и типичные ошибки. Без команд терминала.'
           : 'Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.';
       final ans = await ai!.mentor(cur, task, state, _lastHist(4), const [], ask,
@@ -1241,6 +1546,58 @@ extension AppCourses on AppController {
       }
       await saveProgress();
       return '';
+    } finally {
+      generating = false;
+      notifyListeners();
+    }
+  }
+
+  /// continueCourse — «Продолжить курс»: ИИ смотрит на прогресс и добавляет
+  /// следующие задачи. После каждого блока пройденных тем — экзамен.
+  Future<String> continueCourse({int count = 4}) async {
+    if (busy) return '';
+    if (ai == null || !ai!.ready) return 'Нет API-ключа.';
+    generating = true;
+    fillCurrent = cur.title;
+    lastFillError = '';
+    notifyListeners();
+    try {
+      final course = cur;
+      final completed = course.tasks
+          .where((t) => prog.completed[course.id]?[t.id] ?? false)
+          .map((t) => t.title)
+          .toList();
+      final tasks = await ai!.generateContinuation(course, count,
+          completedTitles: completed);
+      var seq = 0;
+      for (final t in tasks) {
+        if (course.tasks.any((x) => x.id == t.id)) {
+          t.id = 'ai-${DateTime.now().millisecondsSinceEpoch % 100000}-${seq++}';
+        }
+        course.tasks.add(t);
+        (prog.generated[course.id] ??= []).add(t);
+      }
+      // Периодический экзамен по пройденному материалу: один на каждые 5 тем.
+      final doneCount = completed.length;
+      final examCount = course.tasks.where((t) => t.isExam).length;
+      if (doneCount >= 5 && doneCount ~/ 5 > examCount) {
+        try {
+          final exam = await ai!.generateExam(course, completed);
+          if (course.tasks.any((x) => x.id == exam.id)) {
+            exam.id = 'exam-${DateTime.now().millisecondsSinceEpoch % 100000}';
+          }
+          course.tasks.add(exam);
+          (prog.generated[course.id] ??= []).add(exam);
+        } catch (_) {}
+      }
+      await saveProgress();
+      if (tasks.isNotEmpty) {
+        selectTask(course.tasks.length - tasks.length);
+      }
+      return '';
+    } catch (e) {
+      lastFillError = _errMsg(e);
+      return lastFillError;
     } finally {
       generating = false;
       notifyListeners();

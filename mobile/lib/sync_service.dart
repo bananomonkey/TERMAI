@@ -32,6 +32,8 @@ class SyncService extends ChangeNotifier {
   User? _user;
   Timer? _pushTimer;
   String? _pendingJson;
+  Timer? _configPushTimer;
+  String? _pendingConfigJson;
 
   /// Синхронизация имеет смысл только на мобильных платформах.
   bool get supported =>
@@ -84,7 +86,7 @@ class SyncService extends ChangeNotifier {
         notifyListeners();
       });
     } catch (e) {
-      _error = _msg(e);
+      _error = _friendly(e);
     }
     notifyListeners();
   }
@@ -121,9 +123,9 @@ class SyncService extends ChangeNotifier {
       return '';
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return '';
-      return _msg(e);
+      return _friendly(e);
     } catch (e) {
-      return _msg(e);
+      return _friendly(e);
     } finally {
       _busy = false;
       notifyListeners();
@@ -159,7 +161,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': (data?['updated_at'] as num?)?.toInt() ?? 0,
       };
     } catch (e) {
-      _error = _msg(e);
+      _error = _friendly(e);
       notifyListeners();
       return null;
     }
@@ -180,9 +182,9 @@ class SyncService extends ChangeNotifier {
       });
       return '';
     } catch (e) {
-      _error = _msg(e);
+      _error = _friendly(e);
       notifyListeners();
-      return _msg(e);
+      return _friendly(e);
     }
   }
 
@@ -202,9 +204,9 @@ class SyncService extends ChangeNotifier {
       });
       return '';
     } catch (e) {
-      _error = _msg(e);
+      _error = _friendly(e);
       notifyListeners();
-      return _msg(e);
+      return _friendly(e);
     }
   }
 
@@ -226,7 +228,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': (data?['updated_at'] as num?)?.toInt() ?? 0,
       };
     } catch (e) {
-      _error = _msg(e);
+      _error = _friendly(e);
       notifyListeners();
       return null;
     }
@@ -241,9 +243,15 @@ class SyncService extends ChangeNotifier {
           .collection('users_progress')
           .doc(u.uid)
           .delete();
+      try {
+        await FirebaseFirestore.instance
+            .collection('users_config')
+            .doc(u.uid)
+            .delete();
+      } catch (_) {}
       return '';
     } catch (e) {
-      return _msg(e);
+      return _friendly(e);
     }
   }
 
@@ -259,9 +267,37 @@ class SyncService extends ChangeNotifier {
     });
   }
 
+  /// scheduleConfigPush — отложенная отправка конфига (имя, тема, ключи).
+  /// Отдельный таймер, чтобы прогресс и конфиг не отменяли друг друга.
+  void scheduleConfigPush(String json) {
+    if (!_ready || _user == null) return;
+    _pendingConfigJson = json;
+    _configPushTimer?.cancel();
+    _configPushTimer = Timer(const Duration(seconds: 2), () {
+      final pending = _pendingConfigJson;
+      _pendingConfigJson = null;
+      if (pending != null) pushConfig(pending);
+    });
+  }
+
   String _msg(Object e) {
     var s = e.toString();
     s = s.replaceFirst(RegExp(r'^Exception:\s*'), '');
     return s.length > 240 ? s.substring(0, 240) : s;
+  }
+
+  String _friendly(Object e) {
+    final raw = _msg(e).toLowerCase();
+    if (raw.contains('permission-denied') ||
+        raw.contains('missing or insufficient permissions')) {
+      return 'Нет доступа к облаку: проверь Firestore Rules для users_progress и users_config.';
+    }
+    if (raw.contains('unavailable') || raw.contains('network')) {
+      return 'Нет связи с облаком. Проверь интернет и повтори.';
+    }
+    if (raw.contains('unauthenticated')) {
+      return 'Сессия Google истекла — войди заново.';
+    }
+    return _msg(e);
   }
 }

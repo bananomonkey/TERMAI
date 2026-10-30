@@ -130,8 +130,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 16),
           Center(
-            child: Text('тренажёр навыков с ИИ-наставником',
-                style: TextStyle(fontSize: 13, color: C.muted)),
+            child: Text(
+              'тренажёр навыков с ИИ-наставником',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
+                color: C.text,
+              ),
+            ),
           ),
           const SizedBox(height: 26),
           Text('Учись делать, а не смотреть',

@@ -71,6 +71,7 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
         listenable: screenObserver,
         builder: (context, __) {
           if (!controller.config.onboarded ||
+              !controller.config.mascotVisible ||
               !_screens.contains(ScreenObserver.current)) {
             return const SizedBox.shrink();
           }

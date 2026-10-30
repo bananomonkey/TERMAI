@@ -161,7 +161,11 @@ class _BootScreenState extends State<BootScreen>
             ),
             const SizedBox(height: 20),
             Text('тренажёр навыков с ИИ-наставником',
-                style: TextStyle(color: C.muted, fontSize: 13)),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: C.text,
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
       ),

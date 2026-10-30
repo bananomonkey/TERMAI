@@ -1,5 +1,9 @@
-// progress_map.dart — карта прогресса: маршрут по курсу, узлы задач,
-// достижения и ключевые показатели. Открывается из нижнего дока.
+// progress_map.dart — интерактивная карта курса в виде графа.
+//
+// Один граф на курс: корень курса → модули (по 5 задач) → задачи/экзамены.
+// Layout детерминированный, слоистый: без force-directed и пересчёта
+// координат при зуме. Холст изолирован RepaintBoundary, ноды вне viewport
+// не строятся (culling), сами ноды максимально лёгкие.
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -10,8 +14,55 @@ import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-class ProgressMapScreen extends StatelessWidget {
+class ProgressMapScreen extends StatefulWidget {
   const ProgressMapScreen({super.key});
+
+  @override
+  State<ProgressMapScreen> createState() => _ProgressMapScreenState();
+}
+
+class _ProgressMapScreenState extends State<ProgressMapScreen> {
+  final TransformationController _tc = TransformationController();
+  final Set<int> _collapsed = {};
+  Rect _visible = const Rect.fromLTWH(-300, -300, 1600, 1600);
+  Size _viewport = Size.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _tc.addListener(_onTransform);
+  }
+
+  @override
+  void dispose() {
+    _tc.removeListener(_onTransform);
+    _tc.dispose();
+    super.dispose();
+  }
+
+  void _onTransform() {
+    if (_viewport == Size.zero) return;
+    try {
+      final inv = Matrix4.inverted(_tc.value);
+      final rect = MatrixUtils.transformRect(
+        inv,
+        Offset.zero & _viewport,
+      ).inflate(180);
+      if (rect != _visible) setState(() => _visible = rect);
+    } catch (_) {}
+  }
+
+  void _fit() {
+    final size = _viewport;
+    if (size == Size.zero) return;
+    final graph = _buildGraph(controller.cur);
+    final scaleX = size.width / (graph.width + 60);
+    final scaleY = size.height / (graph.height + 60);
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+    _tc.value = Matrix4.identity()
+      ..translate(20.0, 20.0)
+      ..scale(scale.clamp(0.35, 1.0));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +71,13 @@ class ProgressMapScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Карта прогресса',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(
+            tooltip: 'Достижения',
+            icon: const Icon(Icons.emoji_events_outlined, size: 21),
+            onPressed: () => _showAchievements(context),
+          ),
+        ],
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -32,25 +90,31 @@ class ProgressMapScreen extends StatelessWidget {
               );
             }
             final course = controller.cur;
-            final tasks = course.tasks;
-            final done = controller.prog.completed[course.id] ?? {};
-            final completed =
-                tasks.where((t) => done[t.id] ?? false).length;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            final graph = _buildGraph(course);
+            return Column(
               children: [
-                _StatsCard(
-                  level: controller.prog.level,
-                  xp: controller.prog.xp,
-                  streak: controller.prog.streak,
-                  solved: controller.prog.solvedTotal,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: _StatsCard(
+                    level: controller.prog.level,
+                    xp: controller.prog.xp,
+                    streak: controller.prog.streak,
+                    solved: controller.prog.solvedTotal,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                caption('Маршрут', color: C.accent),
-                const SizedBox(height: 9),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: caption('Маршрут', color: C.accent),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 SizedBox(
-                  height: 38,
+                  height: 36,
                   child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: controller.courses.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 7),
@@ -61,7 +125,12 @@ class ProgressMapScreen extends StatelessWidget {
                         selected: selected,
                         label: Text(c.title,
                             maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onSelected: (_) => controller.switchCourseSilent(i),
+                        onSelected: (_) {
+                          controller.switchCourseSilent(i);
+                          _collapsed.clear();
+                          _tc.value = Matrix4.identity();
+                          setState(() {});
+                        },
                         labelStyle: TextStyle(
                             fontSize: 12,
                             color: selected ? C.text : C.muted),
@@ -75,68 +144,91 @@ class ProgressMapScreen extends StatelessWidget {
                     },
                   ),
                 ),
-                const SizedBox(height: 12),
-                cardBox(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Stack(
                     children: [
-                      Row(children: [
-                        Expanded(
-                          child: Text(course.title,
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: C.text)),
+                      Positioned.fill(
+                        child: LayoutBuilder(builder: (context, box) {
+                          _viewport = Size(box.maxWidth, box.maxHeight);
+                          return ClipRect(
+                            child: InteractiveViewer(
+                              transformationController: _tc,
+                              constrained: false,
+                              minScale: 0.3,
+                              maxScale: 2.6,
+                              boundaryMargin:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 500, vertical: 500),
+                              child: RepaintBoundary(
+                                child: SizedBox(
+                                  width: graph.width,
+                                  height: graph.height,
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: CustomPaint(
+                                          painter: _EdgePainter(
+                                            nodes: graph.nodes,
+                                            edges: graph.edges,
+                                            visible: _visible,
+                                          ),
+                                        ),
+                                      ),
+                                      for (final n in graph.nodes)
+                                        if (_visible
+                                            .overlaps(n.rect))
+                                          Positioned(
+                                            left: n.x,
+                                            top: n.y,
+                                            width: n.w,
+                                            height: n.h,
+                                            child: RepaintBoundary(
+                                              child: _GraphNodeView(
+                                                node: n,
+                                                onTap: () => _onNodeTap(n),
+                                              ),
+                                            ),
+                                          ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      if (graph.nodes.length <= 1)
+                        Center(
+                          child: Text(
+                            'В курсе пока нет задач. Открой курс и продолжи его.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: C.muted),
+                          ),
                         ),
-                        Text('$completed/${tasks.length}',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: C.good)),
-                      ]),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: tasks.isEmpty
-                              ? 0
-                              : completed / tasks.length,
-                          minHeight: 6,
-                          backgroundColor: C.card2,
-                          color: C.good,
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _ZoomButton(
+                                icon: Icons.add,
+                                onTap: () => _zoom(1.25)),
+                            const SizedBox(height: 7),
+                            _ZoomButton(
+                                icon: Icons.remove,
+                                onTap: () => _zoom(0.8)),
+                            const SizedBox(height: 7),
+                            _ZoomButton(
+                                icon: Icons.fit_screen_outlined,
+                                onTap: _fit),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                if (tasks.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'В курсе пока нет задач. Открой курс и попроси ИИ наполнить его.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: C.muted, height: 1.4),
-                    ),
-                  )
-                else
-                  for (var i = 0; i < tasks.length; i++)
-                    _RouteRow(
-                      index: i,
-                      total: tasks.length,
-                      task: tasks[i],
-                      done: done[tasks[i].id] ?? false,
-                      current: i == _frontier(tasks, done),
-                      onTap: () {
-                        controller.selectTask(i);
-                        Navigator.of(context)
-                            .push(pageRoute(const LessonScreen()));
-                      },
-                    ),
-                const SizedBox(height: 18),
-                caption('Достижения', color: C.accent),
-                const SizedBox(height: 9),
-                _Achievements(achieved: controller.prog.achieved),
               ],
             );
           },
@@ -145,11 +237,389 @@ class ProgressMapScreen extends StatelessWidget {
     );
   }
 
-  int _frontier(List<Task> tasks, Map<String, bool> done) {
-    for (var i = 0; i < tasks.length; i++) {
-      if (!(done[tasks[i].id] ?? false)) return i;
+  void _zoom(double factor) {
+    final current = _tc.value.getMaxScaleOnAxis();
+    final next = (current * factor).clamp(0.3, 2.6);
+    final f = next / current;
+    _tc.value = _tc.value.clone()..scale(f);
+    setState(() {});
+  }
+
+  void _onNodeTap(_GNode n) {
+    if (n.type == 'module') {
+      setState(() {
+        if (!_collapsed.remove(n.module)) _collapsed.add(n.module);
+      });
+      return;
     }
-    return tasks.length;
+    if (n.taskIndex != null) {
+      controller.selectTask(n.taskIndex!);
+      Navigator.of(context).push(pageRoute(const LessonScreen()));
+    }
+  }
+
+  void _showAchievements(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Достижения',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: C.text)),
+              const SizedBox(height: 12),
+              _Achievements(achieved: controller.prog.achieved),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  _Graph _buildGraph(Course course) {
+    final tasks = course.tasks;
+    final done = controller.prog.completed[course.id] ?? {};
+    var frontier = tasks.length;
+    for (var i = 0; i < tasks.length; i++) {
+      if (!(done[tasks[i].id] ?? false)) {
+        frontier = i;
+        break;
+      }
+    }
+
+    final nodes = <_GNode>[];
+    final edges = <_GEdge>[];
+    const left = 32.0;
+    const taskX = 292.0;
+    const taskW = 238.0;
+    const taskH = 52.0;
+    const moduleW = 190.0;
+    const moduleH = 50.0;
+    const rowGap = 66.0;
+
+    final root = _GNode(
+      id: 'root',
+      type: 'course',
+      label: course.title,
+      module: -1,
+      x: left,
+      y: 10,
+      w: 260,
+      h: 54,
+    );
+    nodes.add(root);
+
+    var y = 96.0;
+    for (var start = 0; start < tasks.length; start += 5) {
+      final end = (start + 5).clamp(0, tasks.length);
+      final count = end - start;
+      final moduleIndex = start ~/ 5;
+      var topic = course.title;
+      if (course.syllabus.isNotEmpty) {
+        topic = course.syllabus[
+            (moduleIndex).clamp(0, course.syllabus.length - 1)];
+      }
+      final moduleDone = <Task>[
+        for (var i = start; i < end; i++) tasks[i]
+      ].every((t) => done[t.id] ?? false);
+      final moduleNode = _GNode(
+        id: 'm$moduleIndex',
+        type: 'module',
+        label: topic,
+        module: moduleIndex,
+        x: left,
+        y: y,
+        w: moduleW,
+        h: moduleH,
+        done: moduleDone,
+        count: count,
+        collapsed: _collapsed.contains(moduleIndex),
+      );
+      nodes.add(moduleNode);
+      edges.add(_GEdge('root', moduleNode.id));
+      if (moduleIndex > 0) edges.add(_GEdge('m${moduleIndex - 1}', moduleNode.id));
+
+      if (!_collapsed.contains(moduleIndex)) {
+        for (var i = start; i < end; i++) {
+          final t = tasks[i];
+          final n = _GNode(
+            id: 't$i',
+            type: t.isExam ? 'exam' : 'task',
+            label: t.title,
+            module: moduleIndex,
+            taskIndex: i,
+            x: taskX,
+            y: y + 2 + (i - start) * rowGap,
+            w: taskW,
+            h: taskH,
+            done: done[t.id] ?? false,
+            current: i == frontier,
+            exam: t.isExam,
+            subtitle: t.isExam
+                ? 'экзамен'
+                : (t.isQuiz ? 'тест' : 'практика'),
+          );
+          nodes.add(n);
+          if (i == start) {
+            edges.add(_GEdge(moduleNode.id, n.id));
+          } else {
+            edges.add(_GEdge('t${i - 1}', n.id));
+          }
+        }
+      }
+      y += count * rowGap + 38;
+    }
+    return _Graph(
+      nodes: nodes,
+      edges: edges,
+      width: taskX + taskW + 60,
+      height: (y + 60).clamp(240.0, 6000.0).toDouble(),
+    );
+  }
+}
+
+class _Graph {
+  final List<_GNode> nodes;
+  final List<_GEdge> edges;
+  final double width, height;
+  _Graph({
+    required this.nodes,
+    required this.edges,
+    required this.width,
+    required this.height,
+  });
+}
+
+class _GNode {
+  final String id, type, label, subtitle;
+  final int module;
+  final int? taskIndex;
+  final double x, y, w, h;
+  final bool done, current, exam, collapsed;
+  final int count;
+  _GNode({
+    required this.id,
+    required this.type,
+    required this.label,
+    required this.module,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    this.taskIndex,
+    this.done = false,
+    this.current = false,
+    this.exam = false,
+    this.collapsed = false,
+    this.count = 0,
+    this.subtitle = '',
+  });
+
+  Rect get rect => Rect.fromLTWH(x, y, w, h);
+  Offset get right => Offset(x + w, y + h / 2);
+  Offset get left => Offset(x, y + h / 2);
+  Offset get bottom => Offset(x + w / 2, y + h);
+  Offset get top => Offset(x + w / 2, y);
+}
+
+class _GEdge {
+  final String from, to;
+  _GEdge(this.from, this.to);
+}
+
+class _EdgePainter extends CustomPainter {
+  final List<_GNode> nodes;
+  final List<_GEdge> edges;
+  final Rect visible;
+
+  _EdgePainter({
+    required this.nodes,
+    required this.edges,
+    required this.visible,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final byId = {for (final n in nodes) n.id: n};
+    for (final e in edges) {
+      final a = byId[e.from], b = byId[e.to];
+      if (a == null || b == null) continue;
+      if (!visible.overlaps(a.rect.expandToInclude(b.rect).inflate(40))) {
+        continue;
+      }
+      final color = b.done
+          ? C.good.withAlpha(150)
+          : b.current
+              ? C.accent.withAlpha(200)
+              : C.border;
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = b.current ? 2.2 : 1.5
+        ..strokeCap = StrokeCap.round;
+      final path = Path();
+      if (a.type == 'course' || (a.type == 'module' && b.type == 'module')) {
+        final p1 = a.bottom, p2 = b.top;
+        final mid = (p1.dy + p2.dy) / 2;
+        path.moveTo(p1.dx, p1.dy);
+        path.cubicTo(p1.dx, mid, p2.dx, mid, p2.dx, p2.dy);
+      } else if (a.type == 'module') {
+        final p1 = a.right, p2 = b.left;
+        final mid = (p1.dx + p2.dx) / 2;
+        path.moveTo(p1.dx, p1.dy);
+        path.cubicTo(mid, p1.dy, mid, p2.dy, p2.dx, p2.dy);
+      } else {
+        final p1 = a.bottom, p2 = b.top;
+        path.moveTo(p1.dx, p1.dy);
+        path.cubicTo(p1.dx, p1.dy + 22, p2.dx, p2.dy - 22, p2.dx, p2.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EdgePainter old) => true;
+}
+
+class _GraphNodeView extends StatelessWidget {
+  final _GNode node;
+  final VoidCallback onTap;
+  const _GraphNodeView({required this.node, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color main = node.exam
+        ? C.warn
+        : node.done
+            ? C.good
+            : node.current
+                ? C.accent
+                : C.muted;
+    final bool module = node.type == 'module';
+    final bool root = node.type == 'course';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(module || root ? 14 : 12),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+              horizontal: module || root ? 12 : 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: node.current
+                ? main.withAlpha(C.isLight ? 26 : 34)
+                : C.card,
+            borderRadius: BorderRadius.circular(module || root ? 14 : 12),
+            border: Border.all(
+              color: node.current || node.exam
+                  ? main.withAlpha(190)
+                  : (node.done ? main.withAlpha(110) : C.border),
+              width: node.current || node.exam ? 1.8 : 1,
+            ),
+            boxShadow: node.current
+                ? [
+                    BoxShadow(
+                      color: main.withAlpha(45),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : null,
+          ),
+          child: Row(children: [
+            Icon(
+              root
+                  ? Icons.route_outlined
+                  : module
+                      ? (node.done
+                          ? Icons.check_circle_outline
+                          : Icons.folder_outlined)
+                      : node.exam
+                          ? Icons.assignment_late_outlined
+                          : node.done
+                              ? Icons.check_circle_rounded
+                              : node.current
+                                  ? Icons.play_circle_fill_rounded
+                                  : Icons.circle_outlined,
+              size: root || module ? 18 : 17,
+              color: main,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    node.label,
+                    maxLines: module || root ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: root ? 13.5 : (module ? 12.5 : 11.5),
+                      height: 1.18,
+                      fontWeight: FontWeight.w700,
+                      color: node.done || node.current || node.exam
+                          ? C.text
+                          : C.muted,
+                    ),
+                  ),
+                  if (module)
+                    Text(
+                      node.done
+                          ? 'модуль пройден'
+                          : '${node.count} уроков',
+                      style: TextStyle(
+                          fontSize: 9.5,
+                          color: node.done ? C.good : C.muted),
+                    )
+                  else if (node.subtitle.isNotEmpty)
+                    Text(node.subtitle,
+                        style:
+                            TextStyle(fontSize: 9.5, color: C.muted)),
+                ],
+              ),
+            ),
+            if (module)
+              Icon(
+                node.collapsed ? Icons.chevron_right : Icons.expand_more,
+                size: 16,
+                color: C.muted,
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _ZoomButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _ZoomButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: C.card.withAlpha(225),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Icon(icon, size: 20, color: C.text),
+        ),
+      ),
+    );
   }
 }
 
@@ -166,41 +636,41 @@ class _StatsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final inLevel = xp % 100;
     return glass(
-      radius: 20,
-      blur: 26,
-      padding: const EdgeInsets.all(17),
-      glow: C.glow(color: C.accent, alpha: 45),
+      radius: 18,
+      blur: 20,
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      glow: C.glow(color: C.accent, alpha: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.route_outlined, color: C.accent, size: 19),
-            const SizedBox(width: 8),
+            Icon(Icons.route_outlined, color: C.accent, size: 17),
+            const SizedBox(width: 7),
             Text('Уровень $level',
                 style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
                     color: C.text)),
             const Spacer(),
             Text('$xp XP',
-                style: TextStyle(fontSize: 12.5, color: C.muted)),
+                style: TextStyle(fontSize: 11.5, color: C.muted)),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: inLevel / 100,
-              minHeight: 6,
+              minHeight: 5,
               backgroundColor: C.card2,
               color: C.accent,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(children: [
             _Stat(label: 'Серия', value: '$streak дн.', color: C.warn),
-            const SizedBox(width: 22),
+            const SizedBox(width: 20),
             _Stat(label: 'Решено', value: '$solved', color: C.good),
-            const SizedBox(width: 22),
+            const SizedBox(width: 20),
             _Stat(
                 label: 'До уровня',
                 value: '${100 - inLevel} XP',
@@ -221,208 +691,15 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontSize: 10.5, color: C.muted)),
-          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 10, color: C.muted)),
+          const SizedBox(height: 1),
           Text(value,
               style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w800,
                   color: color)),
         ],
       );
-}
-
-class _RouteRow extends StatelessWidget {
-  final int index, total;
-  final Task task;
-  final bool done, current;
-  final VoidCallback onTap;
-  const _RouteRow({
-    required this.index,
-    required this.total,
-    required this.task,
-    required this.done,
-    required this.current,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        height: 78,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 42,
-              child: Column(children: [
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: index == 0 ? Colors.transparent : C.border,
-                  ),
-                ),
-                _MapNode(
-                  done: done,
-                  current: current,
-                  number: index + 1,
-                ),
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: index == total - 1
-                        ? Colors.transparent
-                        : C.border,
-                  ),
-                ),
-              ]),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 7),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                decoration: BoxDecoration(
-                  color: current
-                      ? C.accent.withAlpha(C.isLight ? 22 : 28)
-                      : C.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: current ? C.accent.withAlpha(110) : C.border,
-                  ),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(task.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: C.text)),
-                        const SizedBox(height: 3),
-                        Text(
-                            '${task.isQuiz ? 'тест' : (task.kind == 'theory' ? 'урок' : 'практика')} · ${task.difficulty}/5',
-                            style: TextStyle(
-                                fontSize: 10.5, color: C.muted)),
-                      ],
-                    ),
-                  ),
-                  if (done)
-                    Icon(Icons.check_circle_rounded,
-                        size: 19, color: C.good)
-                  else if (current)
-                    Icon(Icons.play_circle_fill_rounded,
-                        size: 21, color: C.accent)
-                  else
-                    Icon(Icons.lock_outline, size: 17, color: C.muted),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MapNode extends StatefulWidget {
-  final bool done, current;
-  final int number;
-  const _MapNode({
-    required this.done,
-    required this.current,
-    required this.number,
-  });
-
-  @override
-  State<_MapNode> createState() => _MapNodeState();
-}
-
-class _MapNodeState extends State<_MapNode>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.current) _pulse.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant _MapNode old) {
-    super.didUpdateWidget(old);
-    if (widget.current && !_pulse.isAnimating) {
-      _pulse.repeat(reverse: true);
-    } else if (!widget.current && _pulse.isAnimating) {
-      _pulse.stop();
-      _pulse.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.done
-        ? C.good
-        : widget.current
-            ? C.accent
-            : C.muted;
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (context, _) {
-        final scale = widget.current ? 1 + _pulse.value * 0.08 : 1.0;
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withAlpha(widget.done || widget.current ? 45 : 16),
-              border: Border.all(
-                  color: color.withAlpha(widget.current ? 230 : 130),
-                  width: widget.current ? 2 : 1.4),
-              boxShadow: widget.current
-                  ? [
-                      BoxShadow(
-                        color: color.withAlpha(60),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: widget.done
-                  ? Icon(Icons.check, size: 16, color: color)
-                  : Text('${widget.number}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: color)),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _Achievements extends StatelessWidget {

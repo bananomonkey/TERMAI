@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../ai.dart';
 import '../main.dart';
+import '../notifications.dart';
 import '../store.dart';
 import '../theme_refresh.dart';
+import '../update_service.dart';
 import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
@@ -30,6 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _base;
   late final TextEditingController _name;
   late String _provider;
+  bool _showKey = false;
 
   @override
   void initState() {
@@ -55,6 +58,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Имя сохранено')));
+  }
+
+  Future<void> _testNotification() async {
+    final ok = await notificationService.showTest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? 'Тестовое уведомление отправлено'
+          : 'Уведомления запрещены — разреши их в настройках Android'),
+    ));
   }
 
   Future<void> _pickReminderTime() async {
@@ -88,6 +101,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
     controller.saveConfig(autofill: false);
   }
 
+  Future<void> _generateTheme(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final prompt = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: C.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Тема по описанию'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Например: тёмная тема в стиле киберпанка, '
+                'неоновый бирюзовый акцент, мягкий графит',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dctx),
+              child: Text('Отмена', style: TextStyle(color: C.muted))),
+          FilledButton(
+            onPressed: () => Navigator.pop(dctx, ctrl.text.trim()),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    if (prompt == null || prompt.isEmpty || !context.mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: C.surface,
+        content: Row(children: [
+          SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
+          const SizedBox(width: 14),
+          const Expanded(child: Text('ИИ собирает палитру…')),
+        ]),
+      ),
+    );
+    final err = await controller.generateCustomTheme(prompt);
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(err.isEmpty
+          ? 'Тема создана и сохранена'
+          : err),
+    ));
+  }
+
+  Future<void> _checkUpdates(BuildContext context) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: C.surface,
+        content: Row(children: [
+          SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
+          const SizedBox(width: 14),
+          const Expanded(child: Text('Проверяю обновления…')),
+        ]),
+      ),
+    );
+    try {
+      final info = await UpdateService.check();
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      if (!info.available) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('У тебя последняя версия ${info.current}')));
+        return;
+      }
+      final open = await showDialog<bool>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          backgroundColor: C.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Доступна версия ${info.latest}'),
+          content: SizedBox(
+            width: 340,
+            child: SingleChildScrollView(
+              child: Text(
+                info.notes.isEmpty
+                    ? 'Скачай новый APK и установи поверх старой версии.'
+                    : info.notes,
+                style: TextStyle(fontSize: 12.5, color: C.text, height: 1.4),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx, false),
+                child: Text('Позже', style: TextStyle(color: C.muted))),
+            FilledButton(
+              onPressed: () => Navigator.pop(dctx, true),
+              child: const Text('Скачать'),
+            ),
+          ],
+        ),
+      );
+      if (open == true) {
+        final url = info.apkUrl.isNotEmpty ? info.apkUrl : info.releaseUrl;
+        await UpdateService.open(url);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось проверить обновления: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,6 +247,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _ThemePicker(
                           selected: controller.config.theme,
                           onPick: _pickTheme),
+                      const SizedBox(height: 8),
+                      _CustomThemes(
+                        selected: controller.config.theme,
+                        onPick: _pickTheme,
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => _generateTheme(context),
+                        style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            alignment: Alignment.centerLeft),
+                        icon: Icon(Icons.auto_awesome, size: 18, color: C.accent),
+                        label: Text('Сгенерировать тему ИИ',
+                            style: TextStyle(fontSize: 12.5, color: C.accent)),
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Показывать Термая',
+                            style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: C.text)),
+                        subtitle: Text(
+                          'Плавающий персонаж на экранах приложения',
+                          style:
+                              TextStyle(fontSize: 11.5, color: C.muted),
+                        ),
+                        value: controller.config.mascotVisible,
+                        activeThumbColor: C.accent,
+                        onChanged: controller.setMascotVisible,
+                      ),
                       const SizedBox(height: 16),
                       Text('Яркость кнопок',
                           style: TextStyle(fontSize: 12.5, color: C.muted)),
@@ -278,6 +443,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? (v) => controller.setAiMotivationEnabled(v)
                           : null,
                     ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _testNotification,
+                      style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(42)),
+                      icon: const Icon(Icons.notifications_active_outlined,
+                          size: 17),
+                      label: const Text('Проверить уведомление',
+                          style: TextStyle(fontSize: 12.5)),
+                    ),
                   ],
                 ),
               ),
@@ -311,9 +486,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _key,
-                        obscureText: true,
-                        decoration:
-                            const InputDecoration(labelText: 'API-ключ (sk-…)'),
+                        obscureText: !_showKey,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: InputDecoration(
+                          labelText: 'API-ключ (sk-…)',
+                          suffixIcon: IconButton(
+                            tooltip:
+                                _showKey ? 'Скрыть ключ' : 'Показать ключ',
+                            icon: Icon(
+                              _showKey
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                              color: C.muted,
+                            ),
+                            onPressed: () =>
+                                setState(() => _showKey = !_showKey),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -443,13 +634,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               controller.config.syncKeysToCloud = v;
                               await controller.saveConfig(autofill: false);
                               if (v && controller.sync.signedIn) {
-                                final msg =
-                                    await controller.syncConfig();
-                                if (context.mounted && msg.isNotEmpty) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(
-                                          SnackBar(content: Text(msg)));
+                                final msg = await controller.syncConfig();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(msg.isEmpty
+                                              ? 'Настройки и ключи сохранены в облако'
+                                              : msg)));
                                 }
+                              } else if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Ключи больше не отправляются в облако')));
                               }
                             },
                           ),
@@ -561,8 +758,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
               ),
               const SizedBox(height: 16),
+              _Panel(
+                child: _LinkRow(
+                  icon: Icons.system_update_alt,
+                  title: 'Проверить обновления',
+                  subtitle: 'Скачать свежий APK с GitHub',
+                  onTap: () => _checkUpdates(context),
+                ),
+              ),
+              const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.16.0',
+                child: Text('версия 1.17.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -741,6 +947,73 @@ class _LinkRow extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// _CustomThemes — палитры, созданные ИИ. Можно выбрать или удалить.
+class _CustomThemes extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onPick;
+  const _CustomThemes({required this.selected, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final themes = controller.config.customThemes;
+    if (themes.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final t in themes)
+          Builder(builder: (context) {
+            final p = presetFromCustom(t);
+            final active = selected == t.id;
+            return GestureDetector(
+              onTap: () => onPick(t.id),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: active ? p.accent : p.border,
+                    width: 2,
+                  ),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration:
+                        BoxDecoration(color: p.accent, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(t.title,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: p.text)),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () async {
+                      await controller.deleteCustomTheme(t.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Тема удалена')));
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(Icons.close, size: 14, color: p.muted),
+                    ),
+                  ),
+                ]),
+              ),
+            );
+          }),
+      ],
     );
   }
 }

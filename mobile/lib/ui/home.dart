@@ -75,12 +75,18 @@ class CourseGraphView extends StatelessWidget {
                 ),
               ),
             Expanded(
-              child: ListView.builder(
+              child: ReorderableListView.builder(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 196),
+                buildDefaultDragHandles: false,
                 itemCount: courses.length,
-                itemBuilder: (context, i) =>
-                    _CourseTile(index: i, currentIdx: current),
+                onReorder: (oldIndex, newIndex) =>
+                    controller.reorderCourses(oldIndex, newIndex),
+                itemBuilder: (context, i) => _CourseTile(
+                  key: ValueKey(courses[i].id),
+                  index: i,
+                  currentIdx: current,
+                ),
               ),
             ),
           ],
@@ -97,7 +103,8 @@ class CourseGraphView extends StatelessWidget {
 class _CourseTile extends StatelessWidget {
   final int index;
   final int currentIdx;
-  const _CourseTile({required this.index, required this.currentIdx});
+  const _CourseTile(
+      {super.key, required this.index, required this.currentIdx});
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +183,14 @@ class _CourseTile extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         color: done ? C.good : C.muted)),
                 const SizedBox(width: 2),
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Icon(Icons.drag_indicator,
+                        size: 18, color: C.muted.withAlpha(150)),
+                  ),
+                ),
                 if (done)
                   Icon(Icons.check_circle_rounded, color: C.good, size: 22)
                 else ...[
@@ -417,10 +432,13 @@ class _TaskGroups extends StatelessWidget {
         groups.add(_TaskRow(
           index: i,
           title: t.title,
-          kind: c.isTheory ? 'урок' : (t.isQuiz ? 'тест' : 'практика'),
+          kind: t.isExam
+              ? 'экзамен'
+              : (c.isTheory ? 'урок' : (t.isQuiz ? 'тест' : 'практика')),
           difficulty: t.difficulty,
           done: controller.isDone(t),
           current: i == _frontier(),
+          isExam: t.isExam,
           onTap: () async {
             controller.selectTask(i);
             await Navigator.of(context).push(pageRoute(const LessonScreen()));
@@ -456,7 +474,7 @@ class _TaskRow extends StatelessWidget {
   final int index;
   final String title, kind;
   final int difficulty;
-  final bool done, current;
+  final bool done, current, isExam;
   final VoidCallback onTap;
   const _TaskRow({
     required this.index,
@@ -465,43 +483,89 @@ class _TaskRow extends StatelessWidget {
     required this.difficulty,
     required this.done,
     required this.current,
+    required this.isExam,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final card = cardBox(
+      accent: isExam
+          ? C.warn.withAlpha(180)
+          : (current ? C.accent.withAlpha(C.isLight ? 90 : 110) : null),
+      duration: const Duration(milliseconds: 240),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          statusGlyph(done, current || isExam),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isExam) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: C.warn.withAlpha(35),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: C.warn.withAlpha(120)),
+                    ),
+                    child: Text('ЭКЗАМЕН',
+                        style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                            color: C.warn)),
+                  ),
+                  const SizedBox(height: 5),
+                ],
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Text(kind, style: TextStyle(fontSize: 11, color: C.muted)),
+                  const SizedBox(width: 10),
+                  difficultyDots(difficulty),
+                ]),
+              ],
+            ),
+          ),
+          chevron(size: 24, color: current ? C.accent : C.muted),
+        ],
+      ),
+    );
     return GestureDetector(
       onTap: onTap,
-      child: cardBox(
-        accent: current ? C.accent.withAlpha(C.isLight ? 90 : 110) : null,
-        duration: const Duration(milliseconds: 240),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            statusGlyph(done, current),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25)),
-                  const SizedBox(height: 5),
-                  Row(children: [
-                    Text(kind, style: TextStyle(fontSize: 11, color: C.muted)),
-                    const SizedBox(width: 10),
-                    difficultyDots(difficulty),
-                  ]),
-                ],
+      child: isExam
+          ? TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.25, end: 1),
+              duration: const Duration(milliseconds: 1300),
+              curve: Curves.easeInOut,
+              builder: (context, v, child) => Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: C.warn.withAlpha((70 + 120 * v).round()),
+                    width: 1.6,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: C.warn.withAlpha((18 + 40 * v).round()),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: child,
               ),
-            ),
-            chevron(size: 24, color: current ? C.accent : C.muted),
-          ],
-        ),
-      ),
+              child: card,
+            )
+          : card,
     );
   }
 }
@@ -520,10 +584,7 @@ class _EndActions extends StatelessWidget {
           onTap: (controller.generating || controller.busy)
               ? null
               : () async {
-                  final topic = await askText(context, 'Новая задача от ИИ',
-                      'тема: например «времена в английском» или «проброс портов»');
-                  if (topic == null || topic.isEmpty) return;
-                  final err = await controller.generateTask(topic);
+                  final err = await controller.continueCourse();
                   if (err.isNotEmpty && context.mounted) {
                     ScaffoldMessenger.of(context)
                         .showSnackBar(SnackBar(content: Text(err)));
@@ -543,18 +604,36 @@ class _EndActions extends StatelessWidget {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: C.accent))
               else
-                Icon(Icons.add, color: C.accent, size: 20),
+                Icon(Icons.play_arrow_rounded, color: C.accent, size: 21),
               const SizedBox(width: 8),
               Text(
                   controller.generating
-                      ? 'ИИ пишет задачу…'
-                      : 'Создать задачу от ИИ',
+                      ? 'ИИ продолжает курс…'
+                      : 'Продолжить курс',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: C.accent)),
             ]),
           ),
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: (controller.generating || controller.busy)
+              ? null
+              : () async {
+                  final topic = await askText(context, 'Новая задача от ИИ',
+                      'тема: например «времена в английском» или «проброс портов»');
+                  if (topic == null || topic.isEmpty) return;
+                  final err = await controller.generateTask(topic);
+                  if (err.isNotEmpty && context.mounted) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(err)));
+                  }
+                },
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('Создать одну задачу',
+              style: TextStyle(fontSize: 12)),
         ),
         const SizedBox(height: 8),
         Row(children: [

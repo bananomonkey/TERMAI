@@ -40,11 +40,16 @@ jobs:
       - name: Pub get
         run: flutter pub get
         working-directory: mobile
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build split APKs
+        run: flutter build apk --release --split-per-abi
         working-directory: mobile
-      - name: Rename APK
-        run: cp mobile/build/app/outputs/flutter-apk/app-release.apk TERMAI.apk
+      - name: Collect APKs
+        run: |
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk TERMAI-arm64-v8a.apk
+          cp mobile/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk TERMAI-armeabi-v7a.apk
+          cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk TERMAI-x86_64.apk
+          # совместимый псевдоним для старых ссылок: большинство телефонов — arm64
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk TERMAI.apk
       - name: Build AAB for Google Play
         run: flutter build appbundle --release
         working-directory: mobile
@@ -55,6 +60,9 @@ jobs:
           name: termai-android-artifacts
           path: |
             TERMAI.apk
+            TERMAI-arm64-v8a.apk
+            TERMAI-armeabi-v7a.apk
+            TERMAI-x86_64.apk
             TERMAI.aab
 
   release:

@@ -21,6 +21,7 @@
 
 # Google Play Core (deferred components) — не используется, но Flutter Engine ссылается.
 -dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
 
 # Application classes
 -keep class com.vlad.termai.** { *; }

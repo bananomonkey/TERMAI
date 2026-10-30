@@ -188,10 +188,15 @@ class Task {
         quiz = quiz ?? [],
         start = start ?? SandboxState();
 
-  factory Task.fromJson(Map<String, dynamic> j) => Task(
+  factory Task.fromJson(Map<String, dynamic> j) {
+    final rawKind = (j['kind'] as String?)?.toLowerCase();
+    final kind = rawKind == 'quiz'
+        ? 'quiz'
+        : (rawKind == 'exam' ? 'exam' : 'cmd');
+    return Task(
         id: j['id'] as String? ?? '',
         title: j['title'] as String? ?? '',
-        kind: (j['kind'] as String?) == 'quiz' ? 'quiz' : 'cmd',
+        kind: kind,
         difficulty: (j['difficulty'] as num?)?.toInt() ?? 2,
         goal: j['goal'] as String? ?? '',
         check: j['check'] as String? ?? '',
@@ -206,6 +211,7 @@ class Task {
         start: SandboxState.normalized(
             (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
       );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -224,6 +230,7 @@ class Task {
       };
 
   bool get isQuiz => kind == 'quiz';
+  bool get isExam => kind == 'exam';
   int get xp => 15 * difficulty + 15;
 }
 
@@ -280,6 +287,42 @@ class HistEntry {
 
 // ---------- чат с ментором ----------
 
+/// ChatAttachment — вложение в сообщении чата: фото или документ.
+/// Сам файл лежит в папке приложения, в JSON хранится только путь и метаданные.
+class ChatAttachment {
+  String type; // image | file
+  String path;
+  String name;
+  String mime;
+  int size;
+
+  ChatAttachment({
+    required this.type,
+    required this.path,
+    required this.name,
+    this.mime = '',
+    this.size = 0,
+  });
+
+  bool get isImage => type == 'image';
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        type: j['type'] as String? ?? 'file',
+        path: j['path'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        mime: j['mime'] as String? ?? '',
+        size: (j['size'] as num?)?.toInt() ?? 0,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'path': path,
+        'name': name,
+        'mime': mime,
+        'size': size,
+      };
+}
+
 class ChatMsg {
   final String role; // user | mentor | system | error
   final String text;
@@ -288,7 +331,11 @@ class ChatMsg {
   /// обмена по кнопке «Скопировать».
   final String details;
 
-  ChatMsg(this.role, this.text, {this.details = ''});
+  final List<ChatAttachment> attachments;
+
+  ChatMsg(this.role, this.text,
+      {this.details = '', List<ChatAttachment>? attachments})
+      : attachments = attachments ?? [];
 
   bool get isError => role == 'error';
 
@@ -296,11 +343,16 @@ class ChatMsg {
         'role': role,
         'text': text,
         if (details.isNotEmpty) 'details': details,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
       };
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
         j['role'] as String? ?? 'mentor',
         j['text'] as String? ?? '',
         details: j['details'] as String? ?? '',
+        attachments: ((j['attachments'] as List?) ?? [])
+            .map((a) => ChatAttachment.fromJson(a as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -385,20 +437,42 @@ class Bookmark {
 /// Config.fallbacks: если основной провайдер откажет, TERMAI идёт по списку.
 class AiEndpoint {
   String provider, apiKey, model, baseUrl;
+
+  /// Здоровье модели: сколько ошибок подряд, когда была последняя ошибка,
+  /// до какого времени модель временно понижена, когда последний успех.
+  int failStreak;
+  int lastErrorAt;
+  int penaltyUntil;
+  int lastOkAt;
+  String lastError;
+
   AiEndpoint({
     this.provider = 'deepseek',
     this.apiKey = '',
     this.model = '',
     this.baseUrl = '',
+    this.failStreak = 0,
+    this.lastErrorAt = 0,
+    this.penaltyUntil = 0,
+    this.lastOkAt = 0,
+    this.lastError = '',
   });
 
   bool get ready => apiKey.trim().isNotEmpty;
+
+  bool get penalized =>
+      penaltyUntil > DateTime.now().millisecondsSinceEpoch;
 
   factory AiEndpoint.fromJson(Map<String, dynamic> j) => AiEndpoint(
         provider: j['provider'] as String? ?? 'deepseek',
         apiKey: j['api_key'] as String? ?? '',
         model: j['model'] as String? ?? '',
         baseUrl: j['base_url'] as String? ?? '',
+        failStreak: (j['fail_streak'] as num?)?.toInt() ?? 0,
+        lastErrorAt: (j['last_error_at'] as num?)?.toInt() ?? 0,
+        penaltyUntil: (j['penalty_until'] as num?)?.toInt() ?? 0,
+        lastOkAt: (j['last_ok_at'] as num?)?.toInt() ?? 0,
+        lastError: j['last_error'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -406,6 +480,38 @@ class AiEndpoint {
         'api_key': apiKey,
         'model': model,
         'base_url': baseUrl,
+        if (failStreak > 0) 'fail_streak': failStreak,
+        if (lastErrorAt > 0) 'last_error_at': lastErrorAt,
+        if (penaltyUntil > 0) 'penalty_until': penaltyUntil,
+        if (lastOkAt > 0) 'last_ok_at': lastOkAt,
+        if (lastError.isNotEmpty) 'last_error': lastError,
+      };
+}
+
+/// CustomThemeData — пользовательская палитра, сгенерированная ИИ.
+/// Цвета хранятся в hex-строках, чтобы модель не зависела от Flutter.
+class CustomThemeData {
+  String id;
+  String title;
+  Map<String, String> colors;
+
+  CustomThemeData({
+    required this.id,
+    required this.title,
+    required this.colors,
+  });
+
+  factory CustomThemeData.fromJson(Map<String, dynamic> j) => CustomThemeData(
+        id: j['id'] as String? ?? '',
+        title: j['title'] as String? ?? 'Своя тема',
+        colors: ((j['colors'] as Map?) ?? {})
+            .map((k, v) => MapEntry(k.toString(), v.toString())),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'colors': colors,
       };
 }
 
@@ -456,6 +562,23 @@ class Config {
   /// Отправлять ли ключи ИИ (apiKey + фолбэки) в Google-облако.
   /// По умолчанию включено; пользователь может выключить в настройках.
   bool syncKeysToCloud;
+
+  /// Показывать ли плавающего Термая на экране.
+  bool mascotVisible;
+
+  /// Пользовательские темы, сгенерированные ИИ.
+  List<CustomThemeData> customThemes;
+
+  /// Время последнего изменения конфига (ISO). Нужно для merge с облаком.
+  String updatedAt;
+
+  /// Здоровье основной модели (для авторанжирования).
+  int primaryFailStreak;
+  int primaryLastErrorAt;
+  int primaryPenaltyUntil;
+  int primaryLastOkAt;
+  String primaryLastError;
+
   Config({
     this.apiKey = '',
     this.provider = 'deepseek',
@@ -481,8 +604,17 @@ class Config {
     this.bgDim = 0.55,
     this.buttonBrightness = 1.0,
     this.syncKeysToCloud = true,
+    this.mascotVisible = true,
+    List<CustomThemeData>? customThemes,
+    this.updatedAt = '',
+    this.primaryFailStreak = 0,
+    this.primaryLastErrorAt = 0,
+    this.primaryPenaltyUntil = 0,
+    this.primaryLastOkAt = 0,
+    this.primaryLastError = '',
   }) : motivationQueue = motivationQueue ?? [],
-       fallbacks = fallbacks ?? [];
+       fallbacks = fallbacks ?? [],
+       customThemes = customThemes ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -519,6 +651,18 @@ class Config {
             .clamp(0.6, 1.4)
             .toDouble(),
         syncKeysToCloud: j['sync_keys_to_cloud'] as bool? ?? true,
+        mascotVisible: j['mascot_visible'] as bool? ?? true,
+        customThemes: ((j['custom_themes'] as List?) ?? [])
+            .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        updatedAt: j['updated_at'] as String? ?? '',
+        primaryFailStreak: (j['primary_fail_streak'] as num?)?.toInt() ?? 0,
+        primaryLastErrorAt:
+            (j['primary_last_error_at'] as num?)?.toInt() ?? 0,
+        primaryPenaltyUntil:
+            (j['primary_penalty_until'] as num?)?.toInt() ?? 0,
+        primaryLastOkAt: (j['primary_last_ok_at'] as num?)?.toInt() ?? 0,
+        primaryLastError: j['primary_last_error'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -546,7 +690,34 @@ class Config {
         'bg_dim': bgDim,
         'button_brightness': buttonBrightness,
         'sync_keys_to_cloud': syncKeysToCloud,
+        'mascot_visible': mascotVisible,
+        'custom_themes': customThemes.map((e) => e.toJson()).toList(),
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+        if (primaryFailStreak > 0) 'primary_fail_streak': primaryFailStreak,
+        if (primaryLastErrorAt > 0)
+          'primary_last_error_at': primaryLastErrorAt,
+        if (primaryPenaltyUntil > 0)
+          'primary_penalty_until': primaryPenaltyUntil,
+        if (primaryLastOkAt > 0) 'primary_last_ok_at': primaryLastOkAt,
+        if (primaryLastError.isNotEmpty) 'primary_last_error': primaryLastError,
       };
+
+  /// toCloudJson — конфиг для Firestore. Ключи попадают в облако только
+  /// при includeKeys=true; остальные настройки синхронизируются всегда.
+  Map<String, dynamic> toCloudJson({required bool includeKeys}) {
+    final j = Map<String, dynamic>.from(toJson());
+    // локальный путь к фону не имеет смысла на другом устройстве
+    j.remove('bg_photo');
+    if (!includeKeys) {
+      j.remove('api_key');
+      final fbs = (j['fallbacks'] as List?) ?? const [];
+      j['fallbacks'] = fbs
+          .map((e) => Map<String, dynamic>.from(e as Map)
+            ..remove('api_key'))
+          .toList();
+    }
+    return j;
+  }
 }
 
 class Progress {

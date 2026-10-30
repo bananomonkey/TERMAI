@@ -1,6 +1,7 @@
 // ai.dart — клиент OpenAI-совместимого API и роли ИИ (порт ai.go):
 // симулятор терминала, проверяющий, ментор, генератор задач и курсов.
 import 'dart:convert';
+import 'dart:io' as io;
 import 'package:http/http.dart' as http;
 import 'app_action.dart';
 import 'models.dart';
@@ -114,18 +115,40 @@ class AIClient {
     }
 
     add(cfg.provider, cfg.apiKey, cfg.model, cfg.baseUrl);
+    if (eps.isNotEmpty) {
+      final p = eps.first;
+      p.failStreak = cfg.primaryFailStreak;
+      p.lastErrorAt = cfg.primaryLastErrorAt;
+      p.penaltyUntil = cfg.primaryPenaltyUntil;
+      p.lastOkAt = cfg.primaryLastOkAt;
+      p.lastError = cfg.primaryLastError;
+    }
     for (final f in cfg.fallbacks) {
+      final before = eps.length;
       add(f.provider, f.apiKey, f.model, f.baseUrl);
+      if (eps.length > before) {
+        final ep = eps.last;
+        ep.failStreak = f.failStreak;
+        ep.lastErrorAt = f.lastErrorAt;
+        ep.penaltyUntil = f.penaltyUntil;
+        ep.lastOkAt = f.lastOkAt;
+        ep.lastError = f.lastError;
+      }
     }
     return AIClient._(eps, labels);
   }
 
   bool get ready => _endpoints.isNotEmpty;
 
+  List<AiEndpoint> get endpoints => List<AiEndpoint>.unmodifiable(_endpoints);
+
   /// onUsage — расход токенов: модель, вход, выход. Ставит контроллер.
   void Function(String model, int prompt, int completion)? onUsage;
   /// onRetry — сюда пишем, какое резервное подключение сработало.
   void Function(String message)? onRetry;
+  /// onEndpointResult — здоровье модели: успех/ошибка, задержка.
+  void Function(AiEndpoint ep, bool ok, String error, int latencyMs)?
+      onEndpointResult;
 
   String get model => _endpoints.isEmpty ? '' : _endpoints.first.model;
 
@@ -137,8 +160,29 @@ class AIClient {
     };
   }
 
-  Future<Map<String, dynamic>> _chatOnce(AiEndpoint ep, List<Map<String, String>> messages, double temp,
-      {bool jsonMode = true}) async {
+  String _messageText(dynamic content) {
+    if (content is String) return content;
+    if (content is List) {
+      return content
+          .map((p) {
+            if (p is Map) {
+              return (p['text'] ?? p['file'] ?? p['image_url'] ?? '').toString();
+            }
+            return '';
+          })
+          .join('\n');
+    }
+    return '';
+  }
+
+  Future<Map<String, dynamic>> _chatOnce(
+    AiEndpoint ep,
+    List<Map<String, dynamic>> messages,
+    double temp, {
+    bool jsonMode = true,
+    int? maxTokens,
+    Duration timeout = const Duration(seconds: 180),
+  }) async {
     final uri = Uri.parse('${ep.baseUrl}/chat/completions');
     Future<http.Response> post(bool strict) => http.post(uri,
         headers: _headers(ep),
@@ -146,8 +190,9 @@ class AIClient {
           'model': ep.model,
           'messages': messages,
           'temperature': temp,
+          if (maxTokens != null) 'max_tokens': maxTokens,
           if (jsonMode && strict) 'response_format': {'type': 'json_object'},
-        })).timeout(const Duration(seconds: 180));
+        })).timeout(timeout);
 
     var resp = await post(true);
     if (resp.statusCode != 200) resp = await post(false);
@@ -164,27 +209,110 @@ class AIClient {
     var pt = (usage?['prompt_tokens'] as num?)?.toInt() ?? 0;
     var ct = (usage?['completion_tokens'] as num?)?.toInt() ?? 0;
     if (pt <= 0) {
-      pt = estimateTokens(messages.map((m) => m['content'] ?? '').join('\n'));
+      pt = estimateTokens(messages.map((m) => _messageText(m['content'])).join('\n'));
     }
     if (ct <= 0) ct = estimateTokens((msg['content'] as String?) ?? '');
     onUsage?.call(ep.model, pt, ct);
     return msg;
   }
 
-  /// _chat — идём по основному подключению, а при отказе — по резервным.
-  Future<Map<String, dynamic>> _chat(List<Map<String, String>> messages, double temp, {bool jsonMode = true}) async {
+  int _penaltyMs(Object e, int failStreak) {
+    final raw = e.toString();
+    final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
+    final streak = failStreak.clamp(1, 6);
+    if (status == '401' || status == '403' || status == '404') {
+      return 30 * 60 * 1000;
+    }
+    if (status == '429') return streak * 2 * 60 * 1000;
+    if (status != null && status.startsWith('5')) {
+      return streak * 5 * 60 * 1000;
+    }
+    if (raw.toLowerCase().contains('timeout') ||
+        raw.toLowerCase().contains('timed out')) {
+      return streak * 5 * 60 * 1000;
+    }
+    return streak * 2 * 60 * 1000;
+  }
+
+  /// _chat — идём по подключениям с учётом здоровья: модели с ошибками
+  /// временно уходят вниз, но всё равно пробуются, если остальные отказали.
+  Future<Map<String, dynamic>> _chat(
+    List<Map<String, dynamic>> messages,
+    double temp, {
+    bool jsonMode = true,
+    int? maxTokens,
+    Duration timeout = const Duration(seconds: 180),
+  }) async {
     if (_endpoints.isEmpty) throw Exception('нет настроенных ИИ-подключений');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final order = _endpoints.asMap().entries.toList()
+      ..sort((a, b) {
+        final pa = a.value.penaltyUntil > now ? 1 : 0;
+        final pb = b.value.penaltyUntil > now ? 1 : 0;
+        if (pa != pb) return pa.compareTo(pb);
+        final fa = a.value.failStreak;
+        final fb = b.value.failStreak;
+        if (fa != fb) return fa.compareTo(fb);
+        return a.key.compareTo(b.key);
+      });
     final errors = <String>[];
-    for (var i = 0; i < _endpoints.length; i++) {
+    for (final entry in order) {
+      final i = entry.key;
+      final ep = entry.value;
+      final sw = Stopwatch()..start();
       try {
-        final msg = await _chatOnce(_endpoints[i], messages, temp, jsonMode: jsonMode);
-        if (i > 0) onRetry?.call('Основная модель недоступна — ответила резервная: ${_labels[i]}');
+        final msg = await _chatOnce(ep, messages, temp,
+            jsonMode: jsonMode, maxTokens: maxTokens, timeout: timeout);
+        ep.failStreak = 0;
+        ep.penaltyUntil = 0;
+        ep.lastOkAt = DateTime.now().millisecondsSinceEpoch;
+        ep.lastError = '';
+        onEndpointResult?.call(ep, true, '', sw.elapsedMilliseconds);
+        if (i > 0) {
+          onRetry?.call(
+              'Основная модель недоступна — ответила резервная: ${_labels[i]}');
+        }
         return msg;
       } catch (e) {
+        final ms = DateTime.now().millisecondsSinceEpoch;
+        ep.failStreak += 1;
+        ep.lastErrorAt = ms;
+        ep.lastError = _short(e);
+        ep.penaltyUntil = ms + _penaltyMs(e, ep.failStreak);
+        onEndpointResult?.call(
+            ep, false, ep.lastError, sw.elapsedMilliseconds);
         errors.add('${_labels[i]}: ${_short(e)}');
       }
     }
     throw Exception('Все модели недоступны. ${errors.join(' · ')}');
+  }
+
+  /// testEndpoint — лёгкий тест конкретной модели, без перебора fallback.
+  Future<TestResult> testEndpoint(AiEndpoint ep) async {
+    final sw = Stopwatch()..start();
+    try {
+      final msg = await _chatOnce(
+        ep,
+        [
+          {
+            'role': 'user',
+            'content': 'Ответь одним словом: ок',
+          }
+        ],
+        0,
+        jsonMode: false,
+        maxTokens: 8,
+        timeout: const Duration(seconds: 20),
+      );
+      return TestResult(
+        true,
+        sw.elapsedMilliseconds,
+        (msg['content'] as String? ?? '').trim(),
+        '',
+      );
+    } catch (e) {
+      return TestResult(false, sw.elapsedMilliseconds, '', rawError(e));
+    }
   }
 
   String _short(Object e) {
@@ -232,6 +360,57 @@ class AIClient {
     final msg = await _chat([
       {'role': 'system', 'content': system},
       {'role': 'user', 'content': user},
+    ], temp, jsonMode: false);
+    return ((msg['content'] as String?) ?? '').trim();
+  }
+
+  /// chatTextWithAttachments — текст + фото/документы.
+  /// Изображения уходят как image_url (data URL), документы — как file part.
+  /// Провайдер, который не поддерживает формат, вернёт ошибку — это ожидаемо.
+  Future<String> chatTextWithAttachments(
+    String system,
+    String user,
+    List<ChatAttachment> attachments,
+    double temp,
+  ) async {
+    final parts = <Map<String, dynamic>>[
+      {'type': 'text', 'text': user},
+    ];
+    for (final a in attachments) {
+      final f = io.File(a.path);
+      if (!await f.exists()) {
+        parts.add({
+          'type': 'text',
+          'text': '[Вложение ${a.name} недоступно на этом устройстве]',
+        });
+        continue;
+      }
+      final bytes = await f.readAsBytes();
+      if (bytes.length > 8 * 1024 * 1024) {
+        throw Exception('Вложение «${a.name}» больше 8 МБ');
+      }
+      final mime = a.mime.isNotEmpty
+          ? a.mime
+          : (a.isImage ? 'image/jpeg' : 'application/octet-stream');
+      final b64 = base64Encode(bytes);
+      if (a.isImage) {
+        parts.add({
+          'type': 'image_url',
+          'image_url': {'url': 'data:$mime;base64,$b64'},
+        });
+      } else {
+        parts.add({
+          'type': 'file',
+          'file': {
+            'filename': a.name,
+            'file_data': 'data:$mime;base64,$b64',
+          },
+        });
+      }
+    }
+    final msg = await _chat([
+      {'role': 'system', 'content': system},
+      {'role': 'user', 'content': parts},
     ], temp, jsonMode: false);
     return ((msg['content'] as String?) ?? '').trim();
   }
@@ -320,7 +499,7 @@ class AIClient {
       '- Отвечай по-русски, кратко, без markdown-заголовков.';
 
   Future<String> mentor(Course c, Task? task, SandboxState st, List<HistEntry> hist, List<String> chatLog, String question,
-      {bool interview = false, String solvedContext = '', String appContext = '', bool allowActions = true}) {
+      {bool interview = false, String solvedContext = '', String appContext = '', bool allowActions = true, List<ChatAttachment> attachments = const []}) {
     final b = StringBuffer('Курс: ${c.title}\n');
     b.write('Режим курса: ${c.isTheory ? 'теория, тесты и наставник (без терминала)' : 'практика в терминале'}\n');
     if (task != null) b.write('Текущая задача: ${task.title} — ${task.goal}\n');
@@ -333,7 +512,11 @@ class AIClient {
     if (chatLog.isNotEmpty) b.write('\nНедавний диалог:\n${chatLog.join('\n')}\n');
     b.write('\nВопрос студента: $question');
     final base = interview ? _sysInterviewer : (c.isTheory ? _sysMentorTheory : _sysMentorTerminal);
-    return chatText(allowActions ? base + appActionsPrompt : base, b.toString(), 0.7);
+    final system = allowActions ? base + appActionsPrompt : base;
+    if (attachments.isNotEmpty) {
+      return chatTextWithAttachments(system, b.toString(), attachments, 0.7);
+    }
+    return chatText(system, b.toString(), 0.7);
   }
 
   static const _sysMentorGeneral =
@@ -350,6 +533,7 @@ class AIClient {
     List<String> chatLog = const [],
     String appContext = '',
     String userName = '',
+    List<ChatAttachment> attachments = const [],
   }) {
     final b = StringBuffer();
     if (userName.trim().isNotEmpty) b.writeln('Имя пользователя: $userName');
@@ -360,7 +544,11 @@ class AIClient {
       b.writeln('Недавний диалог:\n${chatLog.join('\n')}');
     }
     b.writeln('Вопрос студента: $question');
-    return chatText(_sysMentorGeneral + appActionsPrompt, b.toString(), 0.7);
+    final system = _sysMentorGeneral + appActionsPrompt;
+    if (attachments.isNotEmpty) {
+      return chatTextWithAttachments(system, b.toString(), attachments, 0.7);
+    }
+    return chatText(system, b.toString(), 0.7);
   }
 
   /// motivationalNotifications — короткие уникальные сообщения для push.
@@ -484,6 +672,99 @@ class AIClient {
     return tasks;
   }
 
+  /// generateContinuation — следующие задачи курса с учётом уже пройденного.
+  Future<List<Task>> generateContinuation(
+    Course course,
+    int count, {
+    List<String> completedTitles = const [],
+  }) async {
+    final start = course.tasks.length;
+    final topics = <String>[];
+    for (var i = 0; i < count; i++) {
+      if (course.syllabus.isNotEmpty) {
+        topics.add(course.syllabus[(start + i) % course.syllabus.length]);
+      } else {
+        topics.add('углубление и повторение по курсу, часть ${start + i + 1}');
+      }
+    }
+    final temp = Course(
+      id: course.id,
+      title: course.title,
+      desc: course.desc,
+      mode: course.mode,
+      syllabus: topics,
+      tasks: List<Task>.from(course.tasks),
+    );
+    final tasks = await generateTaskBatch(temp, count);
+    if (completedTitles.isNotEmpty) {
+      // не повторяем уже пройденные названия
+      tasks.removeWhere((t) => completedTitles
+          .any((x) => x.trim().toLowerCase() == t.title.trim().toLowerCase()));
+    }
+    return tasks;
+  }
+
+  static const _sysExamGen = 'Ты — методист-экзаменатор TERMAI. Составь экзаменационную задачу по пройденным темам курса. '
+      'Экзамен проверяет несколько тем сразу, без подсказок. '
+      'Формат: kind="exam", 3-5 вопросов с 3 вариантами (correct — индекс с 0), '
+      'theory — короткое вступление, goal — что проверить, check — критерий. '
+      'Ответ — только JSON по схеме задачи: '
+      '{"id":"exam-...","title":"Экзамен: ...","kind":"exam","difficulty":3,'
+      '"theory":["..."],"quiz":[{"question":"...","options":["...","...","..."],"correct":0}],'
+      '"goal":"...","hints":[],"check":"...",'
+      '"start_state":{"workdir":"/workspace","files":{},"images":{},"containers":{},"volumes":{},"networks":["bridge","host","none"],"events":[]}}';
+
+  Future<Task> generateExam(Course course, List<String> topics) async {
+    final user = 'Курс: ${course.title}\n'
+        'Пройденные темы: ${topics.join('; ')}\n'
+        'Составь один экзамен по этим темам. Не повторяй названия задач: '
+        '${course.tasks.map((t) => t.title).take(12).join('; ')}\n'
+        'Ответ — только JSON.';
+    final j = await chatJSON(_sysExamGen, user, 0.4);
+    final t = Task.fromJson(j);
+    t.kind = 'exam';
+    t.id = t.id.isEmpty
+        ? 'exam-${DateTime.now().millisecondsSinceEpoch % 100000}'
+        : t.id;
+    t.difficulty = t.difficulty < 1 || t.difficulty > 5 ? 3 : t.difficulty;
+    if (t.title.trim().isEmpty) t.title = 'Экзамен по курсу';
+    if (t.goal.trim().isEmpty) t.goal = 'Проверь себя по пройденным темам.';
+    if (t.check.isEmpty) t.check = t.goal;
+    if (t.quiz.isEmpty) {
+      throw Exception('экзамен получился без вопросов');
+    }
+    return t;
+  }
+
+  static const _sysThemeGen = 'Ты — дизайнер тем для мобильного приложения TERMAI. '
+      'Пользователь описывает настроение/цвета. Верни палитру в JSON. '
+      'Нужны ключи: brightness ("dark" или "light"), bg, surface, card, card2, '
+      'secondary, accent, accentDark, text, muted, good, warn, danger, border, '
+      'termBg, termText. Все цвета — hex-строки #RRGGBB. '
+      'Текст должен читаться на фоне (контраст не ниже 4.5), accent — заметный. '
+      'Ответ — только JSON: {"title":"...","brightness":"dark","colors":{...}}.';
+
+  Future<CustomThemeData> generateTheme(String prompt) async {
+    final j = await chatJSON(
+      _sysThemeGen,
+      'Запрос пользователя: $prompt\nВерни палитру. Ответ — только JSON.',
+      0.7,
+    );
+    final colors = ((j['colors'] as Map?) ?? {})
+        .map((k, v) => MapEntry(k.toString(), v.toString()));
+    final brightness = (j['brightness'] as String?)?.toLowerCase();
+    if (brightness == 'light' || brightness == 'dark') {
+      colors['brightness'] = brightness!;
+    }
+    return CustomThemeData(
+      id: 'custom:${DateTime.now().millisecondsSinceEpoch % 1000000}',
+      title: (j['title'] as String?)?.trim().isNotEmpty == true
+          ? (j['title'] as String).trim()
+          : 'Тема по запросу',
+      colors: colors,
+    );
+  }
+
   // ---------- роль 5: генератор курсов ----------
 
   static const _sysCourseGen = 'Ты — методист, собирающий учебную программу для тренажёра по ЛЮБЫМ навыкам: языки, школьные и вузовские предметы, профессии, DevOps, дизайн, soft skills и т.п. Пользователь описывает цель.\n'
@@ -543,4 +824,12 @@ class CheckResult {
   final String comment;
   final int difficulty;
   CheckResult(this.solved, this.comment, this.difficulty);
+}
+
+class TestResult {
+  final bool ok;
+  final int latencyMs;
+  final String reply;
+  final String error;
+  TestResult(this.ok, this.latencyMs, this.reply, this.error);
 }

@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — тренажёр навыков с ИИ-наставником (языки, Linux, Docker, Git и другие курсы)"
 publish_to: "none"
-version: 1.16.0+37
+version: 1.17.0+38
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -11,17 +11,18 @@ dependencies:
     sdk: flutter
   http: ^1.2.2
   flutter_markdown: ^0.7.4
-  crypto: ^3.0.5
   path_provider: ^2.1.4
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
-  sensors_plus: ^6.1.1
   firebase_core: ^5.0.0
   firebase_auth: ^7.0.0
   google_sign_in: ^7.2.0
   cloud_firestore: ^7.0.0
   image_picker: ^1.1.2
-
+  flutter_timezone: ^5.1.1
+  package_info_plus: ^10.2.2
+  url_launcher: ^6.3.3
+  file_picker: ^13.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -34,6 +35,17 @@ flutter:
     - assets/icon/termai.png
     - assets/icon/termai_closed.png
     - assets/icon/termai_open.png
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 flutter_launcher_icons:
   android: true

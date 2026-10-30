@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../attachments.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
@@ -34,6 +35,7 @@ class ChatScreen extends StatefulWidget implements PreserveOnTheme {
 class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final List<ChatAttachment> _attachments = [];
   bool _asked = false;
   int _lastMsgCount = -1;
 
@@ -83,10 +85,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _send() {
     final q = _input.text.trim();
-    if (q.isEmpty) return;
+    if (q.isEmpty && _attachments.isEmpty) return;
+    final files = List<ChatAttachment>.from(_attachments);
     _input.clear();
-    controller.sendChat(q);
+    setState(() => _attachments.clear());
+    controller.sendChat(q, attachments: files);
     _scrollDown();
+  }
+
+  Future<void> _attach() async {
+    await showAttachmentSheet(context, (a) {
+      if (!mounted) return;
+      setState(() => _attachments.add(a));
+    });
   }
 
   void _scrollDown() {
@@ -440,22 +451,63 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-                child: Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      onSubmitted: (_) => _send(),
-                      decoration:
-                          const InputDecoration(hintText: 'Спроси ментора…'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: controller.mentorBusy ? null : _send,
-                    icon: const Icon(Icons.send, size: 19),
-                    style: IconButton.styleFrom(backgroundColor: C.accentDark),
-                  ),
-                ]),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_attachments.isNotEmpty)
+                      SizedBox(
+                        height: 42,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _attachments.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 6),
+                          itemBuilder: (context, i) {
+                            final a = _attachments[i];
+                            return InputChip(
+                              avatar: Icon(
+                                a.isImage
+                                    ? Icons.image_outlined
+                                    : Icons.description_outlined,
+                                size: 16,
+                                color: C.accent,
+                              ),
+                              label: Text(
+                                a.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onDeleted: () =>
+                                  setState(() => _attachments.removeAt(i)),
+                            );
+                          },
+                        ),
+                      ),
+                    Row(children: [
+                      IconButton(
+                        tooltip: 'Прикрепить фото или файл',
+                        onPressed: controller.mentorBusy ? null : _attach,
+                        icon: Icon(Icons.attach_file,
+                            size: 21, color: C.muted),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          onSubmitted: (_) => _send(),
+                          decoration: const InputDecoration(
+                              hintText: 'Спроси ментора…'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        onPressed: controller.mentorBusy ? null : _send,
+                        icon: const Icon(Icons.send, size: 19),
+                        style:
+                            IconButton.styleFrom(backgroundColor: C.accentDark),
+                      ),
+                    ]),
+                  ],
+                ),
               ),
             ]),
           ),
@@ -485,7 +537,38 @@ class _Bubble extends StatelessWidget {
       case 'user':
         return Align(
           alignment: Alignment.centerRight,
-          child: _wrap(msg.text, C.accentDark, isUser: true),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _wrap(msg.text, C.accentDark, isUser: true),
+              if (msg.attachments.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      for (final a in msg.attachments)
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: Icon(
+                            a.isImage
+                                ? Icons.image_outlined
+                                : Icons.description_outlined,
+                            size: 15,
+                            color: C.accent,
+                          ),
+                          label: Text(
+                            a.name,
+                            style: const TextStyle(fontSize: 10.5),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         );
       default:
         return Padding(
