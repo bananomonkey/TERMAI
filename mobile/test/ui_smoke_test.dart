@@ -184,6 +184,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('progress map nodes can be dragged independently', (tester) async {
+    controller.config = Config()..onboarded = true;
+    controller.courses = [
+      Course(id: 'linux', title: 'Linux', tasks: [
+        Task(id: 't1', title: 'Первая команда', goal: 'ls'),
+        Task(id: 't2', title: 'Вторая команда', goal: 'pwd'),
+      ]),
+    ];
+    controller.courseIdx = 0;
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const ProgressMapScreen(),
+    ));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final a0 = tester.getTopLeft(find.text('Первая команда'));
+    final b0 = tester.getTopLeft(find.text('Вторая команда'));
+    // Задачи одного модуля стоят веером по горизонтали, а не в одну колонку.
+    expect((a0.dy - b0.dy).abs(), lessThan(2.0));
+    expect((a0.dx - b0.dx).abs(), greaterThan(40.0));
+    await tester.drag(find.text('Первая команда'), const Offset(50, 30));
+    await tester.pump(const Duration(milliseconds: 250));
+    final a1 = tester.getTopLeft(find.text('Первая команда'));
+    final b1 = tester.getTopLeft(find.text('Вторая команда'));
+    expect(a1, isNot(a0));
+    expect((b1 - b0).distance, lessThan(1.0));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('lesson switches slides without errors', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));

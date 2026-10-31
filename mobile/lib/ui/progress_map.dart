@@ -4,7 +4,10 @@
 // Layout детерминированный, слоистый: без force-directed и пересчёта
 // координат при зуме. Холст изолирован RepaintBoundary, ноды вне viewport
 // не строятся (culling), сами ноды максимально лёгкие.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:graphview/GraphView.dart' as gv;
 
 import '../main.dart';
 import '../models.dart';
@@ -24,6 +27,11 @@ class ProgressMapScreen extends StatefulWidget {
 class _ProgressMapScreenState extends State<ProgressMapScreen> {
   final TransformationController _tc = TransformationController();
   final Set<int> _collapsed = {};
+
+  /// Ручные позиции узлов. Живут только в состоянии экрана: пользователь
+  /// перетаскивает ветки и узлы, но после выхода раскладка сбрасывается.
+  final Map<String, Offset> _manualPositions = {};
+  String? _draggingId;
   Rect _visible = const Rect.fromLTWH(-300, -300, 1600, 1600);
   Size _viewport = Size.zero;
 
@@ -32,8 +40,24 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     super.initState();
     _tc.addListener(_onTransform);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _fit();
+      if (mounted) _focusRoot();
     });
+  }
+
+  /// _focusRoot — стартовый вид: корень по центру сверху, читаемый масштаб.
+  /// Кнопка «fit» отдельно показывает всё дерево целиком.
+  void _focusRoot() {
+    if (controller.courses.isEmpty || _viewport == Size.zero) return;
+    final graph = _buildGraph(controller.cur);
+    final root = graph.nodes.firstWhere((n) => n.type == 'course',
+        orElse: () => graph.nodes.first);
+    const scale = 0.62;
+    final tx = _viewport.width / 2 - (root.x + root.w / 2) * scale;
+    final ty = 24 - root.y * scale;
+    _tc.value = Matrix4.identity()
+      ..translate(tx, ty)
+      ..scale(scale);
+    setState(() {});
   }
 
   @override
@@ -65,7 +89,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     final scale = scaleX < scaleY ? scaleX : scaleY;
     _tc.value = Matrix4.identity()
       ..translate(20.0, 20.0)
-      ..scale(scale.clamp(0.35, 1.0));
+      ..scale(scale.clamp(0.08, 1.0));
   }
 
   @override
@@ -132,8 +156,11 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                         onSelected: (_) {
                           controller.switchCourseSilent(i);
                           _collapsed.clear();
-                          _tc.value = Matrix4.identity();
+                          _manualPositions.clear();
                           setState(() {});
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) _focusRoot();
+                          });
                         },
                         labelStyle: TextStyle(
                             fontSize: 12,
@@ -148,7 +175,18 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                     },
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'перетаскивай узлы · щипок — зум',
+                      style: TextStyle(fontSize: 10.5, color: C.muted),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Expanded(
                   child: Stack(
                     children: [
@@ -159,7 +197,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                             child: InteractiveViewer(
                               transformationController: _tc,
                               constrained: false,
-                              minScale: 0.3,
+                              minScale: 0.08,
                               maxScale: 2.6,
                               boundaryMargin:
                                   const EdgeInsets.symmetric(
@@ -175,14 +213,18 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                                           painter: _EdgePainter(
                                             nodes: graph.nodes,
                                             edges: graph.edges,
-                                            visible: _visible,
+                                            visible: _draggingId != null
+                                                ? const Rect.fromLTWH(
+                                                    -99999, -99999, 199998, 199998)
+                                                : _visible,
                                           ),
                                         ),
                                       ),
                                       for (final n in graph.nodes)
-                                        if (_visible
-                                            .overlaps(n.rect))
+                                        if (_draggingId != null ||
+                                            _visible.overlaps(n.rect))
                                           Positioned(
+                                            key: ValueKey(n.id),
                                             left: n.x,
                                             top: n.y,
                                             width: n.w,
@@ -190,7 +232,13 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                                             child: RepaintBoundary(
                                               child: _GraphNodeView(
                                                 node: n,
+                                                dragging: _draggingId == n.id,
                                                 onTap: () => _onNodeTap(n),
+                                                onDragStart: () =>
+                                                    _startDrag(n),
+                                                onDrag: (d) => _dragNode(
+                                                    n, d, graph.nodes),
+                                                onDragEnd: _endDrag,
                                               ),
                                             ),
                                           ),
@@ -227,6 +275,13 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                             _ZoomButton(
                                 icon: Icons.fit_screen_outlined,
                                 onTap: _fit),
+                            const SizedBox(height: 7),
+                            _ZoomButton(
+                                icon: Icons.restart_alt,
+                                onTap: () {
+                                  setState(_manualPositions.clear);
+                                  _fit();
+                                }),
                           ],
                         ),
                       ),
@@ -243,7 +298,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
 
   void _zoom(double factor) {
     final current = _tc.value.getMaxScaleOnAxis();
-    final next = (current * factor).clamp(0.3, 2.6);
+    final next = (current * factor).clamp(0.08, 2.6);
     final f = next / current;
     _tc.value = _tc.value.clone()..scale(f);
     setState(() {});
@@ -260,6 +315,38 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       controller.selectTask(n.taskIndex!);
       Navigator.of(context).push(pageRoute(const LessonScreen()));
     }
+  }
+
+  void _startDrag(_GNode n) {
+    setState(() => _draggingId = n.id);
+  }
+
+  void _endDrag() {
+    if (_draggingId == null) return;
+    setState(() => _draggingId = null);
+  }
+
+  /// _dragNode — перетаскивание узла. Корень тянет всё дерево,
+  /// модуль — свою ветку с задачами, задача — только себя.
+  void _dragNode(_GNode n, Offset delta, List<_GNode> all) {
+    setState(() {
+      Iterable<_GNode> targets;
+      if (n.type == 'course') {
+        targets = all;
+      } else if (n.type == 'module') {
+        targets = all.where(
+            (x) => x.id == n.id || (x.type != 'module' && x.module == n.module));
+      } else {
+        targets = [n];
+      }
+      for (final t in targets) {
+        final current = _manualPositions[t.id] ?? Offset(t.x, t.y);
+        _manualPositions[t.id] = Offset(
+          math.max(0.0, current.dx + delta.dx),
+          math.max(0.0, current.dy + delta.dy),
+        );
+      }
+    });
   }
 
   void _showAchievements(BuildContext context) {
@@ -289,6 +376,10 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     );
   }
 
+  /// _buildGraph — настоящее дерево: корень → модули → задачи.
+  /// Координаты считает BuchheimWalkerAlgorithm (слоистый tree layout),
+  /// а не ручная колонка. Поэтому модули и задачи одного уровня
+  /// расходятся веером, а не выстраиваются в один список.
   _Graph _buildGraph(Course course) {
     final tasks = course.tasks;
     final done = controller.prog.completed[course.id] ?? {};
@@ -301,28 +392,22 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     }
 
     final nodes = <_GNode>[];
-    final edges = <_GEdge>[];
-    const left = 32.0;
-    const taskX = 292.0;
-    const taskW = 238.0;
-    const taskH = 52.0;
-    const moduleW = 190.0;
-    const moduleH = 50.0;
-    const rowGap = 66.0;
+    final graph = gv.Graph()..isTree = true;
 
-    final root = _GNode(
+    final rootMeta = _GNode(
       id: 'root',
       type: 'course',
       label: course.title,
       module: -1,
-      x: left,
-      y: 10,
-      w: 260,
-      h: 54,
+      x: 0,
+      y: 0,
+      w: 280,
+      h: 58,
     );
-    nodes.add(root);
+    nodes.add(rootMeta);
+    final root = gv.Node.Id('root')..size = Size(rootMeta.w, rootMeta.h);
+    graph.addNode(root);
 
-    var y = 96.0;
     for (var start = 0; start < tasks.length; start += 5) {
       final end = (start + 5).clamp(0, tasks.length);
       final count = end - start;
@@ -335,36 +420,40 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       final moduleDone = <Task>[
         for (var i = start; i < end; i++) tasks[i]
       ].every((t) => done[t.id] ?? false);
-      final moduleNode = _GNode(
-        id: 'm$moduleIndex',
+      final moduleId = 'm$moduleIndex';
+      final moduleMeta = _GNode(
+        id: moduleId,
         type: 'module',
         label: topic,
         module: moduleIndex,
-        x: left,
-        y: y,
-        w: moduleW,
-        h: moduleH,
+        x: 0,
+        y: 0,
+        w: 210,
+        h: 56,
         done: moduleDone,
         count: count,
         collapsed: _collapsed.contains(moduleIndex),
       );
-      nodes.add(moduleNode);
-      edges.add(_GEdge('root', moduleNode.id));
-      if (moduleIndex > 0) edges.add(_GEdge('m${moduleIndex - 1}', moduleNode.id));
+      nodes.add(moduleMeta);
+      final moduleNode = gv.Node.Id(moduleId)
+        ..size = Size(moduleMeta.w, moduleMeta.h);
+      graph.addNode(moduleNode);
+      graph.addEdge(root, moduleNode);
 
       if (!_collapsed.contains(moduleIndex)) {
         for (var i = start; i < end; i++) {
           final t = tasks[i];
-          final n = _GNode(
-            id: 't$i',
+          final taskId = 't$i';
+          final taskMeta = _GNode(
+            id: taskId,
             type: t.isExam ? 'exam' : 'task',
             label: t.title,
             module: moduleIndex,
             taskIndex: i,
-            x: taskX,
-            y: y + 2 + (i - start) * rowGap,
-            w: taskW,
-            h: taskH,
+            x: 0,
+            y: 0,
+            w: 244,
+            h: 54,
             done: done[t.id] ?? false,
             current: i == frontier,
             exam: t.isExam,
@@ -372,21 +461,51 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                 ? 'экзамен'
                 : (t.isQuiz ? 'тест' : 'практика'),
           );
-          nodes.add(n);
-          if (i == start) {
-            edges.add(_GEdge(moduleNode.id, n.id));
-          } else {
-            edges.add(_GEdge('t${i - 1}', n.id));
-          }
+          nodes.add(taskMeta);
+          final taskNode = gv.Node.Id(taskId)
+            ..size = Size(taskMeta.w, taskMeta.h);
+          graph.addNode(taskNode);
+          graph.addEdge(moduleNode, taskNode);
         }
       }
-      y += count * rowGap + 38;
     }
+
+    // Слоистый tree-layout: глубина → уровень, братья расходятся по ширине.
+    final config = gv.BuchheimWalkerConfiguration()
+      ..siblingSeparation = 26
+      ..levelSeparation = 112
+      ..subtreeSeparation = 46
+      ..orientation = gv.BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
+    final alg = gv.BuchheimWalkerAlgorithm(config, null);
+    final graphSize = alg.run(graph, 40, 32);
+
+    final byId = {for (final n in nodes) n.id: n};
+    var maxX = graphSize.width + 80;
+    var maxY = graphSize.height + 80;
+    for (final gn in graph.nodes) {
+      final id = gn.key?.value.toString() ?? '';
+      final meta = byId[id];
+      if (meta == null) continue;
+      final manual = _manualPositions[id];
+      meta.x = manual?.dx ?? gn.position.dx;
+      meta.y = manual?.dy ?? gn.position.dy;
+      maxX = math.max(maxX, meta.x + meta.w + 80);
+      maxY = math.max(maxY, meta.y + meta.h + 80);
+    }
+
+    final edges = <_GEdge>[];
+    for (final e in graph.edges) {
+      final from = e.source.key?.value.toString() ?? '';
+      final to = e.destination.key?.value.toString() ?? '';
+      if (from.isEmpty || to.isEmpty) continue;
+      edges.add(_GEdge(from, to));
+    }
+
     return _Graph(
       nodes: nodes,
       edges: edges,
-      width: taskX + taskW + 60,
-      height: (y + 60) < 240 ? 240 : (y + 60),
+      width: maxX,
+      height: math.max(maxY, 260.0),
     );
   }
 }
@@ -407,7 +526,8 @@ class _GNode {
   final String id, type, label, subtitle;
   final int module;
   final int? taskIndex;
-  final double x, y, w, h;
+  double x, y;
+  final double w, h;
   final bool done, current, exam, collapsed;
   final int count;
   _GNode({
@@ -471,21 +591,10 @@ class _EdgePainter extends CustomPainter {
         ..strokeWidth = b.current ? 2.2 : 1.5
         ..strokeCap = StrokeCap.round;
       final path = Path();
-      if (a.type == 'course' || (a.type == 'module' && b.type == 'module')) {
-        final p1 = a.bottom, p2 = b.top;
-        final mid = (p1.dy + p2.dy) / 2;
-        path.moveTo(p1.dx, p1.dy);
-        path.cubicTo(p1.dx, mid, p2.dx, mid, p2.dx, p2.dy);
-      } else if (a.type == 'module') {
-        final p1 = a.right, p2 = b.left;
-        final mid = (p1.dx + p2.dx) / 2;
-        path.moveTo(p1.dx, p1.dy);
-        path.cubicTo(mid, p1.dy, mid, p2.dy, p2.dx, p2.dy);
-      } else {
-        final p1 = a.bottom, p2 = b.top;
-        path.moveTo(p1.dx, p1.dy);
-        path.cubicTo(p1.dx, p1.dy + 22, p2.dx, p2.dy - 22, p2.dx, p2.dy);
-      }
+      final p1 = a.bottom, p2 = b.top;
+      final mid = (p1.dy + p2.dy) / 2;
+      path.moveTo(p1.dx, p1.dy);
+      path.cubicTo(p1.dx, mid, p2.dx, mid, p2.dx, p2.dy);
       canvas.drawPath(path, paint);
     }
   }
@@ -497,7 +606,18 @@ class _EdgePainter extends CustomPainter {
 class _GraphNodeView extends StatelessWidget {
   final _GNode node;
   final VoidCallback onTap;
-  const _GraphNodeView({required this.node, required this.onTap});
+  final VoidCallback onDragStart;
+  final ValueChanged<Offset> onDrag;
+  final VoidCallback onDragEnd;
+  final bool dragging;
+  const _GraphNodeView({
+    required this.node,
+    required this.onTap,
+    required this.onDragStart,
+    required this.onDrag,
+    required this.onDragEnd,
+    required this.dragging,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -510,11 +630,17 @@ class _GraphNodeView extends StatelessWidget {
                 : C.muted;
     final bool module = node.type == 'module';
     final bool root = node.type == 'course';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(module || root ? 14 : 12),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      onPanStart: (_) => onDragStart(),
+      onPanUpdate: (d) => onDrag(d.delta),
+      onPanEnd: (_) => onDragEnd(),
+      onPanCancel: onDragEnd,
+      child: AnimatedScale(
+        scale: dragging ? 1.04 : 1,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
         child: Container(
           padding: EdgeInsets.symmetric(
               horizontal: module || root ? 12 : 10, vertical: 7),
@@ -524,20 +650,30 @@ class _GraphNodeView extends StatelessWidget {
                 : C.card,
             borderRadius: BorderRadius.circular(module || root ? 14 : 12),
             border: Border.all(
-              color: node.current || node.exam
-                  ? main.withAlpha(190)
-                  : (node.done ? main.withAlpha(110) : C.border),
-              width: node.current || node.exam ? 1.8 : 1,
+              color: dragging
+                  ? main.withAlpha(230)
+                  : node.current || node.exam
+                      ? main.withAlpha(190)
+                      : (node.done ? main.withAlpha(110) : C.border),
+              width: dragging || node.current || node.exam ? 1.8 : 1,
             ),
-            boxShadow: node.current
+            boxShadow: dragging
                 ? [
                     BoxShadow(
-                      color: main.withAlpha(45),
-                      blurRadius: 10,
-                      spreadRadius: 1,
+                      color: main.withAlpha(70),
+                      blurRadius: 16,
+                      spreadRadius: 2,
                     )
                   ]
-                : null,
+                : node.current
+                    ? [
+                        BoxShadow(
+                          color: main.withAlpha(45),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                        )
+                      ]
+                    : null,
           ),
           child: Row(children: [
             Icon(
@@ -592,6 +728,8 @@ class _GraphNodeView extends StatelessWidget {
                 ],
               ),
             ),
+            Icon(Icons.drag_indicator,
+                size: 14, color: C.muted.withAlpha(dragging ? 200 : 110)),
             if (module)
               Icon(
                 node.collapsed ? Icons.chevron_right : Icons.expand_more,
