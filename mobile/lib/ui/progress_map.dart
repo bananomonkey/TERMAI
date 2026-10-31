@@ -40,24 +40,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     super.initState();
     _tc.addListener(_onTransform);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusRoot();
+      if (mounted) _fit();
     });
-  }
-
-  /// _focusRoot — стартовый вид: корень по центру сверху, читаемый масштаб.
-  /// Кнопка «fit» отдельно показывает всё дерево целиком.
-  void _focusRoot() {
-    if (controller.courses.isEmpty || _viewport == Size.zero) return;
-    final graph = _buildGraph(controller.cur);
-    final root = graph.nodes.firstWhere((n) => n.type == 'course',
-        orElse: () => graph.nodes.first);
-    const scale = 0.62;
-    final tx = _viewport.width / 2 - (root.x + root.w / 2) * scale;
-    final ty = 24 - root.y * scale;
-    _tc.value = Matrix4.identity()
-      ..translate(tx, ty)
-      ..scale(scale);
-    setState(() {});
   }
 
   @override
@@ -159,7 +143,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                           _manualPositions.clear();
                           setState(() {});
                           WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) _focusRoot();
+                            if (mounted) _fit();
                           });
                         },
                         labelStyle: TextStyle(
@@ -401,8 +385,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       module: -1,
       x: 0,
       y: 0,
-      w: 280,
-      h: 58,
+      w: 300,
+      h: 62,
     );
     nodes.add(rootMeta);
     final root = gv.Node.Id('root')..size = Size(rootMeta.w, rootMeta.h);
@@ -428,8 +412,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
         module: moduleIndex,
         x: 0,
         y: 0,
-        w: 210,
-        h: 56,
+        w: 230,
+        h: 58,
         done: moduleDone,
         count: count,
         collapsed: _collapsed.contains(moduleIndex),
@@ -452,7 +436,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
             taskIndex: i,
             x: 0,
             y: 0,
-            w: 244,
+            w: 204,
             h: 54,
             done: done[t.id] ?? false,
             current: i == frontier,
@@ -643,7 +627,8 @@ class _GraphNodeView extends StatelessWidget {
         curve: Curves.easeOut,
         child: Container(
           padding: EdgeInsets.symmetric(
-              horizontal: module || root ? 12 : 10, vertical: 7),
+              horizontal: module || root ? 12 : 10,
+              vertical: module || root ? 7 : 4),
           decoration: BoxDecoration(
             color: node.current
                 ? main.withAlpha(C.isLight ? 26 : 34)

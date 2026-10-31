@@ -184,6 +184,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('progress map builds a real hierarchy of levels', (tester) async {
+    controller.config = Config()..onboarded = true;
+    controller.courses = [
+      Course(
+        id: 'tree',
+        title: 'TreeCourse',
+        syllabus: ['Mod A', 'Mod B'],
+        tasks: [
+          for (var i = 0; i < 5; i++)
+            Task(id: 'a$i', title: 'A$i', goal: 'goal'),
+          Task(id: 'b0', title: 'B0', goal: 'goal'),
+        ],
+      ),
+    ];
+    controller.courseIdx = 0;
+    await tester.binding.setSurfaceSize(const Size(4000, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const ProgressMapScreen(),
+    ));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final modA = tester.getTopLeft(find.text('Mod A'));
+    final modB = tester.getTopLeft(find.text('Mod B'));
+    final a0 = tester.getTopLeft(find.text('A0'));
+    final a4 = tester.getTopLeft(find.text('A4'));
+    final b0 = tester.getTopLeft(find.text('B0'));
+    // Модули — один уровень, задачи — следующий; внутри уровня они веером.
+    expect((modA.dy - modB.dy).abs(), lessThan(2.0));
+    expect((modA.dx - modB.dx).abs(), greaterThan(40.0));
+    expect((a0.dy - a4.dy).abs(), lessThan(2.0));
+    expect((a0.dx - a4.dx).abs(), greaterThan(40.0));
+    expect(a0.dy, greaterThan(modA.dy));
+    expect((a0.dy - b0.dy).abs(), lessThan(2.0));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('progress map nodes can be dragged independently', (tester) async {
     controller.config = Config()..onboarded = true;
     controller.courses = [
