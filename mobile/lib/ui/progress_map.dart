@@ -376,6 +376,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     }
 
     final nodes = <_GNode>[];
+    final edges = <_GEdge>[];
     final graph = gv.Graph()..isTree = true;
 
     final rootMeta = _GNode(
@@ -391,6 +392,9 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
     nodes.add(rootMeta);
     final root = gv.Node.Id('root')..size = Size(rootMeta.w, rootMeta.h);
     graph.addNode(root);
+
+    final moduleById = <String, _GNode>{};
+    final taskColumns = <int, List<_GNode>>{};
 
     for (var start = 0; start < tasks.length; start += 5) {
       final end = (start + 5).clamp(0, tasks.length);
@@ -412,24 +416,25 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
         module: moduleIndex,
         x: 0,
         y: 0,
-        w: 230,
+        w: 244,
         h: 58,
         done: moduleDone,
         count: count,
         collapsed: _collapsed.contains(moduleIndex),
       );
       nodes.add(moduleMeta);
+      moduleById[moduleId] = moduleMeta;
       final moduleNode = gv.Node.Id(moduleId)
         ..size = Size(moduleMeta.w, moduleMeta.h);
       graph.addNode(moduleNode);
       graph.addEdge(root, moduleNode);
 
+      final column = <_GNode>[];
       if (!_collapsed.contains(moduleIndex)) {
         for (var i = start; i < end; i++) {
           final t = tasks[i];
-          final taskId = 't$i';
           final taskMeta = _GNode(
-            id: taskId,
+            id: 't$i',
             type: t.isExam ? 'exam' : 'task',
             label: t.title,
             module: moduleIndex,
@@ -445,51 +450,64 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                 ? 'экзамен'
                 : (t.isQuiz ? 'тест' : 'практика'),
           );
+          column.add(taskMeta);
           nodes.add(taskMeta);
-          final taskNode = gv.Node.Id(taskId)
-            ..size = Size(taskMeta.w, taskMeta.h);
-          graph.addNode(taskNode);
-          graph.addEdge(moduleNode, taskNode);
         }
       }
+      taskColumns[moduleIndex] = column;
     }
 
-    // Слоистый tree-layout: глубина → уровень, братья расходятся по ширине.
+    // BuchheimWalker для уровня «курс → модули»: модули одного уровня
+    // расходятся по ширине, а не выстраиваются в один столбец.
     final config = gv.BuchheimWalkerConfiguration()
-      ..siblingSeparation = 26
-      ..levelSeparation = 112
-      ..subtreeSeparation = 46
+      ..siblingSeparation = 38
+      ..levelSeparation = 118
+      ..subtreeSeparation = 52
       ..orientation = gv.BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
     final alg = gv.BuchheimWalkerAlgorithm(config, null);
     final graphSize = alg.run(graph, 40, 32);
 
-    final byId = {for (final n in nodes) n.id: n};
-    var maxX = graphSize.width + 80;
-    var maxY = graphSize.height + 80;
     for (final gn in graph.nodes) {
       final id = gn.key?.value.toString() ?? '';
-      final meta = byId[id];
+      final meta = id == 'root' ? rootMeta : moduleById[id];
       if (meta == null) continue;
       final manual = _manualPositions[id];
       meta.x = manual?.dx ?? gn.position.dx;
       meta.y = manual?.dy ?? gn.position.dy;
-      maxX = math.max(maxX, meta.x + meta.w + 80);
-      maxY = math.max(maxY, meta.y + meta.h + 80);
     }
 
-    final edges = <_GEdge>[];
-    for (final e in graph.edges) {
-      final from = e.source.key?.value.toString() ?? '';
-      final to = e.destination.key?.value.toString() ?? '';
-      if (from.isEmpty || to.isEmpty) continue;
-      edges.add(_GEdge(from, to));
+    // Задачи — sub-level под модулем: вертикальная колонка, а не общая
+    // бесконечная строка. Колонки разных модулей стоят рядом.
+    var maxX = graphSize.width + 80;
+    var maxY = graphSize.height + 80;
+    for (final entry in taskColumns.entries) {
+      final module = moduleById['m${entry.key}'];
+      if (module == null) continue;
+      final colX = module.x + (module.w - 204) / 2;
+      var colY = module.y + module.h + 30;
+      for (final task in entry.value) {
+        final manual = _manualPositions[task.id];
+        task.x = manual?.dx ?? colX;
+        task.y = manual?.dy ?? colY;
+        edges.add(_GEdge(module.id, task.id));
+        maxX = math.max(maxX, task.x + task.w + 80);
+        maxY = math.max(maxY, task.y + task.h + 80);
+        colY += task.h + 14;
+      }
     }
+    for (final m in moduleById.values) {
+      edges.add(_GEdge('root', m.id));
+      maxX = math.max(maxX, m.x + m.w + 80);
+      maxY = math.max(maxY, m.y + m.h + 80);
+    }
+    maxX = math.max(maxX, rootMeta.x + rootMeta.w + 80);
+    maxY = math.max(maxY, rootMeta.y + rootMeta.h + 80);
 
     return _Graph(
       nodes: nodes,
       edges: edges,
       width: maxX,
-      height: math.max(maxY, 260.0),
+      height: math.max(maxY, 300.0),
     );
   }
 }

@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — тренажёр навыков с ИИ-наставником (языки, Linux, Docker, Git и другие курсы)"
 publish_to: "none"
-version: 1.18.1+43
+version: 1.18.2+44
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

@@ -212,13 +212,14 @@ void main() {
     final a0 = tester.getTopLeft(find.text('A0'));
     final a4 = tester.getTopLeft(find.text('A4'));
     final b0 = tester.getTopLeft(find.text('B0'));
-    // Модули — один уровень, задачи — следующий; внутри уровня они веером.
+    // Модули — один уровень; задачи — следующий, колонками под модулями.
     expect((modA.dy - modB.dy).abs(), lessThan(2.0));
     expect((modA.dx - modB.dx).abs(), greaterThan(40.0));
-    expect((a0.dy - a4.dy).abs(), lessThan(2.0));
-    expect((a0.dx - a4.dx).abs(), greaterThan(40.0));
+    expect((a0.dx - a4.dx).abs(), lessThan(2.0));
+    expect((a0.dy - a4.dy).abs(), greaterThan(40.0));
     expect(a0.dy, greaterThan(modA.dy));
     expect((a0.dy - b0.dy).abs(), lessThan(2.0));
+    expect((a0.dx - b0.dx).abs(), greaterThan(40.0));
     expect(tester.takeException(), isNull);
   });
 
@@ -241,9 +242,9 @@ void main() {
 
     final a0 = tester.getTopLeft(find.text('Первая команда'));
     final b0 = tester.getTopLeft(find.text('Вторая команда'));
-    // Задачи одного модуля стоят веером по горизонтали, а не в одну колонку.
-    expect((a0.dy - b0.dy).abs(), lessThan(2.0));
-    expect((a0.dx - b0.dx).abs(), greaterThan(40.0));
+    // Задачи одного модуля — колонкой друг под другом, а не в одну строку.
+    expect((a0.dx - b0.dx).abs(), lessThan(2.0));
+    expect((a0.dy - b0.dy).abs(), greaterThan(40.0));
     await tester.drag(find.text('Первая команда'), const Offset(50, 30));
     await tester.pump(const Duration(milliseconds: 250));
     final a1 = tester.getTopLeft(find.text('Первая команда'));
