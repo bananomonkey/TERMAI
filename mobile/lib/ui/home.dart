@@ -7,6 +7,7 @@ import '../main.dart';
 import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
+import 'design_system.dart';
 import 'lesson.dart';
 import 'review.dart';
 import 'theme.dart';
@@ -42,12 +43,28 @@ class CourseGraphView extends StatelessWidget {
           }
         }
         if (current < 0) current = courses.length - 1;
+        var totalTasks = 0;
+        var solvedTasks = 0;
+        for (final course in courses) {
+          totalTasks += course.tasks.length;
+          final done = controller.prog.completed[course.id] ?? {};
+          solvedTasks += course.tasks.where((t) => done[t.id] ?? false).length;
+        }
+        final overall =
+            totalTasks == 0 ? 0 : (solvedTasks / totalTasks * 100).round();
         final list = Column(
           children: [
+            _HomeSummary(
+              courses: courses.length,
+              solved: solvedTasks,
+              total: totalTasks,
+              percent: overall,
+            ),
             if (controller.generating && controller.fillTotal > 0)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: cardBox(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: appCard(
+                  padding: const EdgeInsets.all(11),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -66,7 +83,7 @@ class CourseGraphView extends StatelessWidget {
                         const SizedBox(height: 6),
                         LinearProgressIndicator(
                           value: controller.fillDone / controller.fillTotal,
-                          minHeight: 5,
+                          minHeight: 4,
                           borderRadius: BorderRadius.circular(3),
                           backgroundColor: C.card2,
                           color: C.accent,
@@ -77,7 +94,7 @@ class CourseGraphView extends StatelessWidget {
             Expanded(
               child: ReorderableListView.builder(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 196),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 132),
                 buildDefaultDragHandles: false,
                 itemCount: courses.length,
                 onReorder: (oldIndex, newIndex) =>
@@ -98,13 +115,81 @@ class CourseGraphView extends StatelessWidget {
   }
 }
 
-/// _CourseTile — стеклянная плитка курса: имя, число уроков, прогресс.
-/// У активного курса под стеклом — зелёное свечение, видное сквозь размытие.
+/// _HomeSummary — короткий обзор вместо пустого пространства под списком.
+/// Имя берётся из профиля; если его нет, обращение остаётся нейтральным.
+class _HomeSummary extends StatelessWidget {
+  final int courses, solved, total, percent;
+  const _HomeSummary({
+    required this.courses,
+    required this.solved,
+    required this.total,
+    required this.percent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = controller.config.userName.trim();
+    final title = name.isEmpty ? 'Твой маршрут' : 'Привет, $name';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(17, 8, 17, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.screenTitle.copyWith(color: C.text),
+                ),
+              ),
+              appStatusPill(
+                '$percent%',
+                color: percent >= 100 ? C.good : C.accent,
+                icon: percent >= 100
+                    ? Icons.check_circle_outline
+                    : Icons.trending_up_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '$courses ${_coursesWord(courses)} · $solved из $total уроков',
+            style: AppText.caption.copyWith(color: C.muted),
+          ),
+          const SizedBox(height: 9),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: total == 0 ? 0 : solved / total,
+              minHeight: 4,
+              backgroundColor: C.card2,
+              color: percent >= 100 ? C.good : C.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _coursesWord(int n) {
+    final mod100 = n % 100;
+    final mod10 = n % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'курсов';
+    if (mod10 == 1) return 'курс';
+    if (mod10 >= 2 && mod10 <= 4) return 'курса';
+    return 'курсов';
+  }
+}
+
+/// _CourseTile — компактная плитка курса. В спокойном состоянии видны
+/// только название, прогресс и меню; перетаскивание — долгим нажатием.
 class _CourseTile extends StatelessWidget {
   final int index;
   final int currentIdx;
-  const _CourseTile(
-      {super.key, required this.index, required this.currentIdx});
+  const _CourseTile({super.key, required this.index, required this.currentIdx});
 
   @override
   Widget build(BuildContext context) {
@@ -119,95 +204,144 @@ class _CourseTile extends StatelessWidget {
     final current = !done && index == currentIdx;
     final accent = c.isTheory ? C.secondary : C.accent;
 
+    final glow = done
+        ? C.good
+        : current
+            ? accent
+            : accent;
+    final glowAlpha = done ? 34 : (current ? 104 : 16);
+    final statusColor = done ? C.good : (current ? accent : C.muted);
+
     return RepaintBoundary(
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        // выделение текста при двойном тапе отключено: заголовок не должен
-        // подсвечиваться и «краснеть» системным селектом
+        padding: const EdgeInsets.only(bottom: 9),
+        // выделение текста при длинном нажатии отключено: жест принадлежит
+        // перетаскиванию карточки, а не системному селекту.
         child: SelectionContainer.disabled(
-          child: GestureDetector(
-            onTap: () => Navigator.of(context)
-                .push(pageRoute(TaskListScreen(courseIdx: index))),
-            onDoubleTap: () => _showCourseActions(context, index),
-            child: glass(
-              radius: 20,
-              blur: 22,
-              padding: const EdgeInsets.all(16),
-              glow: current
-                  ? C.glow(color: C.good, alpha: 70)
-                  : C.glow(color: accent, alpha: 18),
-              child: Row(children: [
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Icon(
-                              c.isTheory
-                                  ? Icons.auto_stories_outlined
-                                  : Icons.terminal,
-                              size: 15,
-                              color: accent),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(c.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: C.text,
-                                    decoration: TextDecoration.none)),
-                          ),
-                        ]),
-                        const SizedBox(height: 4),
-                        Text(
-                            '$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
-                            style: TextStyle(fontSize: 11, color: C.muted)),
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(5),
-                          child: LinearProgressIndicator(
-                            value: total == 0 ? 0 : solved / total,
-                            minHeight: 6,
-                            backgroundColor: Colors.white.withAlpha(14),
-                            color: done ? C.good : (current ? C.good : accent),
-                          ),
-                        ),
-                      ]),
-                ),
-                const SizedBox(width: 10),
-                Text('$pct%',
-                    style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w900,
-                        color: done ? C.good : C.muted)),
-                const SizedBox(width: 2),
-                ReorderableDragStartListener(
-                  index: index,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Icon(Icons.drag_indicator,
-                        size: 18, color: C.muted.withAlpha(150)),
-                  ),
-                ),
-                if (done)
-                  Icon(Icons.check_circle_rounded, color: C.good, size: 22)
-                else ...[
-                  chevron(
-                      size: current ? 28 : 26,
-                      color: current ? C.good : C.muted),
-                  GestureDetector(
-                    onTap: () => _showCourseActions(context, index),
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: Icon(Icons.more_vert,
-                          size: 18, color: C.muted.withAlpha(170)),
-                    ),
+          child: ReorderableDelayedDragStartListener(
+            index: index,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: glow.withAlpha(glowAlpha),
+                    blurRadius: current ? 30 : 22,
+                    spreadRadius: current ? -4 : -7,
+                    offset: const Offset(0, 9),
                   ),
                 ],
-              ]),
+              ),
+              child: Material(
+                color: C.card.withAlpha(C.isLight ? 245 : 238),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(
+                    color: current
+                        ? accent.withAlpha(C.isLight ? 70 : 95)
+                        : C.border.withAlpha(120),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => Navigator.of(context)
+                      .push(pageRoute(TaskListScreen(courseIdx: index))),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 5, 10),
+                    child: Row(children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent.withAlpha(C.isLight ? 18 : 26),
+                        ),
+                        child: Icon(
+                          c.isTheory
+                              ? Icons.auto_stories_outlined
+                              : Icons.terminal,
+                          size: 18,
+                          color: accent,
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Flexible(
+                                child: Text(
+                                  c.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ).copyWith(color: C.text),
+                                ),
+                              ),
+                              if (done) ...[
+                                const SizedBox(width: 5),
+                                Icon(Icons.check_circle_rounded,
+                                    color: C.good, size: 15),
+                              ],
+                            ]),
+                            const SizedBox(height: 3),
+                            Text(
+                              '$solved/$total уроков · ${c.isTheory ? 'теория' : 'терминал'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.caption.copyWith(color: C.muted),
+                            ),
+                            const SizedBox(height: 7),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: total == 0 ? 0 : solved / total,
+                                minHeight: 4,
+                                backgroundColor: C.isLight
+                                    ? C.border.withAlpha(90)
+                                    : Colors.white.withAlpha(14),
+                                color: statusColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '$pct%',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              color: done ? C.good : C.text,
+                            ),
+                          ),
+                          SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: IconButton(
+                              tooltip: 'Действия с курсом',
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
+                              onPressed: () =>
+                                  _showCourseActions(context, index),
+                              icon: Icon(Icons.more_vert,
+                                  color: C.muted.withAlpha(190)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -368,9 +502,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         return Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: Text(c.title,
-                style:
-                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            title: Text(c.title, style: AppText.screenTitle),
           ),
           body: AppBackdrop(
             child: const _TaskGroups(),
@@ -659,8 +791,8 @@ class _EndActions extends StatelessWidget {
                   }
                 },
           icon: const Icon(Icons.add, size: 16),
-          label: const Text('Создать одну задачу',
-              style: TextStyle(fontSize: 12)),
+          label:
+              const Text('Создать одну задачу', style: TextStyle(fontSize: 12)),
         ),
         const SizedBox(height: 8),
         Row(children: [

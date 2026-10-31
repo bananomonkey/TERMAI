@@ -47,8 +47,6 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
     'TaskListScreen',
     'LessonScreen',
     'SettingsScreen',
-    'ChatScreen',
-    'InterviewScreen',
     'ArchiveScreen',
     'UsageScreen',
     'ChatsScreen',
@@ -83,8 +81,8 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final media = MediaQuery.of(context);
-                final panel = _panelKey.currentContext?.size ??
-                    const Size(154, 58);
+                final panel =
+                    _panelKey.currentContext?.size ?? const Size(154, 58);
                 final minLeft = media.padding.left + 8;
                 final minTop = media.padding.top + 8;
                 final maxLeft = (constraints.maxWidth -
@@ -169,8 +167,18 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
           minTop + cfg.launcherY.clamp(0.0, 1.0) * (maxTop - minTop),
         );
       } else {
-        // По умолчанию — слева внизу, над доком/полем ввода.
-        _pos = Offset(minLeft + 6, (maxTop - 86).clamp(minTop, maxTop));
+        // Карта: слева, чтобы не закрывать кнопки зума. Урок: справа и выше,
+        // чтобы не перекрывать строку терминала. Остальные экраны — справа
+        // над доком. В чатах панель вообще не показывается.
+        final screen = ScreenObserver.current;
+        final left = screen == 'ProgressMapScreen';
+        final lift = screen == 'LessonScreen' ? 132.0 : 76.0;
+        _pos = Offset(
+          left
+              ? (minLeft + 4).clamp(minLeft, maxLeft).toDouble()
+              : (maxLeft - 4).clamp(minLeft, maxLeft).toDouble(),
+          (maxTop - lift).clamp(minTop, maxTop).toDouble(),
+        );
       }
     } else {
       _pos = Offset(

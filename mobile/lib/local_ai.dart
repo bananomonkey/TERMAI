@@ -7,7 +7,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:llamadart/llamadart.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -38,17 +37,88 @@ class LocalAiService extends ChangeNotifier {
   }
 
   Future<Directory> modelsDir() async {
-    final base = await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/models');
+    Directory? dir;
+    // На Android системный DownloadManager пишет в app-specific external
+    // Download/models. Flutter должен смотреть в ту же папку.
+    if (Platform.isAndroid) {
+      try {
+        final ext = await getExternalStorageDirectory();
+        if (ext != null) dir = Directory('${ext.path}/Download/models');
+      } catch (_) {}
+    }
+    dir ??= Directory(
+      '${(await getApplicationDocumentsDirectory()).path}/models',
+    );
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
   }
 
+  /// Переносит модели из старой внутренней папки documents/models в
+  /// external Download/models, которую использует системный DownloadManager.
+  Future<Map<String, String>> migrateLegacyModels() async {
+    if (!Platform.isAndroid) return const {};
+    final oldDir = Directory(
+      '${(await getApplicationDocumentsDirectory()).path}/models',
+    );
+    final newDir = await modelsDir();
+    if (oldDir.path == newDir.path || !await oldDir.exists()) return const {};
+    final moved = <String, String>{};
+    try {
+      await for (final entry in oldDir.list()) {
+        if (entry is! File || !entry.path.toLowerCase().endsWith('.gguf')) {
+          continue;
+        }
+        final target = File(
+            '${newDir.path}/${entry.path.split(Platform.pathSeparator).last}');
+        if (await target.exists()) {
+          // Уже перенесено ранее; старую копию можно убрать.
+          if (await target.length() == await entry.length()) {
+            moved[entry.path] = target.path;
+            await entry.delete();
+          }
+          continue;
+        }
+        await entry.copy(target.path);
+        moved[entry.path] = target.path;
+        await entry.delete();
+      }
+    } catch (_) {}
+    return moved;
+  }
+
+  /// Список установленных GGUF-файлов без обращения к сети.
+  Future<List<File>> installedModels() async {
+    final dir = await modelsDir();
+    try {
+      final files = await dir
+          .list()
+          .where((e) =>
+              e is File &&
+              e.path.toLowerCase().endsWith('.gguf') &&
+              !e.path.endsWith('.part'))
+          .cast<File>()
+          .toList();
+      files.sort((a, b) => b.path.compareTo(a.path));
+      return files;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<String>? _loadFuture;
+
   /// load — загружает GGUF в память. Повторный вызов для того же файла
-  /// ничего не делает.
-  Future<String> load(String path, {int contextSize = 4096}) async {
-    if (path.trim().isEmpty) return 'Модель не выбрана.';
-    if (_engine != null && _loadedPath == path) return '';
+  /// ничего не делает; параллельные вызовы ждут одну и ту же загрузку.
+  Future<String> load(String path, {int contextSize = 4096}) {
+    if (path.trim().isEmpty) return Future.value('Модель не выбрана.');
+    if (_engine != null && _loadedPath == path) return Future.value('');
+    if (_loadFuture != null) return _loadFuture!;
+    _loadFuture = _doLoad(path, contextSize: contextSize)
+        .whenComplete(() => _loadFuture = null);
+    return _loadFuture!;
+  }
+
+  Future<String> _doLoad(String path, {required int contextSize}) async {
     _loading = true;
     _progress = 0;
     _error = '';
@@ -114,7 +184,8 @@ class LocalAiService extends ChangeNotifier {
     int maxTokens = 1024,
   }) async {
     if (modelPath.trim().isEmpty) {
-      throw Exception('Локальная модель не выбрана. Настрой её в «Локальный ИИ».');
+      throw Exception(
+          'Локальная модель не выбрана. Настрой её в «Локальный ИИ».');
     }
     if (_engine == null || _loadedPath != modelPath) {
       final err = await load(modelPath, contextSize: contextSize);
@@ -140,7 +211,8 @@ class LocalAiService extends ChangeNotifier {
       ),
     );
     final answer = (await stream.text()).trim();
-    if (answer.isEmpty) throw Exception('Локальная модель вернула пустой ответ.');
+    if (answer.isEmpty)
+      throw Exception('Локальная модель вернула пустой ответ.');
     return answer;
   }
 
@@ -160,52 +232,6 @@ class LocalAiService extends ChangeNotifier {
     return content?.toString() ?? '';
   }
 
-  /// downloadModel — скачивает GGUF в папку приложения с прогрессом.
-  Future<String> downloadModel(
-    String url,
-    String fileName, {
-    void Function(double fraction, int received, int total)? onProgress,
-  }) async {
-    final dir = await modelsDir();
-    final target = File('${dir.path}/$fileName');
-    final tmp = File('${target.path}.part');
-    final client = http.Client();
-    IOSink? sink;
-    try {
-      final req = http.Request('GET', Uri.parse(url));
-      final res = await client.send(req);
-      if (res.statusCode != 200) {
-        throw Exception('Сервер вернул ${res.statusCode}');
-      }
-      final total = res.contentLength ?? 0;
-      var received = 0;
-      sink = tmp.openWrite();
-      await for (final chunk in res.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (total > 0) {
-          onProgress?.call((received / total).clamp(0.0, 1.0), received, total);
-        }
-      }
-      await sink.flush();
-      await sink.close();
-      sink = null;
-      if (await target.exists()) await target.delete();
-      await tmp.rename(target.path);
-      return target.path;
-    } catch (e) {
-      try {
-        await sink?.close();
-      } catch (_) {}
-      try {
-        if (await tmp.exists()) await tmp.delete();
-      } catch (_) {}
-      rethrow;
-    } finally {
-      client.close();
-    }
-  }
-
   /// copyIntoModels — копирует выбранный пользователем GGUF в папку приложения,
   /// чтобы путь не зависел от кэша файлового менеджера.
   Future<String> copyIntoModels(String sourcePath) async {
@@ -213,6 +239,7 @@ class LocalAiService extends ChangeNotifier {
     final name = sourcePath.split(Platform.pathSeparator).last;
     final target = File('${dir.path}/$name');
     if (sourcePath == target.path) return sourcePath;
+    if (await target.exists()) await target.delete();
     await File(sourcePath).copy(target.path);
     return target.path;
   }

@@ -7,6 +7,7 @@ import 'package:termai/models.dart';
 import 'package:termai/navigation.dart';
 import 'package:termai/ui/lesson.dart';
 import 'package:termai/ui/mentor_avatar.dart';
+import 'package:termai/ui/progress_map.dart';
 import 'package:termai/ui/settings_screen.dart';
 import 'package:termai/ui/theme.dart';
 
@@ -58,6 +59,123 @@ void main() {
     );
     expect(p.text, 'Ок.');
     expect(p.actions.single.name, 'unknown_action');
+  });
+
+  test('tool registry validates required arguments and navigation kind', () {
+    expect(
+        appToolsJson()
+            .any((t) => ((t['function'] as Map)['name'] == 'open_mental_map')),
+        isTrue);
+    expect(isNavigationTool('open_mental_map'), isTrue);
+    expect(isNavigationTool('list_courses'), isFalse);
+    expect(
+      validateAppToolArgs('open_course', const {}),
+      contains('course'),
+    );
+    expect(
+      validateAppToolArgs('open_screen', const {'screen': 'settings'}),
+      isNull,
+    );
+    expect(
+      validateAppToolArgs('open_screen', const {'screen': 'nope'}),
+      contains('Недопустимое'),
+    );
+  });
+
+  testWidgets('data tools return structured results for the model',
+      (tester) async {
+    controller.config = Config();
+    controller.prog = Progress();
+    controller.courses = [
+      Course(id: 'c1', title: 'Course one', tasks: [
+        Task(id: 't1', title: 'Task one', goal: 'goal'),
+      ]),
+    ];
+    controller.allCourses = controller.courses;
+    controller.courseIdx = 0;
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const Scaffold(body: Text('home')),
+    ));
+    final actions = AppActions(controller);
+    final result =
+        await actions.executeTool(const AppActionCall('list_courses', {}));
+    expect(result.ok, isTrue);
+    final courses = result.data['courses'] as List;
+    expect(courses, hasLength(1));
+    expect((courses.first as Map)['id'], 'c1');
+    expect((courses.first as Map)['total_tasks'], 1);
+  });
+
+  testWidgets('open_mental_map focuses a real course node', (tester) async {
+    ScreenObserver.reset();
+    controller.config = Config()..onboarded = true;
+    controller.prog = Progress();
+    controller.courses = [
+      Course(
+        id: 'map-course',
+        title: 'MapCourse',
+        syllabus: ['Mod A', 'Mod B'],
+        tasks: [
+          for (var i = 0; i < 5; i++)
+            Task(id: 'a$i', title: 'A$i', goal: 'goal'),
+          Task(id: 'b0', title: 'Нужная тема', goal: 'goal'),
+        ],
+      ),
+    ];
+    controller.allCourses = controller.courses;
+    controller.courseIdx = 0;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      navigatorObservers: [screenObserver],
+      theme: buildTheme(),
+      home: const Scaffold(body: Text('home')),
+    ));
+
+    final actions = AppActions(controller);
+    final pending = actions.executeTool(const AppActionCall(
+      'open_mental_map',
+      {'course_id': 'map-course', 'topic': 'Нужная тема'},
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final result = await pending;
+
+    expect(result.ok, isTrue);
+    expect(result.data['course_id'], 'map-course');
+    expect(find.byType(ProgressMapScreen), findsOneWidget);
+    expect(find.text('Нужная тема'), findsWidgets);
+    expect(find.text('Тема «Нужная тема» не найдена на карте.'), findsNothing);
+    ScreenObserver.reset();
+  });
+
+  testWidgets('open_mental_map returns an error for unknown topic',
+      (tester) async {
+    ScreenObserver.reset();
+    controller.config = Config()..onboarded = true;
+    controller.prog = Progress();
+    controller.courses = [
+      Course(id: 'map-course', title: 'MapCourse', tasks: [
+        Task(id: 't1', title: 'Реальная тема', goal: 'goal'),
+      ]),
+    ];
+    controller.allCourses = controller.courses;
+    controller.courseIdx = 0;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      navigatorObservers: [screenObserver],
+      theme: buildTheme(),
+      home: const Scaffold(body: Text('home')),
+    ));
+    final actions = AppActions(controller);
+    final result = await actions.executeTool(const AppActionCall(
+      'open_mental_map',
+      {'course_id': 'map-course', 'topic': 'Выдуманная тема'},
+    ));
+    expect(result.ok, isFalse);
+    expect(result.message, contains('не найдена'));
+    expect(find.text('home'), findsOneWidget);
+    ScreenObserver.reset();
   });
 
   testWidgets('AI action opens settings and returns home', (tester) async {

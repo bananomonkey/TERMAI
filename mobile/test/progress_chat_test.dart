@@ -4,7 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termai/ai.dart';
+import 'package:termai/download_manager.dart';
+import 'package:termai/hugging_face.dart';
 import 'package:termai/models.dart';
+import 'package:termai/ui/attachment_view.dart';
 import 'package:termai/ui/theme.dart';
 
 void main() {
@@ -212,8 +215,7 @@ void main() {
 
     final without = cfg.toCloudJson(includeKeys: false);
     expect(without.containsKey('api_key'), isFalse);
-    expect(
-        ((without['fallbacks'] as List).first as Map).containsKey('api_key'),
+    expect(((without['fallbacks'] as List).first as Map).containsKey('api_key'),
         isFalse);
     expect(without['user_name'], 'Влад');
     expect(without['theme'], 'navy');
@@ -233,6 +235,61 @@ void main() {
     expect(back.attachments, hasLength(1));
     expect(back.attachments.first.isImage, isTrue);
     expect(back.attachments.first.name, 'a.jpg');
+  });
+
+  test('local config never writes AI keys to disk', () {
+    final cfg = Config()
+      ..apiKey = 'sk-main'
+      ..fallbacks = [
+        AiEndpoint(provider: 'openai', apiKey: 'sk-fb', model: 'gpt-4o-mini'),
+      ];
+    final local = cfg.toLocalJson();
+    expect(local.containsKey('api_key'), isFalse);
+    expect(((local['fallbacks'] as List).first as Map).containsKey('api_key'),
+        isFalse);
+    expect(cfg.toCloudJson(includeKeys: true)['api_key'], 'sk-main');
+  });
+
+  test('download metadata survives restart and never stores a token', () {
+    final job = DownloadJob(
+      id: 'repo::file.gguf',
+      repoId: 'owner/repo',
+      fileName: 'file.gguf',
+      url: 'https://huggingface.co/owner/repo/resolve/main/file.gguf',
+      finalPath: '/models/file.gguf',
+      totalBytes: 100,
+      receivedBytes: 40,
+      systemId: 7,
+      createdAt: 1,
+      updatedAt: 2,
+      status: DownloadStatus.downloading,
+    );
+    final json = job.toJson();
+    expect(json.containsKey('token'), isFalse);
+    expect(json.containsKey('authorization'), isFalse);
+    final back = DownloadJob.fromJson(json);
+    expect(back.systemId, 7);
+    expect(back.status, DownloadStatus.downloading);
+    expect(back.progress, 0.4);
+  });
+
+  test('HF LFS size prefers the real blob size and labels are compact', () {
+    final file = HFFile.fromJson({
+      'path': 'model-q4_k_m.gguf',
+      'size': 135,
+      'lfs': {'size': 491400032},
+    });
+    expect(file.size, 491400032);
+    expect(file.quantization, 'Q4_K_M');
+    final a = ChatAttachment(
+      type: 'image',
+      path: '/tmp/very-long-name.jpg',
+      name: 'очень-длинное-имя-файла.jpg',
+      mime: 'image/jpeg',
+      size: 2048,
+    );
+    expect(attachmentTypeLabel(a), 'Фото');
+    expect(attachmentSize(2048), '2 КБ');
   });
 
   test('exam task kind survives JSON round-trip', () {

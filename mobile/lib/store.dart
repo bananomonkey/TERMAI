@@ -8,10 +8,12 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
 import 'app_action.dart';
+import 'diagnostics.dart';
 import 'models.dart';
 import 'navigation.dart';
 import 'notifications.dart';
 import 'sandbox.dart';
+import 'secret_store.dart';
 import 'sync_service.dart';
 import 'theme_refresh.dart';
 import 'ui/theme.dart';
@@ -36,6 +38,9 @@ class AppController extends ChangeNotifier {
 
   /// Исполнитель MCP-подобных действий, регистрируется в main().
   AppActionExecutor? actionExecutor;
+
+  /// Структурированный исполнитель инструментов, регистрируется в main().
+  AppToolExecutor? toolExecutor;
 
   final SyncService sync = SyncService.instance;
 
@@ -99,6 +104,7 @@ class AppController extends ChangeNotifier {
             jsonDecode(await cfgFile.readAsString()) as Map<String, dynamic>);
       } catch (_) {}
     }
+    await _restoreAiSecrets();
     final progFile = io.File('$dir/termai-progress.json');
     if (await progFile.exists()) {
       try {
@@ -180,8 +186,8 @@ class AppController extends ChangeNotifier {
     }
     final remoteAt = _cloudConfigTime(cloud, remote);
     final localAt = DateTime.tryParse(config.updatedAt);
-    final cloudNewer = remoteAt != null &&
-        (localAt == null || remoteAt.isAfter(localAt));
+    final cloudNewer =
+        remoteAt != null && (localAt == null || remoteAt.isAfter(localAt));
     if (!cloudNewer) {
       sync.scheduleConfigPush(jsonEncode(
         config.toCloudJson(includeKeys: config.syncKeysToCloud),
@@ -294,6 +300,46 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Секреты лежат в secure storage, а не в termai.json. При первом
+  /// запуске после обновления переносим старые ключи из JSON в хранилище.
+  Future<void> _restoreAiSecrets() async {
+    final sec = await SecretStore.readAiSecrets();
+    final main = (sec['main'] ?? '').toString();
+    if (main.isNotEmpty) config.apiKey = main;
+    final rawFallbacks = sec['fallbacks'];
+    if (rawFallbacks is List) {
+      for (final f in config.fallbacks) {
+        for (final item in rawFallbacks) {
+          if (item is! Map) continue;
+          if ((item['provider'] ?? '').toString() == f.provider &&
+              (item['model'] ?? '').toString() == f.model &&
+              (item['base_url'] ?? '').toString() == f.baseUrl) {
+            final key = (item['api_key'] ?? '').toString();
+            if (key.isNotEmpty) f.apiKey = key;
+            break;
+          }
+        }
+      }
+    }
+    await _writeAiSecrets();
+    // Убираем старые ключи из уже существующего termai.json.
+    final dir = await _dataDir();
+    await io.File('$dir/termai.json')
+        .writeAsString(jsonEncode(config.toLocalJson()));
+  }
+
+  Future<void> _writeAiSecrets() => SecretStore.writeAiSecrets(
+        main: config.apiKey,
+        fallbacks: config.fallbacks
+            .map((f) => {
+                  'provider': f.provider,
+                  'model': f.model,
+                  'base_url': f.baseUrl,
+                  'api_key': f.apiKey,
+                })
+            .toList(growable: false),
+      );
+
   /// _initAI — собирает клиент из основного и резервных подключений.
   /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
   void _initAI() {
@@ -369,7 +415,8 @@ class AppController extends ChangeNotifier {
       themeRevision.value++;
     }
     final dir = await _dataDir();
-    final localJson = jsonEncode(config.toJson());
+    await _writeAiSecrets();
+    final localJson = jsonEncode(config.toLocalJson());
     await io.File('$dir/termai.json').writeAsString(localJson);
     _initAI();
     notifyListeners();
@@ -402,7 +449,7 @@ class AppController extends ChangeNotifier {
       themeRevision.value++;
       final dir = await _dataDir();
       await io.File('$dir/termai.json')
-          .writeAsString(jsonEncode(config.toJson()));
+          .writeAsString(jsonEncode(config.toLocalJson()));
     }
     notifyListeners();
   }
@@ -470,8 +517,10 @@ class AppController extends ChangeNotifier {
     AiEndpoint ep;
     if (index < 0) {
       final p = findProvider(config.provider);
-      final model = config.model.trim().isEmpty ? p.defaultModel : config.model.trim();
-      final base = config.baseUrl.trim().isEmpty ? p.baseUrl : config.baseUrl.trim();
+      final model =
+          config.model.trim().isEmpty ? p.defaultModel : config.model.trim();
+      final base =
+          config.baseUrl.trim().isEmpty ? p.baseUrl : config.baseUrl.trim();
       var key = config.apiKey.trim();
       if (key.isEmpty &&
           (p.id == 'ollama' ||
@@ -479,8 +528,7 @@ class AppController extends ChangeNotifier {
               base.contains('127.0.0.1'))) {
         key = 'local';
       }
-      ep = AiEndpoint(
-          provider: p.id, apiKey: key, model: model, baseUrl: base);
+      ep = AiEndpoint(provider: p.id, apiKey: key, model: model, baseUrl: base);
     } else {
       if (index >= config.fallbacks.length) {
         return TestResult(false, 0, '', 'Модель не найдена');
@@ -496,8 +544,7 @@ class AppController extends ChangeNotifier {
               base.contains('127.0.0.1'))) {
         key = 'local';
       }
-      ep = AiEndpoint(
-          provider: p.id, apiKey: key, model: model, baseUrl: base);
+      ep = AiEndpoint(provider: p.id, apiKey: key, model: model, baseUrl: base);
     }
     final r = await client.testEndpoint(ep);
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -684,7 +731,7 @@ class AppController extends ChangeNotifier {
     if (persist) {
       final dir = await _dataDir();
       await io.File('$dir/termai.json')
-          .writeAsString(jsonEncode(config.toJson()));
+          .writeAsString(jsonEncode(config.toLocalJson()));
     }
     notifyListeners();
   }
@@ -805,8 +852,7 @@ class AppController extends ChangeNotifier {
                 config.model = remoteCfg.model;
                 config.baseUrl = remoteCfg.baseUrl;
               }
-              if (config.fallbacks.isEmpty &&
-                  remoteCfg.fallbacks.isNotEmpty) {
+              if (config.fallbacks.isEmpty && remoteCfg.fallbacks.isNotEmpty) {
                 config.fallbacks = remoteCfg.fallbacks;
               }
             }
@@ -838,8 +884,7 @@ class AppController extends ChangeNotifier {
         }
       } catch (_) {}
     }
-    final pushErr =
-        loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
+    final pushErr = loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
     // Настройки уходят всегда; ключи — только если пользователь не выключил опцию.
     final cfgErr = await syncConfig(pullFirst: loaded);
     if (pushErr.isNotEmpty) return pushErr;
@@ -1329,13 +1374,14 @@ extension AppCourses on AppController {
       'AiFallbacksScreen' => 'резервные модели',
       'ReviewScreen' => 'повторение',
       'ProgressMapScreen' => 'карта прогресса',
+      'LocalAiScreen' => 'локальный ИИ',
+      'HuggingFaceScreen' => 'каталог Hugging Face',
       _ => screen,
     };
     final chat = activeChat;
     final isInterview = chat?.taskId == '__interview__';
-    final chatLabel = chat == null
-        ? '—'
-        : (chat.isGeneral ? 'общий чат' : chat.title);
+    final chatLabel =
+        chat == null ? '—' : (chat.isGeneral ? 'общий чат' : chat.title);
     return 'Имя пользователя: ${userNameOrFriend}. '
         'Экран: $screenLabel. '
         'Чат: $chatLabel${isInterview ? ' (собеседование)' : ''}. '
@@ -1366,6 +1412,24 @@ extension AppCourses on AppController {
     chatMsgs = chat.messages;
     chat.updatedAt = DateTime.now().toIso8601String();
     await saveProgress();
+    final command = question.trim().toLowerCase();
+    if (command == '/диагностика' ||
+        command == '/диагностика.' ||
+        command == '/diagnostics' ||
+        command == '/diagnostic') {
+      mentorBusy = true;
+      notifyListeners();
+      try {
+        final report = await runDiagnostics(this);
+        addChatDiagnostic(report.summary, report.details);
+      } catch (e) {
+        addChatError('Диагностика не удалась', e);
+      } finally {
+        mentorBusy = false;
+        notifyListeners();
+      }
+      return '';
+    }
     if (ai == null || !ai!.ready) {
       this.addChatMessage(
           'system', 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.');
@@ -1381,30 +1445,80 @@ extension AppCourses on AppController {
               lastSolvedHist +
               '\n'
           : '';
-      final answer = general
-          ? await ai!.generalMentor(
-              solvedCtx + question,
-              chatLog: this.chatLogForAI,
-              appContext: appContextForAI,
-              userName: userNameOrFriend,
-              attachments: attachments,
-            )
-          : await ai!.mentor(cur, currentTask, state, _lastHist(8),
-              this.chatLogForAI, solvedCtx + question,
-              interview: chat.taskId == '__interview__',
-              appContext: appContextForAI,
-              attachments: attachments);
+      String answer;
+      AssistantTurn? turn;
+      final canUseNativeTools = toolExecutor != null && attachments.isEmpty;
+      if (canUseNativeTools) {
+        var navigationUsed = false;
+        Future<AppActionResult> executeTool(AppActionCall call) async {
+          if (isNavigationTool(call.name) && navigationUsed) {
+            return const AppActionResult(
+              ok: false,
+              message: 'Пропущено конфликтующее навигационное действие.',
+            );
+          }
+          final result = await toolExecutor!(call);
+          if (isNavigationTool(call.name) && result.ok) {
+            navigationUsed = true;
+          }
+          if (!result.ok && result.message.isNotEmpty) {
+            addChatError('Не удалось выполнить ${call.name}', result.message);
+          }
+          return result;
+        }
+
+        turn = general
+            ? await ai!.generalMentorWithTools(
+                solvedCtx + question,
+                chatLog: this.chatLogForAI,
+                appContext: appContextForAI,
+                userName: userNameOrFriend,
+                tools: appToolsJson(),
+                execute: executeTool,
+              )
+            : await ai!.mentorWithTools(
+                cur,
+                currentTask,
+                state,
+                _lastHist(8),
+                this.chatLogForAI,
+                solvedCtx + question,
+                interview: chat.taskId == '__interview__',
+                appContext: appContextForAI,
+                tools: appToolsJson(),
+                execute: executeTool,
+              );
+        answer = turn.text;
+        if (answer.trim().isEmpty && turn.toolsUsed) answer = 'Готово.';
+      } else {
+        answer = general
+            ? await ai!.generalMentor(
+                solvedCtx + question,
+                chatLog: this.chatLogForAI,
+                appContext: appContextForAI,
+                userName: userNameOrFriend,
+                attachments: attachments,
+              )
+            : await ai!.mentor(cur, currentTask, state, _lastHist(8),
+                this.chatLogForAI, solvedCtx + question,
+                interview: chat.taskId == '__interview__',
+                appContext: appContextForAI,
+                attachments: attachments);
+      }
       if (lastSolvedTitle.isNotEmpty) {
         lastSolvedTitle = '';
         lastSolvedHist = '';
       }
 
-      // Ответ может содержать MCP-подобные вызовы приложения.
+      // Ответ может содержать MCP-подобные вызовы приложения. Если native
+      // tools уже выполнили действия, повторно маркеры не исполняем.
       final parsed = parseAppActions(answer);
+      final markerActions =
+          (turn?.toolsUsed ?? false) ? const <AppActionCall>[] : parsed.actions;
       final visible = parsed.text.trim();
       if (visible.isNotEmpty) {
         this.addChatMessage('mentor', visible);
-      } else if (parsed.actions.isNotEmpty) {
+      } else if (markerActions.isNotEmpty || (turn?.toolsUsed ?? false)) {
         this.addChatMessage('mentor', 'Готово.');
       }
       mentorBusy = false;
@@ -1412,7 +1526,17 @@ extension AppCourses on AppController {
 
       // Действия выполняем уже после снятия mentorBusy: генерация курса,
       // проверка задачи и терминал внутри проверяют флаг busy.
-      await _executeAppActions(parsed.actions);
+      final outcomes = await _executeAppActions(markerActions);
+      final useful = outcomes
+          .where((r) => r.ok && (r.data.isNotEmpty || r.message.isNotEmpty));
+      if (useful.isNotEmpty) {
+        final follow =
+            await _answerWithToolResults(question, outcomes, general);
+        final visibleFollow = parseAppActions(follow).text.trim();
+        if (visibleFollow.isNotEmpty) {
+          this.addChatMessage('mentor', visibleFollow);
+        }
+      }
     } catch (e) {
       addChatError('Наставник недоступен', e);
       mentorBusy = false;
@@ -1421,25 +1545,112 @@ extension AppCourses on AppController {
     return '';
   }
 
-  Future<void> _executeAppActions(List<AppActionCall> actions) async {
-    if (actions.isEmpty) return;
-    final exec = actionExecutor;
-    if (exec == null) {
-      addChatMessage('system', 'Действия приложения недоступны.');
-      return;
-    }
-    for (final action in actions) {
-      var err = '';
-      try {
-        err = await exec(action);
-      } catch (e) {
-        err = _errMsg(e);
+  /// Возвращает результат инструментов модели и просит короткий ответ.
+  /// Действия из этого ответа не исполняем: защита от циклов.
+  Future<String> _answerWithToolResults(
+    String question,
+    List<AppActionResult> outcomes,
+    bool general,
+  ) async {
+    if (ai == null || !ai!.ready) return '';
+    final results = outcomes.map((r) => r.forModel).join('\n');
+    final prompt = 'Вопрос пользователя: $question\n\n'
+        'Результаты инструментов TERMAI (JSON, доверяй только им):\n$results\n\n'
+        'Ответь пользователю по-русски кратко, используя эти данные. '
+        'Не вызывай инструменты повторно и не выдумывай отсутствующие данные.';
+    mentorBusy = true;
+    notifyListeners();
+    try {
+      if (general) {
+        return await ai!.generalMentor(
+          prompt,
+          chatLog: chatLogForAI,
+          appContext: appContextForAI,
+          userName: userNameOrFriend,
+        );
       }
-      if (err.isNotEmpty) {
-        addChatError('Не удалось выполнить ${action.name}', err);
-      }
+      return await ai!.mentor(
+        cur,
+        currentTask,
+        state,
+        _lastHist(8),
+        chatLogForAI,
+        prompt,
+        interview: activeChat?.taskId == '__interview__',
+        appContext: appContextForAI,
+      );
+    } catch (_) {
+      return '';
+    } finally {
+      mentorBusy = false;
+      notifyListeners();
     }
   }
+
+  Future<List<AppActionResult>> _executeAppActions(
+      List<AppActionCall> actions) async {
+    if (actions.isEmpty) return const [];
+    final tool = toolExecutor;
+    final legacy = actionExecutor;
+    if (tool == null && legacy == null) {
+      addChatMessage('system', 'Действия приложения недоступны.');
+      return const [];
+    }
+    final results = <AppActionResult>[];
+    var navigationUsed = false;
+    for (final action in actions) {
+      final isNavigation = _navigationActionNames.contains(action.name);
+      if (isNavigation && navigationUsed) {
+        results.add(const AppActionResult(
+          ok: false,
+          message: 'Пропущено конфликтующее навигационное действие.',
+        ));
+        continue;
+      }
+      try {
+        AppActionResult result;
+        if (tool != null) {
+          result = await tool(action);
+        } else {
+          final err = await legacy!(action);
+          result = AppActionResult(ok: err.isEmpty, message: err);
+        }
+        if (isNavigation && result.ok) navigationUsed = true;
+        if (!result.ok && result.message.isNotEmpty) {
+          addChatError('Не удалось выполнить ${action.name}', result.message);
+        }
+        results.add(result);
+      } catch (e) {
+        final result = AppActionResult(ok: false, message: _errMsg(e));
+        addChatError('Не удалось выполнить ${action.name}', result.message);
+        results.add(result);
+      }
+    }
+    return results;
+  }
+
+  static const _navigationActionNames = <String>{
+    'open_screen',
+    'open_course',
+    'open_lesson',
+    'open_task',
+    'open_chat',
+    'open_interview',
+    'open_terminal',
+    'open_mental_map',
+    'open_local_ai',
+    'open_hf_catalog',
+    'open_progress',
+    'open_settings',
+    'open_archive',
+    'open_chats',
+    'open_usage',
+    'open_help',
+    'open_background',
+    'open_fallbacks',
+    'open_review',
+    'open_home',
+  };
 
   // ---------- решение ----------
 
@@ -1455,7 +1666,8 @@ extension AppCourses on AppController {
       final ask = (cur.isTheory || task.isExam)
           ? 'Дай разбор этой темы: главные идеи, примеры и типичные ошибки. Без команд терминала.'
           : 'Дай пошаговое решение этой задачи: команды по шагам и ожидаемый результат. Минимум теории, только шаги.';
-      final ans = await ai!.mentor(cur, task, state, _lastHist(4), const [], ask,
+      final ans = await ai!.mentor(
+          cur, task, state, _lastHist(4), const [], ask,
           allowActions: false);
       if (ans.trim().isNotEmpty) {
         task.solution = ans;
@@ -1592,15 +1804,16 @@ extension AppCourses on AppController {
           .where((t) => prog.completed[course.id]?[t.id] ?? false)
           .map((t) => t.title)
           .toList();
-      final tasks = await ai!.generateContinuation(course, count,
-          completedTitles: completed);
+      final tasks = await ai!
+          .generateContinuation(course, count, completedTitles: completed);
       if (tasks.isEmpty) {
         throw Exception('ИИ не предложил новых задач — попробуй ещё раз.');
       }
       var seq = 0;
       for (final t in tasks) {
         if (course.tasks.any((x) => x.id == t.id)) {
-          t.id = 'ai-${DateTime.now().millisecondsSinceEpoch % 100000}-${seq++}';
+          t.id =
+              'ai-${DateTime.now().millisecondsSinceEpoch % 100000}-${seq++}';
         }
         course.tasks.add(t);
         (prog.generated[course.id] ??= []).add(t);
@@ -1885,8 +2098,8 @@ extension AppMentorChats on AppController {
   List<MentorChat> chatsForTask(String courseId, String taskId) {
     if (courseId.isEmpty || taskId.isEmpty) return const [];
     final out = prog.mentorChats
-        .where((c) =>
-            !c.isGeneral && c.courseId == courseId && c.taskId == taskId)
+        .where(
+            (c) => !c.isGeneral && c.courseId == courseId && c.taskId == taskId)
         .toList();
     out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return out;
@@ -2073,6 +2286,12 @@ extension AppMentorChats on AppController {
     _appendChat(c, ChatMsg(role, text));
   }
 
+  /// addChatDiagnostic — отчёт диагностики с раскрываемыми деталями.
+  void addChatDiagnostic(String summary, String details) {
+    final c = activeChat ?? ensureGeneralChat();
+    _appendChat(c, ChatMsg('diagnostic', summary, details: details));
+  }
+
   /// addChatError — человеческая ошибка без сырого лога в чате.
   void addChatError(String prefix, Object error) {
     final c = activeChat ?? ensureGeneralChat();
@@ -2094,7 +2313,8 @@ extension AppMentorChats on AppController {
     final msgs = activeChat?.messages ?? chatMsgs;
     final tail = msgs.length <= 8 ? msgs : msgs.sublist(msgs.length - 8);
     return tail
-        .where((m) => m.role != 'system' && m.role != 'error')
+        .where((m) =>
+            m.role != 'system' && m.role != 'error' && m.role != 'diagnostic')
         .map((m) => (m.role == 'user' ? 'Студент: ' : 'Наставник: ') + m.text)
         .toList();
   }

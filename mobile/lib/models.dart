@@ -190,27 +190,26 @@ class Task {
 
   factory Task.fromJson(Map<String, dynamic> j) {
     final rawKind = (j['kind'] as String?)?.toLowerCase();
-    final kind = rawKind == 'quiz'
-        ? 'quiz'
-        : (rawKind == 'exam' ? 'exam' : 'cmd');
+    final kind =
+        rawKind == 'quiz' ? 'quiz' : (rawKind == 'exam' ? 'exam' : 'cmd');
     return Task(
-        id: j['id'] as String? ?? '',
-        title: j['title'] as String? ?? '',
-        kind: kind,
-        difficulty: (j['difficulty'] as num?)?.toInt() ?? 2,
-        goal: j['goal'] as String? ?? '',
-        check: j['check'] as String? ?? '',
-        expected: j['expected_output'] as String? ?? '',
-        solution: j['solution'] as String? ?? '',
-        peeked: j['peeked'] as bool? ?? false,
-        theory: (j['theory'] as List?)?.cast<String>() ?? [],
-        hints: (j['hints'] as List?)?.cast<String>() ?? [],
-        quiz: ((j['quiz'] as List?) ?? [])
-            .map((q) => QuizQ.fromJson(q as Map<String, dynamic>))
-            .toList(),
-        start: SandboxState.normalized(
-            (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
-      );
+      id: j['id'] as String? ?? '',
+      title: j['title'] as String? ?? '',
+      kind: kind,
+      difficulty: (j['difficulty'] as num?)?.toInt() ?? 2,
+      goal: j['goal'] as String? ?? '',
+      check: j['check'] as String? ?? '',
+      expected: j['expected_output'] as String? ?? '',
+      solution: j['solution'] as String? ?? '',
+      peeked: j['peeked'] as bool? ?? false,
+      theory: (j['theory'] as List?)?.cast<String>() ?? [],
+      hints: (j['hints'] as List?)?.cast<String>() ?? [],
+      quiz: ((j['quiz'] as List?) ?? [])
+          .map((q) => QuizQ.fromJson(q as Map<String, dynamic>))
+          .toList(),
+      start: SandboxState.normalized(
+          (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
+    );
   }
 
   Map<String, dynamic> toJson() => {
@@ -460,8 +459,7 @@ class AiEndpoint {
 
   bool get ready => apiKey.trim().isNotEmpty;
 
-  bool get penalized =>
-      penaltyUntil > DateTime.now().millisecondsSinceEpoch;
+  bool get penalized => penaltyUntil > DateTime.now().millisecondsSinceEpoch;
 
   factory AiEndpoint.fromJson(Map<String, dynamic> j) => AiEndpoint(
         provider: j['provider'] as String? ?? 'deepseek',
@@ -621,9 +619,9 @@ class Config {
     this.primaryPenaltyUntil = 0,
     this.primaryLastOkAt = 0,
     this.primaryLastError = '',
-  }) : motivationQueue = motivationQueue ?? [],
-       fallbacks = fallbacks ?? [],
-       customThemes = customThemes ?? [];
+  })  : motivationQueue = motivationQueue ?? [],
+        fallbacks = fallbacks ?? [],
+        customThemes = customThemes ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -636,17 +634,13 @@ class Config {
         userName: j['user_name'] as String? ?? '',
         notificationsEnabled: j['notifications_enabled'] as bool? ?? true,
         dailyReminderEnabled: j['daily_reminder_enabled'] as bool? ?? true,
-        reminderHour: ((j['reminder_hour'] as num?)?.toInt() ?? 12)
-            .clamp(0, 23)
-            .toInt(),
-        reminderMinute: ((j['reminder_minute'] as num?)?.toInt() ?? 0)
-            .clamp(0, 59)
-            .toInt(),
+        reminderHour:
+            ((j['reminder_hour'] as num?)?.toInt() ?? 12).clamp(0, 23).toInt(),
+        reminderMinute:
+            ((j['reminder_minute'] as num?)?.toInt() ?? 0).clamp(0, 59).toInt(),
         aiMotivationEnabled: j['ai_motivation_enabled'] as bool? ?? true,
-        motivationQueue:
-            (j['motivation_queue'] as List?)?.cast<String>() ?? [],
-        motivationGeneratedAt:
-            j['motivation_generated_at'] as String? ?? '',
+        motivationQueue: (j['motivation_queue'] as List?)?.cast<String>() ?? [],
+        motivationGeneratedAt: j['motivation_generated_at'] as String? ?? '',
         launcherX: (j['launcher_x'] as num?)?.toDouble() ?? -1,
         launcherY: (j['launcher_y'] as num?)?.toDouble() ?? -1,
         themeAuto: j['theme_auto'] as bool? ?? true,
@@ -665,16 +659,13 @@ class Config {
             .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
             .toList(),
         localModelPath: j['local_model_path'] as String? ?? '',
-        localContextSize:
-            ((j['local_context_size'] as num?)?.toInt() ?? 4096)
-                .clamp(512, 32768)
-                .toInt(),
+        localContextSize: ((j['local_context_size'] as num?)?.toInt() ?? 4096)
+            .clamp(512, 32768)
+            .toInt(),
         updatedAt: j['updated_at'] as String? ?? '',
         primaryFailStreak: (j['primary_fail_streak'] as num?)?.toInt() ?? 0,
-        primaryLastErrorAt:
-            (j['primary_last_error_at'] as num?)?.toInt() ?? 0,
-        primaryPenaltyUntil:
-            (j['primary_penalty_until'] as num?)?.toInt() ?? 0,
+        primaryLastErrorAt: (j['primary_last_error_at'] as num?)?.toInt() ?? 0,
+        primaryPenaltyUntil: (j['primary_penalty_until'] as num?)?.toInt() ?? 0,
         primaryLastOkAt: (j['primary_last_ok_at'] as num?)?.toInt() ?? 0,
         primaryLastError: j['primary_last_error'] as String? ?? '',
       );
@@ -710,13 +701,24 @@ class Config {
         'custom_themes': customThemes.map((e) => e.toJson()).toList(),
         if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
         if (primaryFailStreak > 0) 'primary_fail_streak': primaryFailStreak,
-        if (primaryLastErrorAt > 0)
-          'primary_last_error_at': primaryLastErrorAt,
+        if (primaryLastErrorAt > 0) 'primary_last_error_at': primaryLastErrorAt,
         if (primaryPenaltyUntil > 0)
           'primary_penalty_until': primaryPenaltyUntil,
         if (primaryLastOkAt > 0) 'primary_last_ok_at': primaryLastOkAt,
         if (primaryLastError.isNotEmpty) 'primary_last_error': primaryLastError,
       };
+
+  /// toLocalJson — конфиг для файла на устройстве. Секреты сюда не
+  /// попадают: они живут в защищённом хранилище.
+  Map<String, dynamic> toLocalJson() {
+    final j = Map<String, dynamic>.from(toJson());
+    j.remove('api_key');
+    final fbs = (j['fallbacks'] as List?) ?? const [];
+    j['fallbacks'] = fbs
+        .map((e) => Map<String, dynamic>.from(e as Map)..remove('api_key'))
+        .toList();
+    return j;
+  }
 
   /// toCloudJson — конфиг для Firestore. Ключи попадают в облако только
   /// при includeKeys=true; остальные настройки синхронизируются всегда.
@@ -729,8 +731,7 @@ class Config {
       j.remove('api_key');
       final fbs = (j['fallbacks'] as List?) ?? const [];
       j['fallbacks'] = fbs
-          .map((e) => Map<String, dynamic>.from(e as Map)
-            ..remove('api_key'))
+          .map((e) => Map<String, dynamic>.from(e as Map)..remove('api_key'))
           .toList();
     }
     return j;

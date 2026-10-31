@@ -9,6 +9,7 @@ import '../models.dart';
 import '../store.dart';
 import '../theme_refresh.dart';
 import 'app_background.dart';
+import 'attachment_view.dart';
 import 'mentor_avatar.dart';
 import 'theme.dart';
 
@@ -374,146 +375,228 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           body: AppBackdrop(
             child: SafeArea(
-            child: Column(children: [
-              Expanded(
-                child: msgs.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const MentorAvatar(size: 92, glow: true),
-                              const SizedBox(height: 16),
-                              Text('Термай',
-                                  style: TextStyle(
-                                      fontSize: 21,
-                                      fontWeight: FontWeight.w900,
-                                      color: C.text)),
-                              const SizedBox(height: 5),
-                              Text(
-                                  widget.interview
-                                      ? 'ИИ-интервьюер TERMAI'
-                                      : (chat?.isGeneral ?? true)
-                                          ? 'Общий чат · ${controller.userNameOrFriend}'
-                                          : 'ИИ-наставник TERMAI',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      letterSpacing: 0.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: C.accent)),
-                              const SizedBox(height: 14),
-                              Text(
-                                  'Спроси о задаче, синтаксисе, ошибке…\n'
-                                  'Или попроси открыть настройки, архив или вставить команду в терминал.',
-                                  textAlign: TextAlign.center,
-                                  style:
-                                      TextStyle(color: C.muted, height: 1.45)),
-                            ],
+              child: Column(children: [
+                Expanded(
+                  child: msgs.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const MentorAvatar(size: 92, glow: true),
+                                const SizedBox(height: 16),
+                                Text('Термай',
+                                    style: TextStyle(
+                                        fontSize: 21,
+                                        fontWeight: FontWeight.w900,
+                                        color: C.text)),
+                                const SizedBox(height: 5),
+                                Text(
+                                    widget.interview
+                                        ? 'ИИ-интервьюер TERMAI'
+                                        : (chat?.isGeneral ?? true)
+                                            ? 'Общий чат · ${controller.userNameOrFriend}'
+                                            : 'ИИ-наставник TERMAI',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        letterSpacing: 0.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: C.accent)),
+                                const SizedBox(height: 14),
+                                Text(
+                                    'Спроси о задаче, синтаксисе, ошибке…\n'
+                                    'Или попроси открыть настройки, архив или вставить команду в терминал.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: C.muted, height: 1.45)),
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(14),
-                        itemCount:
-                            msgs.length + (controller.mentorBusy ? 1 : 0),
-                        itemBuilder: (context, i) {
-                          if (i >= msgs.length) {
-                            return Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const MentorAvatar(
-                                        size: 28, speaking: true),
-                                    const SizedBox(width: 10),
-                                    SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2.2,
-                                            color: C.accent)),
-                                    const SizedBox(width: 8),
-                                    Text('Термай печатает…',
-                                        style: TextStyle(
-                                            fontSize: 12.5, color: C.muted)),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-                          return _Bubble(msg: msgs[i]);
-                        },
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_attachments.isNotEmpty)
-                      SizedBox(
-                        height: 42,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _attachments.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 6),
+                        )
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.all(14),
+                          itemCount:
+                              msgs.length + (controller.mentorBusy ? 1 : 0),
                           itemBuilder: (context, i) {
-                            final a = _attachments[i];
-                            return InputChip(
-                              avatar: Icon(
-                                a.isImage
-                                    ? Icons.image_outlined
-                                    : Icons.description_outlined,
-                                size: 16,
-                                color: C.accent,
-                              ),
-                              label: Text(
-                                a.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onDeleted: () =>
-                                  setState(() => _attachments.removeAt(i)),
-                            );
+                            if (i >= msgs.length) {
+                              return Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const MentorAvatar(
+                                          size: 28, speaking: true),
+                                      const SizedBox(width: 10),
+                                      SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2.2,
+                                              color: C.accent)),
+                                      const SizedBox(width: 8),
+                                      Text('Термай печатает…',
+                                          style: TextStyle(
+                                              fontSize: 12.5, color: C.muted)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            return _Bubble(msg: msgs[i]);
                           },
                         ),
-                      ),
-                    Row(children: [
-                      IconButton(
-                        tooltip: 'Прикрепить фото или файл',
-                        onPressed: controller.mentorBusy ? null : _attach,
-                        icon: Icon(Icons.attach_file,
-                            size: 21, color: C.muted),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _input,
-                          onSubmitted: (_) => _send(),
-                          decoration: const InputDecoration(
-                              hintText: 'Спроси ментора…'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        onPressed: controller.mentorBusy ? null : _send,
-                        icon: const Icon(Icons.send, size: 19),
-                        style:
-                            IconButton.styleFrom(backgroundColor: C.accentDark),
-                      ),
-                    ]),
-                  ],
                 ),
-              ),
-            ]),
-          ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_attachments.isNotEmpty)
+                        SizedBox(
+                          height: 36,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _attachments.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 5),
+                            itemBuilder: (context, i) {
+                              final a = _attachments[i];
+                              final type = attachmentTypeLabel(a);
+                              final index = _attachments
+                                      .take(i)
+                                      .where(
+                                          (x) => attachmentTypeLabel(x) == type)
+                                      .length +
+                                  1;
+                              return AttachmentBadge(
+                                attachment: a,
+                                index: index,
+                                onTap: () => showAttachmentViewer(a),
+                                onRemove: () =>
+                                    setState(() => _attachments.removeAt(i)),
+                              );
+                            },
+                          ),
+                        ),
+                      Row(children: [
+                        IconButton(
+                          tooltip: 'Прикрепить фото или файл',
+                          onPressed: controller.mentorBusy ? null : _attach,
+                          icon:
+                              Icon(Icons.attach_file, size: 21, color: C.muted),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _input,
+                            onSubmitted: (_) => _send(),
+                            decoration: const InputDecoration(
+                                hintText: 'Спроси ментора…'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          onPressed: controller.mentorBusy ? null : _send,
+                          icon: const Icon(Icons.send, size: 19),
+                          style: IconButton.styleFrom(
+                              backgroundColor: C.accentDark),
+                        ),
+                      ]),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+class _DiagnosticBubble extends StatelessWidget {
+  final ChatMsg msg;
+  const _DiagnosticBubble({required this.msg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+      decoration: BoxDecoration(
+        color: C.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.accent.withAlpha(75)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.health_and_safety_outlined, size: 18, color: C.accent),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text('Диагностика TERMAI',
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: C.text)),
+              ),
+              IconButton(
+                tooltip: 'Скопировать отчёт',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: () async {
+                  await Clipboard.setData(
+                      ClipboardData(text: '${msg.text}\n\n${msg.details}'));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Отчёт скопирован')),
+                  );
+                },
+                icon: Icon(Icons.copy_rounded, size: 16, color: C.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            msg.text,
+            style: TextStyle(fontSize: 12.5, height: 1.5, color: C.text),
+          ),
+          if (msg.details.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Theme(
+              data:
+                  Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                iconColor: C.muted,
+                collapsedIconColor: C.muted,
+                title: Text('Технические детали',
+                    style: TextStyle(fontSize: 11.5, color: C.muted)),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SelectableText(
+                      msg.details,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          height: 1.45,
+                          color: C.muted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -534,6 +617,8 @@ class _Bubble extends StatelessWidget {
         );
       case 'error':
         return _errorBubble(context);
+      case 'diagnostic':
+        return _DiagnosticBubble(msg: msg);
       case 'user':
         return Align(
           alignment: Alignment.centerRight,
@@ -545,26 +630,10 @@ class _Bubble extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Wrap(
-                    spacing: 6,
+                    spacing: 5,
                     runSpacing: 4,
                     alignment: WrapAlignment.end,
-                    children: [
-                      for (final a in msg.attachments)
-                        Chip(
-                          visualDensity: VisualDensity.compact,
-                          avatar: Icon(
-                            a.isImage
-                                ? Icons.image_outlined
-                                : Icons.description_outlined,
-                            size: 15,
-                            color: C.accent,
-                          ),
-                          label: Text(
-                            a.name,
-                            style: const TextStyle(fontSize: 10.5),
-                          ),
-                        ),
-                    ],
+                    children: attachmentBadges(msg.attachments),
                   ),
                 ),
             ],
@@ -618,8 +687,7 @@ class _Bubble extends StatelessWidget {
                 tooltip: 'Скопировать ошибку',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 32, minHeight: 32),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 onPressed: () async {
                   final text = msg.details.isNotEmpty ? msg.details : msg.text;
                   await Clipboard.setData(ClipboardData(text: text));

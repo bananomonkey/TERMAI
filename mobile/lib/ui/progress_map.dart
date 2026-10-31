@@ -13,12 +13,20 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
+import 'design_system.dart';
 import 'lesson.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 class ProgressMapScreen extends StatefulWidget {
-  const ProgressMapScreen({super.key});
+  /// courseId/focusQuery приходят из инструмента open_mental_map.
+  final String initialCourseId;
+  final String focusQuery;
+  const ProgressMapScreen({
+    super.key,
+    this.initialCourseId = '',
+    this.focusQuery = '',
+  });
 
   @override
   State<ProgressMapScreen> createState() => _ProgressMapScreenState();
@@ -27,6 +35,8 @@ class ProgressMapScreen extends StatefulWidget {
 class _ProgressMapScreenState extends State<ProgressMapScreen> {
   final TransformationController _tc = TransformationController();
   final Set<int> _collapsed = {};
+  String _focusId = '';
+  String _focusLabel = '';
 
   /// Ручные позиции узлов. Живут только в состоянии экрана: пользователь
   /// перетаскивает ветки и узлы, но после выхода раскладка сбрасывается.
@@ -39,8 +49,20 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
   void initState() {
     super.initState();
     _tc.addListener(_onTransform);
+    if (widget.initialCourseId.trim().isNotEmpty) {
+      final q = widget.initialCourseId.trim().toLowerCase();
+      final idx = controller.courses.indexWhere(
+        (c) => c.id.toLowerCase() == q || c.title.toLowerCase() == q,
+      );
+      if (idx >= 0) controller.switchCourseSilent(idx);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _fit();
+      if (!mounted) return;
+      if (widget.focusQuery.trim().isNotEmpty) {
+        _focusTopic(widget.focusQuery);
+      } else {
+        _fit();
+      }
     });
   }
 
@@ -76,13 +98,66 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       ..scale(scale.clamp(0.08, 1.0));
   }
 
+  /// Находит узел по теме/названию задачи и центрирует на нём карту.
+  /// Если совпадения нет — не открывает случайный узел, а сообщает об этом.
+  void _focusTopic(String raw) {
+    final q = raw.trim().toLowerCase();
+    if (q.isEmpty || controller.courses.isEmpty) {
+      _fit();
+      return;
+    }
+    // Свёрнутые модули могут скрывать нужную задачу — раскрываем дерево.
+    _collapsed.clear();
+    final graph = _buildGraph(controller.cur);
+    _GNode? exact;
+    _GNode? starts;
+    _GNode? contains;
+    for (final n in graph.nodes) {
+      final label = n.label.toLowerCase();
+      final id = n.id.toLowerCase();
+      bool match(String s) => s == q;
+      bool prefix(String s) => s.startsWith(q);
+      bool has(String s) => s.contains(q);
+      if (exact == null && (match(label) || match(id))) exact = n;
+      if (starts == null && (prefix(label) || prefix(id))) starts = n;
+      if (contains == null && (has(label) || has(id))) contains = n;
+    }
+    final target = exact ?? starts ?? contains;
+    if (target == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Тема «$raw» не найдена на карте.')),
+        );
+      }
+      _fit();
+      return;
+    }
+    setState(() {
+      _focusId = target.id;
+      _focusLabel = target.label;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _centerOn(target);
+    });
+  }
+
+  void _centerOn(_GNode node) {
+    final size = _viewport;
+    if (size == Size.zero) return;
+    const scale = 0.9;
+    final tx = size.width / 2 - (node.x + node.w / 2) * scale;
+    final ty = size.height / 2 - (node.y + node.h / 2) * scale;
+    _tc.value = Matrix4.identity()
+      ..translate(tx, ty)
+      ..scale(scale);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Карта прогресса',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text('Карта прогресса', style: AppText.screenTitle),
         actions: [
           IconButton(
             tooltip: 'Достижения',
@@ -141,35 +216,39 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                           controller.switchCourseSilent(i);
                           _collapsed.clear();
                           _manualPositions.clear();
+                          _focusId = '';
+                          _focusLabel = '';
                           setState(() {});
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) _fit();
                           });
                         },
                         labelStyle: TextStyle(
-                            fontSize: 12,
-                            color: selected ? C.text : C.muted),
+                            fontSize: 12, color: selected ? C.text : C.muted),
                         selectedColor: C.accent.withAlpha(C.isLight ? 40 : 55),
                         backgroundColor: C.card,
-                        side: BorderSide(
-                            color: selected ? C.accent : C.border),
+                        side: BorderSide(color: selected ? C.accent : C.border),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20)),
                       );
                     },
                   ),
                 ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'перетаскивай узлы · щипок — зум',
-                      style: TextStyle(fontSize: 10.5, color: C.muted),
+                if (_focusLabel.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 2),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 230),
+                        child: appStatusPill(
+                          _focusLabel,
+                          color: C.secondary,
+                          icon: Icons.my_location,
+                        ),
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 2),
                 Expanded(
                   child: Stack(
@@ -183,9 +262,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                               constrained: false,
                               minScale: 0.08,
                               maxScale: 2.6,
-                              boundaryMargin:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 500, vertical: 500),
+                              boundaryMargin: const EdgeInsets.symmetric(
+                                  horizontal: 500, vertical: 500),
                               child: RepaintBoundary(
                                 child: SizedBox(
                                   width: graph.width,
@@ -198,8 +276,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                                             nodes: graph.nodes,
                                             edges: graph.edges,
                                             visible: _draggingId != null
-                                                ? const Rect.fromLTWH(
-                                                    -99999, -99999, 199998, 199998)
+                                                ? const Rect.fromLTWH(-99999,
+                                                    -99999, 199998, 199998)
                                                 : _visible,
                                           ),
                                         ),
@@ -217,6 +295,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                                               child: _GraphNodeView(
                                                 node: n,
                                                 dragging: _draggingId == n.id,
+                                                highlighted: _focusId == n.id,
                                                 onTap: () => _onNodeTap(n),
                                                 onDragStart: () =>
                                                     _startDrag(n),
@@ -249,16 +328,13 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _ZoomButton(
-                                icon: Icons.add,
-                                onTap: () => _zoom(1.25)),
+                                icon: Icons.add, onTap: () => _zoom(1.25)),
                             const SizedBox(height: 7),
                             _ZoomButton(
-                                icon: Icons.remove,
-                                onTap: () => _zoom(0.8)),
+                                icon: Icons.remove, onTap: () => _zoom(0.8)),
                             const SizedBox(height: 7),
                             _ZoomButton(
-                                icon: Icons.fit_screen_outlined,
-                                onTap: _fit),
+                                icon: Icons.fit_screen_outlined, onTap: _fit),
                             const SizedBox(height: 7),
                             _ZoomButton(
                                 icon: Icons.restart_alt,
@@ -318,8 +394,8 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       if (n.type == 'course') {
         targets = all;
       } else if (n.type == 'module') {
-        targets = all.where(
-            (x) => x.id == n.id || (x.type != 'module' && x.module == n.module));
+        targets = all.where((x) =>
+            x.id == n.id || (x.type != 'module' && x.module == n.module));
       } else {
         targets = [n];
       }
@@ -402,12 +478,11 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
       final moduleIndex = start ~/ 5;
       var topic = course.title;
       if (course.syllabus.isNotEmpty) {
-        topic = course.syllabus[
-            (moduleIndex).clamp(0, course.syllabus.length - 1)];
+        topic =
+            course.syllabus[(moduleIndex).clamp(0, course.syllabus.length - 1)];
       }
-      final moduleDone = <Task>[
-        for (var i = start; i < end; i++) tasks[i]
-      ].every((t) => done[t.id] ?? false);
+      final moduleDone = <Task>[for (var i = start; i < end; i++) tasks[i]]
+          .every((t) => done[t.id] ?? false);
       final moduleId = 'm$moduleIndex';
       final moduleMeta = _GNode(
         id: moduleId,
@@ -446,9 +521,7 @@ class _ProgressMapScreenState extends State<ProgressMapScreen> {
             done: done[t.id] ?? false,
             current: i == frontier,
             exam: t.isExam,
-            subtitle: t.isExam
-                ? 'экзамен'
-                : (t.isQuiz ? 'тест' : 'практика'),
+            subtitle: t.isExam ? 'экзамен' : (t.isQuiz ? 'тест' : 'практика'),
           );
           column.add(taskMeta);
           nodes.add(taskMeta);
@@ -612,6 +685,7 @@ class _GraphNodeView extends StatelessWidget {
   final ValueChanged<Offset> onDrag;
   final VoidCallback onDragEnd;
   final bool dragging;
+  final bool highlighted;
   const _GraphNodeView({
     required this.node,
     required this.onTap,
@@ -619,6 +693,7 @@ class _GraphNodeView extends StatelessWidget {
     required this.onDrag,
     required this.onDragEnd,
     required this.dragging,
+    this.highlighted = false,
   });
 
   @override
@@ -648,35 +723,45 @@ class _GraphNodeView extends StatelessWidget {
               horizontal: module || root ? 12 : 10,
               vertical: module || root ? 7 : 4),
           decoration: BoxDecoration(
-            color: node.current
-                ? main.withAlpha(C.isLight ? 26 : 34)
-                : C.card,
+            color: node.current ? main.withAlpha(C.isLight ? 26 : 34) : C.card,
             borderRadius: BorderRadius.circular(module || root ? 14 : 12),
             border: Border.all(
-              color: dragging
-                  ? main.withAlpha(230)
-                  : node.current || node.exam
-                      ? main.withAlpha(190)
-                      : (node.done ? main.withAlpha(110) : C.border),
-              width: dragging || node.current || node.exam ? 1.8 : 1,
+              color: highlighted
+                  ? C.secondary.withAlpha(245)
+                  : dragging
+                      ? main.withAlpha(230)
+                      : node.current || node.exam
+                          ? main.withAlpha(190)
+                          : (node.done ? main.withAlpha(110) : C.border),
+              width: highlighted
+                  ? 2.4
+                  : (dragging || node.current || node.exam ? 1.8 : 1),
             ),
-            boxShadow: dragging
+            boxShadow: highlighted
                 ? [
                     BoxShadow(
-                      color: main.withAlpha(70),
-                      blurRadius: 16,
+                      color: C.secondary.withAlpha(95),
+                      blurRadius: 22,
                       spreadRadius: 2,
                     )
                   ]
-                : node.current
+                : dragging
                     ? [
                         BoxShadow(
-                          color: main.withAlpha(45),
-                          blurRadius: 10,
-                          spreadRadius: 1,
+                          color: main.withAlpha(70),
+                          blurRadius: 16,
+                          spreadRadius: 2,
                         )
                       ]
-                    : null,
+                    : node.current
+                        ? [
+                            BoxShadow(
+                              color: main.withAlpha(45),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null,
           ),
           child: Row(children: [
             Icon(
@@ -717,17 +802,13 @@ class _GraphNodeView extends StatelessWidget {
                   ),
                   if (module)
                     Text(
-                      node.done
-                          ? 'модуль пройден'
-                          : '${node.count} уроков',
+                      node.done ? 'модуль пройден' : '${node.count} уроков',
                       style: TextStyle(
-                          fontSize: 9.5,
-                          color: node.done ? C.good : C.muted),
+                          fontSize: 9.5, color: node.done ? C.good : C.muted),
                     )
                   else if (node.subtitle.isNotEmpty)
                     Text(node.subtitle,
-                        style:
-                            TextStyle(fontSize: 9.5, color: C.muted)),
+                        style: TextStyle(fontSize: 9.5, color: C.muted)),
                 ],
               ),
             ),
@@ -793,12 +874,9 @@ class _StatsCard extends StatelessWidget {
             const SizedBox(width: 7),
             Text('Уровень $level',
                 style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: C.text)),
+                    fontSize: 14, fontWeight: FontWeight.w900, color: C.text)),
             const Spacer(),
-            Text('$xp XP',
-                style: TextStyle(fontSize: 11.5, color: C.muted)),
+            Text('$xp XP', style: TextStyle(fontSize: 11.5, color: C.muted)),
           ]),
           const SizedBox(height: 7),
           ClipRRect(
@@ -840,9 +918,7 @@ class _Stat extends StatelessWidget {
           const SizedBox(height: 1),
           Text(value,
               style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  color: color)),
+                  fontSize: 12.5, fontWeight: FontWeight.w800, color: color)),
         ],
       );
 }

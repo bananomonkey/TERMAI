@@ -6,6 +6,7 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
+import 'design_system.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -13,7 +14,8 @@ class ArchiveScreen extends StatelessWidget {
   const ArchiveScreen({super.key});
 
   Future<void> _rename(BuildContext context, Course c) async {
-    final t = await askText(context, 'Переименовать курс', 'новое название', initial: c.title);
+    final t = await askText(context, 'Переименовать курс', 'новое название',
+        initial: c.title);
     if (t != null && t.isNotEmpty) controller.renameCourseById(c.id, t);
   }
 
@@ -24,13 +26,15 @@ class ArchiveScreen extends StatelessWidget {
         backgroundColor: C.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Удалить навсегда?'),
-        content: Text('«${c.title}» исчезнет вместе со своими задачами. Прогресс по нему останется в статистике.'),
+        content: Text(
+            '«${c.title}» исчезнет вместе со своими задачами. Прогресс по нему останется в статистике.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: Text('Отмена', style: TextStyle(color: C.muted))),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger, minimumSize: const Size(64, 42)),
+            style: FilledButton.styleFrom(
+                backgroundColor: C.danger, minimumSize: const Size(64, 42)),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Удалить'),
           ),
@@ -45,7 +49,7 @@ class ArchiveScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Архив курсов', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text('Архив курсов', style: AppText.screenTitle),
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -53,28 +57,11 @@ class ArchiveScreen extends StatelessWidget {
           builder: (context, _) {
             final list = controller.archivedCourses;
             if (list.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.inventory_2_outlined, size: 42, color: C.muted),
-                      const SizedBox(height: 14),
-                      Text(
-                        'Архив пуст.',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.text),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Убери курс в архив двойным тапом по его плитке на главном экране — '
-                        'он будет храниться здесь и в любой момент вернётся в список.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: C.muted, height: 1.5),
-                      ),
-                    ],
-                  ),
-                ),
+              return appEmptyState(
+                icon: Icons.inventory_2_outlined,
+                title: 'Архив пуст',
+                subtitle:
+                    'Убери курс в архив через меню ⋮ на главной — он сохранится здесь вместе с прогрессом.',
               );
             }
             return ListView(
@@ -126,13 +113,17 @@ class _ArchiveTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(course.isTheory ? Icons.auto_stories_outlined : Icons.terminal, size: 16, color: accent),
+            Icon(course.isTheory ? Icons.auto_stories_outlined : Icons.terminal,
+                size: 16, color: accent),
             const SizedBox(width: 8),
             Expanded(
               child: Text(course.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: C.text)),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: C.text)),
             ),
             IconButton(
               tooltip: 'Переименовать',
@@ -150,7 +141,8 @@ class _ArchiveTile extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 onPressed: onRestore,
-                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44)),
                 icon: const Icon(Icons.unarchive_outlined, size: 18),
                 label: const Text('Вернуть в список'),
               ),

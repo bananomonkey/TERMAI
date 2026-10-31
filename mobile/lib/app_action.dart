@@ -24,6 +24,327 @@ class ParsedAnswer {
   const ParsedAnswer(this.text, this.actions);
 }
 
+/// Результат выполнения инструмента. data возвращается модели, message —
+/// короткое человеческое пояснение/ошибка.
+class AppActionResult {
+  final bool ok;
+  final String message;
+  final Map<String, dynamic> data;
+  const AppActionResult({
+    required this.ok,
+    this.message = '',
+    this.data = const {},
+  });
+
+  Map<String, dynamic> toJson() => {
+        'ok': ok,
+        if (message.isNotEmpty) 'message': message,
+        if (data.isNotEmpty) 'data': data,
+      };
+
+  String get forModel => jsonEncode(toJson());
+}
+
+typedef AppToolExecutor = Future<AppActionResult> Function(AppActionCall call);
+
+/// Описание инструмента для native tool calling. Аргументы — JSON Schema.
+class AppToolSpec {
+  final String name, description;
+  final Map<String, dynamic> parameters;
+  final bool navigation;
+  const AppToolSpec({
+    required this.name,
+    required this.description,
+    required this.parameters,
+    this.navigation = false,
+  });
+}
+
+const appToolSpecs = <AppToolSpec>[
+  AppToolSpec(
+    name: 'open_mental_map',
+    description: 'Открыть карту прогресса и сфокусироваться на курсе или теме.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'course_id': {
+          'type': 'string',
+          'description': 'id или точное название курса; пусто — текущий курс',
+        },
+        'topic': {
+          'type': 'string',
+          'description': 'название задачи, модуля или темы для фокуса',
+        },
+      },
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'open_local_ai',
+    description: 'Открыть экран локального ИИ и менеджера моделей.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'open_hf_catalog',
+    description: 'Открыть каталог GGUF-моделей Hugging Face.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'open_screen',
+    description: 'Открыть экран приложения по имени.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'screen': {
+          'type': 'string',
+          'enum': [
+            'home',
+            'settings',
+            'archive',
+            'chats',
+            'usage',
+            'help',
+            'background',
+            'fallbacks',
+            'review',
+            'progress',
+            'more',
+            'chat',
+            'interview',
+            'tasks',
+            'lesson'
+          ],
+        },
+      },
+      'required': ['screen'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'open_course',
+    description: 'Открыть курс по названию или id.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'course': {'type': 'string'}
+      },
+      'required': ['course'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'open_lesson',
+    description: 'Открыть урок; можно указать курс и задачу.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'course': {'type': 'string'},
+        'task': {'type': 'string'},
+      },
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'open_task',
+    description: 'Открыть конкретную задачу.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'task': {'type': 'string'},
+        'course': {'type': 'string'},
+      },
+      'required': ['task'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'open_terminal',
+    description: 'Открыть терминал текущей практической задачи.',
+    navigation: true,
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'list_courses',
+    description: 'Получить список курсов, id и прогресс.',
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'get_learning_progress',
+    description: 'Получить XP, уровень, серию и текущую задачу.',
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'get_local_models',
+    description:
+        'Получить установленные локальные модели и состояние загрузок.',
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'get_current_context',
+    description: 'Получить текущий экран, курс, задачу и ИИ-провайдера.',
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'generate_task',
+    description: 'Создать учебную задачу по теме.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'topic': {'type': 'string'}
+      },
+      'required': ['topic'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'generate_course',
+    description: 'Создать программу курсов по цели пользователя.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'goal': {'type': 'string'}
+      },
+      'required': ['goal'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'fill_terminal',
+    description: 'Вставить команду в терминал, не выполняя её.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'text': {'type': 'string'}
+      },
+      'required': ['text'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'run_terminal',
+    description: 'Выполнить команду в учебном терминале.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'command': {'type': 'string'}
+      },
+      'required': ['command'],
+      'additionalProperties': false,
+    },
+  ),
+  AppToolSpec(
+    name: 'submit_task',
+    description: 'Проверить текущую задачу.',
+    parameters: {
+      'type': 'object',
+      'properties': {},
+      'additionalProperties': false
+    },
+  ),
+  AppToolSpec(
+    name: 'set_theme',
+    description: 'Сменить тему приложения.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'theme': {
+          'type': 'string',
+          'enum': ['dark', 'light', 'navy']
+        },
+      },
+      'required': ['theme'],
+      'additionalProperties': false,
+    },
+  ),
+];
+
+List<Map<String, dynamic>> appToolsJson() => appToolSpecs
+    .map((t) => {
+          'type': 'function',
+          'function': {
+            'name': t.name,
+            'description': t.description,
+            'parameters': t.parameters,
+          },
+        })
+    .toList(growable: false);
+
+bool isNavigationTool(String name) =>
+    appToolSpecs.any((t) => t.name == name && t.navigation);
+
+/// Проверка аргументов перед выполнением. Неизвестные legacy-действия
+/// пропускаем к старому обработчику, а известные схемы проверяем строго.
+String? validateAppToolArgs(String name, Map<String, dynamic> args) {
+  AppToolSpec? spec;
+  for (final s in appToolSpecs) {
+    if (s.name == name) {
+      spec = s;
+      break;
+    }
+  }
+  if (spec == null) return null;
+  final required = spec.parameters['required'];
+  if (required is List) {
+    for (final key in required) {
+      final value = args[key.toString()];
+      if (value == null || value.toString().trim().isEmpty) {
+        return 'Не передан обязательный аргумент «$key».';
+      }
+    }
+  }
+  final props = spec.parameters['properties'];
+  if (props is Map) {
+    for (final entry in args.entries) {
+      final prop = props[entry.key];
+      if (prop is! Map) continue;
+      final type = (prop['type'] ?? '').toString();
+      if (type == 'string' && entry.value is! String) {
+        return 'Аргумент «${entry.key}» должен быть строкой.';
+      }
+      final enumValues = prop['enum'];
+      if (enumValues is List && !enumValues.contains(entry.value)) {
+        return 'Недопустимое значение аргумента «${entry.key}».';
+      }
+    }
+  }
+  return null;
+}
+
 /// Имена, которые умеет выполнять AppActions. Нужны, чтобы не вырезать
 /// из ответа обычные JSON-блоки, не являющиеся вызовами.
 const knownAppActions = <String>{
@@ -70,7 +391,14 @@ const knownAppActions = <String>{
   'open_fallbacks',
   'open_review',
   'open_progress',
+  'open_mental_map',
+  'open_local_ai',
+  'open_hf_catalog',
   'open_home',
+  'list_courses',
+  'get_learning_progress',
+  'get_local_models',
+  'get_current_context',
   'write_terminal',
   'solve_task',
   'create_course',
@@ -90,6 +418,13 @@ const appActionsPrompt = '''
 
 Действия и аргументы:
 - open_screen {screen}: home, settings, archive, chats, usage, help, background, fallbacks, review, progress, more, chat, interview, tasks, lesson.
+- open_mental_map {course_id?, topic?}: открыть карту и сфокусироваться на курсе/теме.
+- open_local_ai: открыть локальный ИИ и менеджер моделей.
+- open_hf_catalog: открыть каталог GGUF-моделей Hugging Face.
+- list_courses: получить список курсов, их id и прогресс.
+- get_learning_progress: получить общий прогресс, XP, серию и текущую задачу.
+- get_local_models: получить установленные модели и состояние загрузок.
+- get_current_context: получить экран, курс и задачу, открытые сейчас.
 - open_course {course}: открыть курс по названию или id.
 - open_lesson {course?, task?}: открыть урок; без аргументов — текущую задачу.
 - open_task {task, course?}: открыть конкретную задачу.
@@ -220,8 +555,17 @@ List<AppActionCall> _callsFrom(dynamic decoded, {required bool allowUnknown}) {
   }
   // Некоторые модели кладут аргументы рядом с name, а не в args.
   const reserved = {
-    'name', 'action', 'tool', 'args', 'arguments', 'params', 'parameters',
-    'actions', 'function', 'type', 'id',
+    'name',
+    'action',
+    'tool',
+    'args',
+    'arguments',
+    'params',
+    'parameters',
+    'actions',
+    'function',
+    'type',
+    'id',
   };
   for (final e in decoded.entries) {
     if (!reserved.contains(e.key.toString())) {

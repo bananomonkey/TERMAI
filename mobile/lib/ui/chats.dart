@@ -7,6 +7,7 @@ import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
+import 'design_system.dart';
 import 'mentor_avatar.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -27,12 +28,15 @@ class ChatsScreen extends StatelessWidget {
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Сохранить')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Сохранить')),
         ],
       ),
     );
     ctrl.dispose();
-    if (title != null && title.isNotEmpty) controller.renameChat(chat.id, title);
+    if (title != null && title.isNotEmpty)
+      controller.renameChat(chat.id, title);
   }
 
   Future<void> _delete(BuildContext context, MentorChat chat) async {
@@ -83,7 +87,7 @@ class ChatsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Чаты с Термаем', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text('Чаты с Термаем', style: AppText.screenTitle),
         actions: [
           IconButton(
             tooltip: 'Новый чат',
@@ -95,89 +99,100 @@ class ChatsScreen extends StatelessWidget {
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) {
-          final chats = List<MentorChat>.from(controller.prog.mentorChats)
-            ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-          if (chats.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const MentorAvatar(size: 76, glow: true),
-                    const SizedBox(height: 14),
-                    Text('Бесед пока нет.',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Задай вопрос Термаю о задаче, синтаксисе или ошибке — беседа сохранится здесь.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: C.muted, height: 1.5),
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: () => _new(context),
-                      icon: const Icon(Icons.forum_outlined, size: 18),
-                      label: const Text('Начать беседу'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
-            itemCount: chats.length,
-            itemBuilder: (context, i) {
-              final c = chats[i];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: cardBox(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(children: [
-                    const MentorAvatar(size: 36),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _open(context, c),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(c.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: C.text)),
-                            const SizedBox(height: 2),
-                            Text(_subtitle(c),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 11.5, color: C.muted)),
-                          ],
-                        ),
+          listenable: controller,
+          builder: (context, _) {
+            final chats = List<MentorChat>.from(controller.prog.mentorChats)
+              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+            if (chats.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const MentorAvatar(size: 76, glow: true),
+                      const SizedBox(height: 14),
+                      Text('Бесед пока нет.',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: C.text)),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Задай вопрос Термаю о задаче, синтаксисе или ошибке — беседа сохранится здесь.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 13, color: C.muted, height: 1.5),
                       ),
-                    ),
-                    chevron(size: 24, color: C.muted),
-                    PopupMenuButton<String>(
-                      tooltip: 'Действия',
-                      icon: Icon(Icons.more_vert, size: 20, color: C.muted),
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'rename', child: Text('Переименовать')),
-                        PopupMenuItem(value: 'delete', child: Text('Удалить')),
-                      ],
-                      onSelected: (v) {
-                        if (v == 'rename') _rename(context, c);
-                        if (v == 'delete') _delete(context, c);
-                      },
-                    ),
-                  ]),
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: () => _new(context),
+                        icon: const Icon(Icons.forum_outlined, size: 18),
+                        label: const Text('Начать беседу'),
+                      ),
+                    ],
+                  ),
                 ),
               );
-            },
-          );
-        },
-      ),
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
+              itemCount: chats.length,
+              itemBuilder: (context, i) {
+                final c = chats[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: cardBox(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    child: Row(children: [
+                      const MentorAvatar(size: 36),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _open(context, c),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(c.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: C.text)),
+                              const SizedBox(height: 2),
+                              Text(_subtitle(c),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11.5, color: C.muted)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      chevron(size: 24, color: C.muted),
+                      PopupMenuButton<String>(
+                        tooltip: 'Действия',
+                        icon: Icon(Icons.more_vert, size: 20, color: C.muted),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                              value: 'rename', child: Text('Переименовать')),
+                          PopupMenuItem(
+                              value: 'delete', child: Text('Удалить')),
+                        ],
+                        onSelected: (v) {
+                          if (v == 'rename') _rename(context, c);
+                          if (v == 'delete') _delete(context, c);
+                        },
+                      ),
+                    ]),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

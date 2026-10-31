@@ -21,26 +21,29 @@ class GlassDock extends StatelessWidget {
         radius: 22,
         blur: 0,
         background: C.button,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _DockButton(
               icon: Icons.route_outlined,
+              label: 'Карта',
               tooltip: 'Карта прогресса',
               onTap: () => Navigator.of(context)
                   .push(pageRoute(const ProgressMapScreen())),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             _DockButton(
               icon: Icons.inventory_2_outlined,
+              label: 'Архив',
               tooltip: 'Архив курсов',
               onTap: () =>
                   Navigator.of(context).push(pageRoute(const ArchiveScreen())),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             _DockButton(
               icon: Icons.payments_outlined,
+              label: 'Расход',
               tooltip: 'Расход токенов',
               onTap: () =>
                   Navigator.of(context).push(pageRoute(const UsageScreen())),
@@ -54,32 +57,54 @@ class GlassDock extends StatelessWidget {
 
 class _DockButton extends StatelessWidget {
   final IconData icon;
+  final String label;
   final String tooltip;
   final VoidCallback onTap;
-  const _DockButton(
-      {required this.icon, required this.tooltip, required this.onTap});
+  const _DockButton({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: Ink(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: C.button2,
-          ),
-          child: InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onTap();
-            },
-            child: Icon(icon, size: 22, color: C.text),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: C.button2,
+                  ),
+                  child: Icon(icon, size: 20, color: C.text),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    color: C.muted,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -7,12 +7,12 @@ import 'package:flutter/material.dart';
 import '../ai.dart';
 import '../main.dart';
 import '../notifications.dart';
-import '../store.dart';
 import '../theme_refresh.dart';
 import '../update_service.dart';
 import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
+import 'design_system.dart';
 import 'help.dart';
 import 'local_ai.dart';
 import 'theme.dart';
@@ -158,7 +158,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
+              child:
+                  CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
           const SizedBox(width: 14),
           const Expanded(child: Text('ИИ собирает палитру…')),
         ]),
@@ -168,9 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(err.isEmpty
-          ? 'Тема создана и сохранена'
-          : err),
+      content: Text(err.isEmpty ? 'Тема создана и сохранена' : err),
     ));
   }
 
@@ -184,7 +183,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
+              child:
+                  CircularProgressIndicator(strokeWidth: 2, color: C.accent)),
           const SizedBox(width: 14),
           const Expanded(child: Text('Проверяю обновления…')),
         ]),
@@ -195,8 +195,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       if (!info.available) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('У тебя последняя версия ${info.current}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('У тебя последняя версия ${info.current}')));
         return;
       }
       final open = await showDialog<bool>(
@@ -249,8 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Настройки',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text('Настройки', style: AppText.screenTitle),
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -281,7 +280,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
                             alignment: Alignment.centerLeft),
-                        icon: Icon(Icons.auto_awesome, size: 18, color: C.accent),
+                        icon:
+                            Icon(Icons.auto_awesome, size: 18, color: C.accent),
                         label: Text('Сгенерировать тему ИИ',
                             style: TextStyle(fontSize: 12.5, color: C.accent)),
                       ),
@@ -295,8 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: C.text)),
                         subtitle: Text(
                           'Плавающий персонаж на экранах приложения',
-                          style:
-                              TextStyle(fontSize: 11.5, color: C.muted),
+                          style: TextStyle(fontSize: 11.5, color: C.muted),
                         ),
                         value: controller.config.mascotVisible,
                         activeThumbColor: C.accent,
@@ -406,8 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       value: controller.config.notificationsEnabled,
                       activeThumbColor: C.accent,
-                      onChanged: (v) =>
-                          controller.setNotificationsEnabled(v),
+                      onChanged: (v) => controller.setNotificationsEnabled(v),
                     ),
                     Divider(color: C.border, height: 1),
                     SwitchListTile.adaptive(
@@ -450,8 +448,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: C.accent),
                         ),
                         const SizedBox(width: 4),
-                        Icon(Icons.schedule_outlined,
-                            size: 18, color: C.muted),
+                        Icon(Icons.schedule_outlined, size: 18, color: C.muted),
                       ]),
                     ),
                     Divider(color: C.border, height: 1),
@@ -515,81 +512,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 12),
                       if (_provider == 'local')
                         Container(
-                          padding: const EdgeInsets.all(11),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: C.card2,
-                            borderRadius: BorderRadius.circular(12),
+                            color: C.card2.withAlpha(150),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.field),
                           ),
                           child: Text(
                             controller.config.localModelPath.isEmpty
-                                ? 'Локальная модель ещё не выбрана. Открой «Локальный ИИ» ниже.'
-                                : 'Локальная модель: ${controller.config.localModelPath.split('/').last}',
-                            style:
-                                TextStyle(fontSize: 11.5, color: C.muted),
+                                ? 'Модель ещё не выбрана. Открой «Локальный ИИ» ниже.'
+                                : 'Модель: ${controller.config.localModelPath.split('/').last}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.caption.copyWith(color: C.muted),
                           ),
                         )
                       else ...[
-                      TextField(
-                        controller: _key,
-                        obscureText: !_showKey,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        decoration: InputDecoration(
-                          labelText: 'API-ключ (sk-…)',
-                          suffixIcon: IconButton(
-                            tooltip:
-                                _showKey ? 'Скрыть ключ' : 'Показать ключ',
-                            icon: Icon(
-                              _showKey
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              size: 20,
-                              color: C.muted,
+                        TextField(
+                          controller: _key,
+                          obscureText: !_showKey,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: InputDecoration(
+                            labelText: 'API-ключ',
+                            hintText: 'sk-…',
+                            suffixIcon: IconButton(
+                              tooltip:
+                                  _showKey ? 'Скрыть ключ' : 'Показать ключ',
+                              icon: Icon(
+                                _showKey
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                size: 20,
+                                color: C.muted,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _showKey = !_showKey),
                             ),
-                            onPressed: () =>
-                                setState(() => _showKey = !_showKey),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _model,
-                        decoration: const InputDecoration(
-                            labelText: 'Модель (пусто — из пресета)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _base,
-                        decoration: const InputDecoration(
-                            labelText: 'Base URL (пусто — из пресета)'),
-                      ),
+                        const SizedBox(height: 6),
+                        Theme(
+                          data: Theme.of(context)
+                              .copyWith(dividerColor: Colors.transparent),
+                          child: ExpansionTile(
+                            tilePadding:
+                                const EdgeInsets.symmetric(horizontal: 2),
+                            childrenPadding: EdgeInsets.zero,
+                            iconColor: C.muted,
+                            collapsedIconColor: C.muted,
+                            title: Text(
+                              'Дополнительно',
+                              style: AppText.caption.copyWith(
+                                color: C.muted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            children: [
+                              TextField(
+                                controller: _model,
+                                decoration: const InputDecoration(
+                                    labelText: 'Модель',
+                                    hintText: 'пусто — из пресета'),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _base,
+                                decoration: const InputDecoration(
+                                    labelText: 'Base URL',
+                                    hintText: 'пусто — из пресета'),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        ),
                       ],
-                      const SizedBox(height: 12),
-                      _LinkRow(
+                      const SizedBox(height: 6),
+                      appRow(
                         icon: Icons.memory,
                         title: 'Локальный ИИ',
                         subtitle: controller.config.localModelPath.isEmpty
-                            ? 'GGUF-модель на устройстве, без интернета'
-                            : 'Модель: ${controller.config.localModelPath.split('/').last}',
+                            ? 'GGUF на устройстве, без интернета'
+                            : controller.config.localModelPath.split('/').last,
                         onTap: () => Navigator.of(context)
                             .push(pageRoute(const LocalAiScreen())),
                       ),
-                      const SizedBox(height: 10),
-                      _LinkRow(
+                      appRow(
                         icon: Icons.swap_horiz_outlined,
                         title: 'Резервные модели',
                         subtitle: controller.config.fallbacks.isEmpty
-                            ? 'Подстраховка, если основной провайдер откажет'
-                            : 'Подключено резервных: ${controller.config.fallbacks.length}',
+                            ? 'Подстраховка при отказе провайдера'
+                            : 'Подключено: ${controller.config.fallbacks.length}',
                         onTap: () => Navigator.of(context)
                             .push(pageRoute(const AiFallbacksScreen())),
                       ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: _saveAi,
-                        style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48)),
-                        child: const Text('Сохранить настройки ИИ'),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton(
+                          onPressed: _saveAi,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(150, 42),
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                          ),
+                          child: const Text('Сохранить ИИ'),
+                        ),
                       ),
                     ]),
               ),
@@ -685,7 +712,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   fontSize: 11.5, color: C.muted, height: 1.3),
                             ),
                             value: controller.config.syncKeysToCloud,
-                            activeColor: C.accent,
+                            activeThumbColor: C.accent,
                             onChanged: (v) async {
                               controller.config.syncKeysToCloud = v;
                               await controller.saveConfig(autofill: false);
@@ -700,8 +727,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               } else if (controller.sync.signedIn) {
                                 // Сразу перезаписываем облако конфигом без ключей.
-                                final msg =
-                                    await controller.syncConfig(pullFirst: false);
+                                final msg = await controller.syncConfig(
+                                    pullFirst: false);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -811,16 +838,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _LinkRow(
                     icon: Icons.menu_book_outlined,
                     title: 'Инструкция',
-                    subtitle: 'Как учиться, что делают экраны и кнопки',
+                    subtitle: 'Как учиться и что делает каждый экран',
                     onTap: () => Navigator.of(context)
                         .push(pageRoute(const HelpScreen())),
-                  ),
-                  const SizedBox(height: 10),
-                  _LinkRow(
-                    icon: Icons.bug_report_outlined,
-                    title: 'Диагностика',
-                    subtitle: 'Журнал ошибок, если что-то работает не так',
-                    onTap: () => _showDiag(context),
                   ),
                 ]),
               ),
@@ -835,7 +855,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.19.0',
+                child: Text('версия 1.20.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -915,31 +935,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
-  void _showDiag(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Диагностика'),
-        content: SizedBox(
-          width: 320,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              diagLog.isEmpty ? 'Ошибок не зафиксировано.' : diagLog.toString(),
-              style: TextStyle(fontSize: 12, color: C.text, height: 1.4),
-            ),
-          ),
-        ),
-        actions: [
-          FilledButton(
-              onPressed: () => Navigator.pop(dctx),
-              child: const Text('Закрыть'))
-        ],
-      ),
-    );
-  }
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -963,10 +958,10 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
         color: C.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(AppSpace.x3),
           child: child,
         ),
       );
@@ -984,38 +979,12 @@ class _LinkRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: C.button2,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+  Widget build(BuildContext context) => appRow(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            Icon(icon, size: 20, color: C.accent),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: C.text)),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: TextStyle(fontSize: 11.5, color: C.muted)),
-                  ]),
-            ),
-            chevron(size: 22, color: C.muted),
-          ]),
-        ),
-      ),
-    );
-  }
+      );
 }
 
 /// _CustomThemes — палитры, созданные ИИ. Можно выбрать или удалить.

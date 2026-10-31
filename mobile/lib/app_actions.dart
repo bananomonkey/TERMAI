@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import 'ai.dart';
 import 'app_action.dart';
+import 'download_manager.dart';
+import 'local_ai.dart';
 import 'models.dart';
 import 'navigation.dart';
 import 'store.dart';
@@ -14,7 +16,9 @@ import 'ui/chat.dart';
 import 'ui/chats.dart';
 import 'ui/help.dart';
 import 'ui/home.dart';
+import 'ui/hugging_face.dart';
 import 'ui/lesson.dart';
+import 'ui/local_ai.dart';
 import 'ui/more.dart';
 import 'ui/progress_map.dart';
 import 'ui/review.dart';
@@ -30,12 +34,33 @@ class AppActions {
   NavigatorState? get _nav => rootNavigatorKey.currentState;
   BuildContext? get _ctx => rootNavigatorKey.currentContext;
 
-  Future<String> execute(AppActionCall call) async {
-    try {
-      return await _run(call.name, call.args);
-    } catch (e) {
-      return _short(e);
+  Map<String, dynamic> _lastData = const {};
+  String _lastMessage = '';
+
+  /// executeTool — структурированный путь для Function Calling: результат
+  /// можно вернуть модели, а не только показать человеку.
+  Future<AppActionResult> executeTool(AppActionCall call) async {
+    _lastData = const {};
+    _lastMessage = '';
+    final invalid = validateAppToolArgs(call.name, call.args);
+    if (invalid != null) {
+      return AppActionResult(ok: false, message: invalid);
     }
+    try {
+      final err = await _run(call.name, call.args);
+      return AppActionResult(
+        ok: err.isEmpty,
+        message: err.isEmpty ? _lastMessage : err,
+        data: _lastData,
+      );
+    } catch (e) {
+      return AppActionResult(ok: false, message: _short(e));
+    }
+  }
+
+  Future<String> execute(AppActionCall call) async {
+    final result = await executeTool(call);
+    return result.ok ? '' : result.message;
   }
 
   String _short(Object e) {
@@ -150,17 +175,31 @@ class AppActions {
     switch (name) {
       case 'open_screen':
         return _openScreen(_str(args, 'screen').ifEmpty(_str(args, 'name')));
+      case 'open_mental_map':
+        return _openMentalMap(args);
+      case 'open_local_ai':
+        await _openNamed('LocalAiScreen', () => const LocalAiScreen());
+        return '';
+      case 'open_hf_catalog':
+        await _openNamed('HuggingFaceScreen', () => const HuggingFaceScreen());
+        return '';
+      case 'list_courses':
+        return _listCourses();
+      case 'get_learning_progress':
+        return _learningProgress();
+      case 'get_local_models':
+        return _localModels();
+      case 'get_current_context':
+        return _currentContext();
       case 'open_course':
-        return _openCourse(
-            _str(args, 'course').ifEmpty(_str(args, 'title')));
+        return _openCourse(_str(args, 'course').ifEmpty(_str(args, 'title')));
       case 'open_lesson':
         return _openLesson(
           course: _str(args, 'course'),
           task: _str(args, 'task'),
         );
       case 'open_chat':
-        return _openChat(
-            _str(args, 'chat').ifEmpty(_str(args, 'title')));
+        return _openChat(_str(args, 'chat').ifEmpty(_str(args, 'title')));
       case 'new_chat':
         if (ScreenObserver.current == 'InterviewScreen') {
           c.createInterviewChat(force: true);
@@ -206,11 +245,9 @@ class AppActions {
       case 'delete_course':
         return _deleteCourse(_str(args, 'course'));
       case 'generate_course':
-        return _generateCourse(
-            _str(args, 'goal').ifEmpty(_str(args, 'topic')));
+        return _generateCourse(_str(args, 'goal').ifEmpty(_str(args, 'topic')));
       case 'generate_task':
-        return _generateTask(
-            _str(args, 'topic').ifEmpty(_str(args, 'goal')));
+        return _generateTask(_str(args, 'topic').ifEmpty(_str(args, 'goal')));
       case 'fill_course':
         return _fillCourse(_str(args, 'course'));
       case 'fill_terminal':
@@ -285,7 +322,12 @@ class AppActions {
       'повторение': 'review',
       'карта': 'progress',
       'карта прогресса': 'progress',
+      'ментальная карта': 'progress',
       'маршрут': 'progress',
+      'локальный ии': 'local_ai',
+      'локальная модель': 'local_ai',
+      'hugging face': 'hf',
+      'каталог моделей': 'hf',
       'ещё': 'more',
       'еще': 'more',
       'чат': 'chat',
@@ -328,6 +370,12 @@ class AppActions {
       case 'progress':
         await _openNamed('ProgressMapScreen', () => const ProgressMapScreen());
         return '';
+      case 'local_ai':
+        await _openNamed('LocalAiScreen', () => const LocalAiScreen());
+        return '';
+      case 'hf':
+        await _openNamed('HuggingFaceScreen', () => const HuggingFaceScreen());
+        return '';
       case 'more':
         final ctx = _ctx;
         if (ctx == null) return 'меню недоступно';
@@ -352,6 +400,152 @@ class AppActions {
       default:
         return 'неизвестный экран «$screen»';
     }
+  }
+
+  /// open_mental_map — открывает карту на конкретном курсе и, если задана
+  /// topic, проверяет существование темы до навигации. Случайные id и темы
+  /// не подставляются: при промахе модель получает понятную ошибку.
+  Future<String> _openMentalMap(Map<String, dynamic> args) async {
+    if (c.courses.isEmpty) return 'нет доступных курсов';
+    final courseQuery = _str(args, 'course_id')
+        .ifEmpty(_str(args, 'courseId'))
+        .ifEmpty(_str(args, 'course'))
+        .ifEmpty(_str(args, 'course_title'));
+    final topic = _str(args, 'topic')
+        .ifEmpty(_str(args, 'node'))
+        .ifEmpty(_str(args, 'query'));
+    final course = courseQuery.isEmpty ? c.cur : _findCourse(courseQuery);
+    if (course == null) return 'курс «$courseQuery» не найден';
+    final visible = _visibleIndex(course);
+    if (visible < 0) return 'курс «${course.title}» в архиве';
+    if (topic.isNotEmpty) {
+      final q = topic.toLowerCase();
+      final found = course.title.toLowerCase().contains(q) ||
+          course.id.toLowerCase().contains(q) ||
+          course.syllabus.any((s) => s.toLowerCase().contains(q)) ||
+          course.tasks.any((t) =>
+              t.id.toLowerCase().contains(q) ||
+              t.title.toLowerCase().contains(q));
+      if (!found) {
+        return 'тема «$topic» не найдена в курсе «${course.title}»';
+      }
+    }
+    c.switchCourseSilent(visible);
+    final nav = _nav;
+    if (ScreenObserver.has('ProgressMapScreen') && nav != null) {
+      // Карта уже в стеке: не плодим копии, а заменяем её на новую
+      // с выбранным курсом и фокусом.
+      nav.popUntil((r) => r.settings.name == 'ProgressMapScreen');
+      nav.pushReplacement(pageRoute(
+        ProgressMapScreen(
+          initialCourseId: course.id,
+          focusQuery: topic,
+        ),
+        name: 'ProgressMapScreen',
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    } else {
+      await _openNamed(
+        'ProgressMapScreen',
+        () => ProgressMapScreen(
+          initialCourseId: course.id,
+          focusQuery: topic,
+        ),
+      );
+    }
+    _lastMessage = topic.isEmpty
+        ? 'Открыта карта курса «${course.title}».'
+        : 'Открыта карта курса «${course.title}» на теме «$topic».';
+    _lastData = {
+      'screen': 'ProgressMapScreen',
+      'course_id': course.id,
+      'course_title': course.title,
+      if (topic.isNotEmpty) 'topic': topic,
+    };
+    return '';
+  }
+
+  String _listCourses() {
+    final items = <Map<String, dynamic>>[];
+    for (final course in c.allCourses) {
+      final done = c.prog.completed[course.id] ?? {};
+      final solved = course.tasks.where((t) => done[t.id] ?? false).length;
+      items.add({
+        'id': course.id,
+        'title': course.title,
+        'archived': c.prog.archived.contains(course.id),
+        'total_tasks': course.tasks.length,
+        'solved_tasks': solved,
+        'done': course.tasks.isNotEmpty && solved >= course.tasks.length,
+      });
+    }
+    _lastData = {'courses': items};
+    return '';
+  }
+
+  String _learningProgress() {
+    final task = c.currentTask;
+    _lastData = {
+      'level': c.prog.level,
+      'xp': c.prog.xp,
+      'streak': c.prog.streak,
+      'solved_total': c.prog.solvedTotal,
+      'tokens_total': c.prog.tokensTotal,
+      'course': c.courses.isEmpty ? null : c.cur.title,
+      'course_id': c.courses.isEmpty ? null : c.cur.id,
+      'task': task?.title,
+      'task_id': task?.id,
+      'screen': ScreenObserver.current,
+    };
+    return '';
+  }
+
+  Future<String> _localModels() async {
+    final files = await LocalAiService.instance.installedModels();
+    final models = <Map<String, dynamic>>[];
+    for (final f in files) {
+      int size = 0;
+      try {
+        size = await f.length();
+      } catch (_) {}
+      models.add({
+        'name': f.path.split('/').last,
+        'path': f.path,
+        'size_bytes': size,
+        'active': c.config.localModelPath == f.path,
+        'loaded': LocalAiService.instance.loadedPath == f.path,
+      });
+    }
+    final jobs = DownloadManager.instance.jobs
+        .map((j) => {
+              'file': j.fileName,
+              'status': j.status.name,
+              'received_bytes': j.receivedBytes,
+              'total_bytes': j.totalBytes,
+              if (j.error.isNotEmpty) 'error': j.error,
+            })
+        .toList();
+    _lastData = {
+      'active_path': c.config.localModelPath,
+      'loaded': LocalAiService.instance.ready,
+      'models': models,
+      'downloads': jobs,
+    };
+    return '';
+  }
+
+  String _currentContext() {
+    _lastData = {
+      'screen': ScreenObserver.current,
+      'course': c.courses.isEmpty ? null : c.cur.title,
+      'course_id': c.courses.isEmpty ? null : c.cur.id,
+      'task': c.currentTask?.title,
+      'task_id': c.currentTask?.id,
+      'provider': c.config.provider,
+      'model': c.ai?.model ?? '',
+      'local_model_loaded': LocalAiService.instance.ready,
+    };
+    return '';
   }
 
   Future<String> _openInterview() async {
@@ -456,8 +650,7 @@ class AppActions {
       await _openNamed('InterviewScreen',
           () => const ChatScreen(interview: true, resume: true));
     } else {
-      if (!found.isGeneral &&
-          !c.courses.any((x) => x.id == found!.courseId)) {
+      if (!found.isGeneral && !c.courses.any((x) => x.id == found!.courseId)) {
         return 'курс этого чата в архиве — сначала верни его';
       }
       c.openChat(found.id);

@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app_actions.dart';
+import 'download_manager.dart';
+import 'local_ai.dart';
 import 'navigation.dart';
 import 'store.dart';
 import 'theme_refresh.dart';
@@ -22,6 +24,7 @@ import 'ui/onboarding.dart';
 import 'ui/termai_overlay.dart';
 
 final AppController controller = AppController();
+AppLifecycleListener? _downloadLifecycle;
 bool diagAutoLesson = false;
 
 void _appendDiag(String entry) {
@@ -54,8 +57,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _installErrorHandlers();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+  _downloadLifecycle = AppLifecycleListener(
+    onResume: () => DownloadManager.instance.refresh(),
+  );
   // ИИ-наставник получает доступ к действиям приложения.
-  controller.actionExecutor = AppActions(controller).execute;
+  final actions = AppActions(controller);
+  controller.actionExecutor = actions.execute;
+  controller.toolExecutor = actions.executeTool;
   runApp(const TermaiApp());
 }
 
@@ -116,6 +124,19 @@ class _BootScreenState extends State<BootScreen>
   Future<void> _boot() async {
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
+    // Переносим модели из старой внутренней папки, если она была.
+    try {
+      final moved = await LocalAiService.instance.migrateLegacyModels();
+      final oldPath = controller.config.localModelPath;
+      if (moved.containsKey(oldPath)) {
+        controller.config.localModelPath = moved[oldPath]!;
+        await controller.saveConfig(autofill: false);
+      }
+    } catch (_) {}
+    // Восстанавливаем системные задачи загрузки моделей после перезапуска.
+    try {
+      await DownloadManager.instance.init();
+    } catch (_) {}
     C.p = presetById(controller.config.theme);
     C.buttonBrightness = controller.config.buttonBrightness.clamp(0.6, 1.4);
     unawaited(controller.scheduleNotifications());
