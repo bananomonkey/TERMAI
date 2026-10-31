@@ -14,6 +14,7 @@ import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
 import 'help.dart';
+import 'local_ai.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -88,10 +89,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveAi() async {
-    controller.config.provider = _provider;
-    controller.config.apiKey = _key.text.trim();
-    controller.config.model = _model.text.trim();
-    controller.config.baseUrl = _base.text.trim();
+    if (_provider == 'local') {
+      if (controller.config.localModelPath.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Сначала выбери GGUF-модель в «Локальный ИИ»')));
+        return;
+      }
+      controller.config.provider = 'local';
+      controller.config.model = 'local';
+      controller.config.apiKey = '';
+      controller.config.baseUrl = '';
+    } else {
+      controller.config.provider = _provider;
+      controller.config.apiKey = _key.text.trim();
+      controller.config.model = _model.text.trim();
+      controller.config.baseUrl = _base.text.trim();
+    }
     await controller.saveConfig();
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -499,6 +513,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
+                      if (_provider == 'local')
+                        Container(
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: C.card2,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            controller.config.localModelPath.isEmpty
+                                ? 'Локальная модель ещё не выбрана. Открой «Локальный ИИ» ниже.'
+                                : 'Локальная модель: ${controller.config.localModelPath.split('/').last}',
+                            style:
+                                TextStyle(fontSize: 11.5, color: C.muted),
+                          ),
+                        )
+                      else ...[
                       TextField(
                         controller: _key,
                         obscureText: !_showKey,
@@ -533,7 +563,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         decoration: const InputDecoration(
                             labelText: 'Base URL (пусто — из пресета)'),
                       ),
+                      ],
                       const SizedBox(height: 12),
+                      _LinkRow(
+                        icon: Icons.memory,
+                        title: 'Локальный ИИ',
+                        subtitle: controller.config.localModelPath.isEmpty
+                            ? 'GGUF-модель на устройстве, без интернета'
+                            : 'Модель: ${controller.config.localModelPath.split('/').last}',
+                        onTap: () => Navigator.of(context)
+                            .push(pageRoute(const LocalAiScreen())),
+                      ),
+                      const SizedBox(height: 10),
                       _LinkRow(
                         icon: Icons.swap_horiz_outlined,
                         title: 'Резервные модели',
@@ -794,7 +835,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.18.2',
+                child: Text('версия 1.19.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),

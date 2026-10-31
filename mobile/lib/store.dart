@@ -319,9 +319,11 @@ class AppController extends ChangeNotifier {
         config.primaryLastError = ep.lastError;
       } else {
         for (final f in config.fallbacks) {
-          if (f.provider == ep.provider &&
-              f.model == ep.model &&
-              f.baseUrl == ep.baseUrl) {
+          final sameLocal = ep.provider == 'local' && f.provider == 'local';
+          if (sameLocal ||
+              (f.provider == ep.provider &&
+                  f.model == ep.model &&
+                  f.baseUrl == ep.baseUrl)) {
             changed = f.failStreak != ep.failStreak ||
                 f.penaltyUntil != ep.penaltyUntil ||
                 f.lastError != ep.lastError;

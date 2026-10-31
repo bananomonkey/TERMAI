@@ -172,8 +172,10 @@ class AiFallbacksScreen extends StatelessWidget {
                   const SizedBox(height: 18),
                   FilledButton(
                     onPressed: () async {
-                      final key = keyCtrl.text.trim();
-                      if (key.isEmpty) {
+                      var key = keyCtrl.text.trim();
+                      if (providerCtrl.text == 'local') {
+                        key = 'local';
+                      } else if (key.isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                             const SnackBar(content: Text('Без ключа подключение не работает')));
                         return;
@@ -181,8 +183,12 @@ class AiFallbacksScreen extends StatelessWidget {
                       final ep = AiEndpoint(
                         provider: providerCtrl.text,
                         apiKey: key,
-                        model: modelCtrl.text.trim(),
-                        baseUrl: baseCtrl.text.trim(),
+                        model: providerCtrl.text == 'local'
+                            ? 'local'
+                            : modelCtrl.text.trim(),
+                        baseUrl: providerCtrl.text == 'local'
+                            ? 'local'
+                            : baseCtrl.text.trim(),
                       );
                       if (index == null) {
                         cfg.fallbacks.add(ep);

@@ -569,6 +569,13 @@ class Config {
   /// Пользовательские темы, сгенерированные ИИ.
   List<CustomThemeData> customThemes;
 
+  /// Локальная GGUF-модель: путь к файлу на этом устройстве.
+  /// Не синхронизируется в облако — на другом устройстве путь недействителен.
+  String localModelPath;
+
+  /// Размер контекста локальной модели в токенах.
+  int localContextSize;
+
   /// Время последнего изменения конфига (ISO). Нужно для merge с облаком.
   String updatedAt;
 
@@ -606,6 +613,8 @@ class Config {
     this.syncKeysToCloud = true,
     this.mascotVisible = true,
     List<CustomThemeData>? customThemes,
+    this.localModelPath = '',
+    this.localContextSize = 4096,
     this.updatedAt = '',
     this.primaryFailStreak = 0,
     this.primaryLastErrorAt = 0,
@@ -655,6 +664,11 @@ class Config {
         customThemes: ((j['custom_themes'] as List?) ?? [])
             .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
             .toList(),
+        localModelPath: j['local_model_path'] as String? ?? '',
+        localContextSize:
+            ((j['local_context_size'] as num?)?.toInt() ?? 4096)
+                .clamp(512, 32768)
+                .toInt(),
         updatedAt: j['updated_at'] as String? ?? '',
         primaryFailStreak: (j['primary_fail_streak'] as num?)?.toInt() ?? 0,
         primaryLastErrorAt:
@@ -691,6 +705,8 @@ class Config {
         'button_brightness': buttonBrightness,
         'sync_keys_to_cloud': syncKeysToCloud,
         'mascot_visible': mascotVisible,
+        'local_model_path': localModelPath,
+        'local_context_size': localContextSize,
         'custom_themes': customThemes.map((e) => e.toJson()).toList(),
         if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
         if (primaryFailStreak > 0) 'primary_fail_streak': primaryFailStreak,
@@ -706,8 +722,9 @@ class Config {
   /// при includeKeys=true; остальные настройки синхронизируются всегда.
   Map<String, dynamic> toCloudJson({required bool includeKeys}) {
     final j = Map<String, dynamic>.from(toJson());
-    // локальный путь к фону не имеет смысла на другом устройстве
+    // локальные пути не имеют смысла на другом устройстве
     j.remove('bg_photo');
+    j.remove('local_model_path');
     if (!includeKeys) {
       j.remove('api_key');
       final fbs = (j['fallbacks'] as List?) ?? const [];

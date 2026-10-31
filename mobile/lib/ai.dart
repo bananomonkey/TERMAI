@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:http/http.dart' as http;
 import 'app_action.dart';
+import 'local_ai.dart';
 import 'models.dart';
 import 'usage.dart';
 
@@ -27,6 +28,7 @@ const providers = <ProviderPreset>[
   ProviderPreset('yandex', 'YandexGPT', 'https://openai-compat.llm.api.cloud.yandex.net/v1', 'yandexgpt-lite', ['yandexgpt-lite', 'yandexgpt-pro'],
       auth: 'apikey'), // в поле ключа — API-ключ Яндекс.Облака
   ProviderPreset('ollama', 'Ollama (локально)', 'http://localhost:11434/v1', 'llama3.1', ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral']),
+  ProviderPreset('local', 'Локальная модель (на устройстве)', '', 'local', []),
   ProviderPreset('custom', 'Свой (OpenAI-совместимый)', '', '', []),
 ];
 
@@ -97,7 +99,14 @@ class AIClient {
   /// endpoints — основное подключение + резервные, по порядку перебора.
   final List<AiEndpoint> _endpoints;
   final List<String> _labels;
-  AIClient._(this._endpoints, this._labels);
+  final String localModelPath;
+  final int localContextSize;
+  AIClient._(
+    this._endpoints,
+    this._labels, {
+    required this.localModelPath,
+    required this.localContextSize,
+  });
 
   factory AIClient(Config cfg) {
     final eps = <AiEndpoint>[];
@@ -105,6 +114,17 @@ class AIClient {
 
     void add(String provider, String apiKey, String model, String baseUrl) {
       final p = findProvider(provider);
+      if (p.id == 'local') {
+        if (cfg.localModelPath.trim().isEmpty) return;
+        eps.add(AiEndpoint(
+          provider: 'local',
+          apiKey: 'local',
+          model: 'local',
+          baseUrl: 'local',
+        ));
+        labels.add(p.title);
+        return;
+      }
       final b = baseUrl.trim().isNotEmpty ? baseUrl.trim() : p.baseUrl;
       var k = apiKey.trim();
       if (k.isEmpty && (p.id == 'ollama' || b.contains('localhost') || b.contains('127.0.0.1'))) {
@@ -137,7 +157,12 @@ class AIClient {
         ep.lastError = f.lastError;
       }
     }
-    return AIClient._(eps, labels);
+    return AIClient._(
+      eps,
+      labels,
+      localModelPath: cfg.localModelPath,
+      localContextSize: cfg.localContextSize,
+    );
   }
 
   bool get ready => _endpoints.isNotEmpty;
@@ -185,6 +210,21 @@ class AIClient {
     int? maxTokens,
     Duration timeout = const Duration(seconds: 180),
   }) async {
+    if (ep.provider == 'local') {
+      final text = await LocalAiService.instance.chat(
+        messages,
+        modelPath: localModelPath,
+        contextSize: localContextSize,
+        temp: temp,
+        maxTokens: maxTokens ?? 1024,
+      );
+      if (text.trim().isEmpty) throw Exception('локальная модель вернула пустой ответ');
+      final pt = estimateTokens(
+          messages.map((m) => _messageText(m['content'])).join('\n'));
+      final ct = estimateTokens(text);
+      onUsage?.call('local', pt, ct);
+      return {'role': 'assistant', 'content': text};
+    }
     final uri = Uri.parse('${ep.baseUrl}/chat/completions');
     Future<http.Response> post(bool strict) => http.post(uri,
         headers: _headers(ep),

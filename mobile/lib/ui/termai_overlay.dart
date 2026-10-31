@@ -57,6 +57,7 @@ class _TermaiOverlayState extends State<TermaiOverlay> {
     'AiFallbacksScreen',
     'ReviewScreen',
     'ProgressMapScreen',
+    'LocalAiScreen',
   };
 
   final GlobalKey _panelKey = GlobalKey();
