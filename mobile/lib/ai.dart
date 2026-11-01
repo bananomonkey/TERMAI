@@ -147,6 +147,10 @@ class AssistantTurn {
 }
 
 class AIClient {
+  /// Фабрика HTTP-клиента для тестов. В приложении остаётся null и
+  /// используется обычный http.post; тесты подменяют транспорт без сети.
+  static http.Client Function()? httpClientFactory;
+
   /// endpoints — основное подключение + резервные, по порядку перебора.
   final List<AiEndpoint> _endpoints;
   final List<String> _labels;
@@ -284,9 +288,10 @@ class AIClient {
     }
     final uri = Uri.parse('${ep.baseUrl}/chat/completions');
     final hasTools = tools != null && tools.isNotEmpty;
+    final client = httpClientFactory?.call() ?? http.Client();
     Future<http.Response> post(
             {required bool strict, required bool withTools}) =>
-        http
+        client
             .post(uri,
                 headers: _headers(ep),
                 body: jsonEncode({
@@ -303,13 +308,18 @@ class AIClient {
                 }))
             .timeout(timeout);
 
-    var resp = await post(strict: true, withTools: hasTools);
-    // Не все OpenAI-совместимые провайдеры умеют tools. Если запрос
-    // отвергнут из-за схемы, повторяем без tools — сработает marker-fallback.
-    if (resp.statusCode == 400 && hasTools) {
-      resp = await post(strict: false, withTools: false);
-    } else if (resp.statusCode != 200) {
-      resp = await post(strict: false, withTools: hasTools);
+    http.Response resp;
+    try {
+      resp = await post(strict: true, withTools: hasTools);
+      // Не все OpenAI-совместимые провайдеры умеют tools. Если запрос
+      // отвергнут из-за схемы, повторяем без tools — сработает marker-fallback.
+      if (resp.statusCode == 400 && hasTools) {
+        resp = await post(strict: false, withTools: false);
+      } else if (resp.statusCode != 200) {
+        resp = await post(strict: false, withTools: hasTools);
+      }
+    } finally {
+      client.close();
     }
     if (resp.statusCode != 200) {
       throw Exception(
@@ -1171,8 +1181,19 @@ class AIClient {
 
   /// minimumCourseTasks — при создании курса проверяем, что задач не меньше 5;
   /// если модель сгенерировала меньше — добираем по одной на тему программы.
-  Future<List<Task>> ensureCourseFilled(Course course) async {
+  Future<List<Task>> ensureCourseFilled(
+    Course course, {
+    bool Function()? isCanceled,
+  }) async {
+    var attempts = 0;
     while (course.tasks.length < 5) {
+      if (isCanceled?.call() ?? false) {
+        throw Exception('генерация отменена');
+      }
+      if (++attempts > 12) {
+        throw Exception(
+            'не удалось набрать 5 задач для курса «${course.title}»');
+      }
       final i = course.tasks.length;
       final topic = course.syllabus.isEmpty
           ? 'практика по предмету курса, часть ' + (i + 1).toString()
@@ -1180,6 +1201,15 @@ class AIClient {
       final t = await generateTask(
           course.title, topic, course.tasks.map((x) => x.title).toList(), '',
           mode: course.mode);
+      if (t.title.trim().isEmpty || t.goal.trim().isEmpty) {
+        throw Exception('модель вернула пустую задачу для курса');
+      }
+      if (course.isTheory && t.quiz.isEmpty) {
+        throw Exception('модель вернула урок без теста для курса');
+      }
+      if (course.tasks.any((x) => x.id == t.id)) {
+        t.id = '${t.id}-${course.tasks.length + 1}';
+      }
       course.tasks.add(t);
     }
     return course.tasks;

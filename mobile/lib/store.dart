@@ -10,6 +10,8 @@ import 'ai.dart';
 import 'app_action.dart';
 import 'diagnostics.dart';
 import 'directions.dart';
+import 'editor_verify.dart';
+import 'generation_operation.dart';
 import 'k8s_sandbox.dart';
 import 'models.dart';
 import 'navigation.dart';
@@ -18,6 +20,9 @@ import 'sandbox.dart';
 import 'secret_store.dart';
 import 'sync_service.dart';
 import 'theme_refresh.dart';
+import 'tts_service.dart';
+import 'update_background.dart';
+import 'update_service.dart';
 import 'ui/theme.dart';
 
 /// diagLog — глобальный журнал ошибок для экрана «Диагностика».
@@ -28,6 +33,23 @@ class UndoEntry {
   final SandboxState st;
   final String term;
   UndoEntry(this.key, this.st, this.term);
+}
+
+class CourseRebuildPlan {
+  final Course course;
+  final List<Task> tasks;
+  final List<String> keptTitles;
+  final List<String> addedTitles;
+  final List<String> removedTitles;
+  final List<String> preservedCompleted;
+  const CourseRebuildPlan({
+    required this.course,
+    required this.tasks,
+    required this.keptTitles,
+    required this.addedTitles,
+    required this.removedTitles,
+    required this.preservedCompleted,
+  });
 }
 
 class AppController extends ChangeNotifier {
@@ -81,6 +103,29 @@ class AppController extends ChangeNotifier {
   String fillCurrent = '';
   bool ready = false;
   String lastFillError = '';
+
+  /// Доступное обновление и состояние проверки GitHub Releases.
+  UpdateInfo? availableUpdate;
+  bool updateChecking = false;
+  String updateError = '';
+
+  /// Длительные ИИ-операции имеют собственное состояние и не используют
+  /// глобальный busy терминала/чата. Благодаря этому создание одной задачи
+  /// не зависит от того, закончена ли предыдущая задача или идёт чат.
+  final GenerationOperations operations = GenerationOperations();
+
+  GenerationOperation? get activeGeneration => operations.active;
+  bool get generationBusy => operations.isBusy;
+  bool get taskGenerationBusy => operations.isActive(GenerationKind.task);
+  bool get courseGenerationBusy => operations.isActive(GenerationKind.courses);
+  bool get canGenerateTask => ai != null && ai!.ready && courses.isNotEmpty;
+
+  Future<void> cancelGeneration() async {
+    final op = operations.active;
+    if (op == null) return;
+    op.requestCancel();
+    notifyListeners();
+  }
 
   // режимы
   bool interviewMode = false;
@@ -237,10 +282,22 @@ class AppController extends ChangeNotifier {
   }
 
   /// _cloudIsBetter — облако полезнее локальной копии (больше решено/чатов).
-  bool _cloudIsBetter(Progress remote) =>
-      remote.solvedTotal > prog.solvedTotal ||
-      (remote.solvedTotal == prog.solvedTotal &&
-          remote.mentorChats.length > prog.mentorChats.length);
+  bool _cloudIsBetter(Progress remote) {
+    if (remote.solvedTotal != prog.solvedTotal) {
+      return remote.solvedTotal > prog.solvedTotal;
+    }
+    if (remote.mentorChats.length != prog.mentorChats.length) {
+      return remote.mentorChats.length > prog.mentorChats.length;
+    }
+    // При равном числе задач не теряем реальную историю активности/время.
+    if (remote.dailySolved.length != prog.dailySolved.length) {
+      return remote.dailySolved.length > prog.dailySolved.length;
+    }
+    final remoteSeconds =
+        remote.dailySeconds.values.fold<int>(0, (a, b) => a + b);
+    final localSeconds = prog.dailySeconds.values.fold<int>(0, (a, b) => a + b);
+    return remoteSeconds > localSeconds;
+  }
 
   /// _assembleCourses — собирает список курсов из актива + прогресса
   /// (используется при старте и после импорта).
@@ -260,6 +317,8 @@ class AppController extends ChangeNotifier {
       for (final t2 in prog.generated[c.id] ?? <Task>[]) {
         if (!c.tasks.any((x) => x.id == t2.id)) c.tasks.add(t2);
       }
+      final rebuilt = prog.rebuiltTasks[c.id];
+      if (rebuilt != null) c.tasks = List<Task>.from(rebuilt);
     }
     _ensureDirections();
     _migrateDirectionData();
@@ -789,6 +848,89 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> setTtsEnabled(bool value) async {
+    config.ttsEnabled = value;
+    await saveConfig(autofill: false);
+    if (!value) {
+      await TtsService.instance.stop();
+    } else {
+      await TtsService.instance.init();
+    }
+    notifyListeners();
+  }
+
+  /// saveTtsConfig — сохранить движок/голос/скорость из экрана настроек.
+  Future<void> saveTtsConfig() async {
+    await saveConfig(autofill: false);
+    notifyListeners();
+  }
+
+  // ---------- обновления ----------
+
+  /// checkUpdates — ручная или тихая проверка GitHub Releases.
+  /// Тихая не ходит в сеть чаще, чем раз в 6 часов.
+  Future<UpdateInfo?> checkUpdates(
+      {bool silent = false, bool force = false}) async {
+    if (updateChecking) return availableUpdate;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!force) {
+      if (silent && !config.updatesAutoCheck) return availableUpdate;
+      if (config.lastUpdateCheckAt > 0 &&
+          now - config.lastUpdateCheckAt <
+              UpdateService.checkInterval.inMilliseconds) {
+        return availableUpdate;
+      }
+    }
+    updateChecking = true;
+    updateError = '';
+    notifyListeners();
+    try {
+      final info = await UpdateService.check();
+      availableUpdate = info;
+      config.lastUpdateCheckAt = now;
+      await saveConfig(autofill: false);
+      return info;
+    } catch (e) {
+      updateError = e.toString().replaceFirst('Exception: ', '');
+      return null;
+    } finally {
+      updateChecking = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> openAvailableUpdate() async {
+    final info = availableUpdate;
+    if (info == null) return false;
+    final url = info.apkUrl.isNotEmpty ? info.apkUrl : info.releaseUrl;
+    return UpdateService.open(url);
+  }
+
+  Future<void> dismissAvailableUpdate() async {
+    final info = availableUpdate;
+    if (info == null) return;
+    config.ignoredUpdate = info.latest;
+    await saveConfig(autofill: false);
+    notifyListeners();
+  }
+
+  Future<void> setUpdatesAutoCheck(bool value) async {
+    config.updatesAutoCheck = value;
+    await saveConfig(autofill: false);
+    if (value) {
+      await initUpdateWorker();
+    } else {
+      await cancelUpdateWorker();
+    }
+    notifyListeners();
+  }
+
+  Future<void> setUpdatesNotifications(bool value) async {
+    config.updatesNotifications = value;
+    await saveConfig(autofill: false);
+    notifyListeners();
+  }
+
   Future<void> setReminderTime(int hour, int minute) async {
     config.reminderHour = hour.clamp(0, 23);
     config.reminderMinute = minute.clamp(0, 59);
@@ -1301,6 +1443,25 @@ extension AppCourses on AppController {
 
   // ---------- тест ----------
 
+  String editorDraft(Task t) =>
+      prog.drafts[Progress.taskKey(cur.id, t.id)] ?? t.editorStarter;
+
+  /// saveEditorDraft — черновик переживает уход с экрана и перезапуск.
+  void saveEditorDraft(Task t, String text) {
+    prog.drafts[Progress.taskKey(cur.id, t.id)] = text;
+    saveProgress();
+  }
+
+  /// submitEditorTask — детерминированная проверка YAML/кода из редактора.
+  Future<String> submitEditorTask(Task t, String text) async {
+    if (isDone(t)) return 'Эта задача уже решена.';
+    final result = verifyEditorTask(t, text);
+    if (!result.ok) return result.message;
+    saveEditorDraft(t, text);
+    await _completeTask(t, result.message, t.difficulty);
+    return '';
+  }
+
   void _markQuizDone(Task t) {
     final m = prog.quizDone[cur.id] ?? {};
     m[t.id] = true;
@@ -1357,7 +1518,7 @@ extension AppCourses on AppController {
     if (task.isQuiz && !quizDone(task) && !isDone(task))
       return 'Сначала пройди тест по теории.';
     if (isDone(task)) return 'Эта задача уже решена.';
-    final local = tryVerifyTask(task, state);
+    final local = tryVerifyTask(task, state, history: _lastHist(40));
     if (local != null) {
       if (local.ok) {
         await _completeTask(task, local.message, task.difficulty);
@@ -1424,6 +1585,12 @@ extension AppCourses on AppController {
     final dir = config.activeDirection;
     prog.directionXp[dir] = (prog.directionXp[dir] ?? 0) + xp;
     prog.directionSolved[dir] = (prog.directionSolved[dir] ?? 0) + 1;
+    prog.recordSolved(
+      courseId: cur.id,
+      taskId: t.id,
+      direction: dir,
+      xp: xp,
+    );
     _bumpStreak();
     _checkAchievements();
     await saveProgress();
@@ -1450,6 +1617,12 @@ extension AppCourses on AppController {
       'comment': note,
       'achievements': achs,
     };
+    if (config.ttsEnabled && config.ttsAutoCompletion) {
+      final phrase = note.trim().isEmpty
+          ? '${t.title}. Задача выполнена.'
+          : '${t.title}. $note';
+      unawaited(TtsService.instance.speak(phrase, config));
+    }
     refreshTerminal();
 
     // следующая задача
@@ -1483,6 +1656,18 @@ extension AppCourses on AppController {
     } finally {
       examBusy = false;
     }
+  }
+
+  /// addStudySeconds — время, реально проведённое в уроке. Вызывается из
+  /// LessonScreen при уходе с экрана/сворачивании приложения.
+  Future<void> addStudySeconds(int seconds) async {
+    if (seconds <= 0) return;
+    prog.recordStudy(
+      direction: config.activeDirection,
+      seconds: seconds,
+    );
+    await saveProgress();
+    notifyListeners();
   }
 
   void _bumpStreak() {
@@ -1545,6 +1730,9 @@ extension AppCourses on AppController {
       'AiFallbacksScreen' => 'резервные модели',
       'ReviewScreen' => 'повторение',
       'ProgressMapScreen' => 'карта прогресса',
+      'StatsScreen' => 'статистика',
+      'TtsSettingsScreen' => 'озвучивание',
+      'LocalTtsScreen' => 'локальные голоса',
       'LocalAiScreen' => 'локальный ИИ',
       'HuggingFaceScreen' => 'каталог Hugging Face',
       _ => screen,
@@ -1854,58 +2042,315 @@ extension AppCourses on AppController {
 
   // ---------- генерация от ИИ ----------
 
-  Future<String> generateTask(String topic) async {
-    if (busy) return '';
-    if (ai == null || !ai!.ready) return 'Нет API-ключа.';
-    termBusy = true;
-    termLine('  …ИИ пишет задачу по теме: $topic');
-    refreshTerminal();
+  String _uniqueTaskId(Course course, String raw) {
+    var base = raw.trim();
+    if (base.isEmpty) {
+      base = 'ai-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    }
+    if (!course.tasks.any((t) => t.id == base)) return base;
+    var n = 2;
+    while (course.tasks.any((t) => t.id == '$base-$n')) {
+      n++;
+    }
+    return '$base-$n';
+  }
+
+  String _uniqueCourseId(String raw) {
+    var base = raw.trim();
+    if (base.isEmpty) {
+      base = 'ai-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    }
+    if (!allCourses.any((c) => c.id == base)) return base;
+    var n = 2;
+    while (allCourses.any((c) => c.id == '$base-$n')) {
+      n++;
+    }
+    return '$base-$n';
+  }
+
+  String _normalizedTitle(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  /// prepareCourseRebuild — пересобрать программу курса, но сначала показать
+  /// точный diff. Завершённые задачи сохраняются даже при смене программы.
+  Future<CourseRebuildPlan?> prepareCourseRebuild(Course course) async {
+    if (ai == null || !ai!.ready) {
+      lastFillError = 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+      return null;
+    }
+    final GenerationOperation op;
     try {
-      final t = await ai!.generateTask(cur.title, topic, _recentTitles(10), '',
+      op = operations.begin(
+          GenerationKind.fill, 'Пересборка курса «${course.title}»');
+    } catch (e) {
+      lastFillError = _errMsg(e);
+      return null;
+    }
+    generating = true;
+    lastFillError = '';
+    notifyListeners();
+    try {
+      final old = List<Task>.from(course.tasks);
+      final done = prog.completed[course.id] ?? const <String, bool>{};
+      final target = old.isEmpty ? 5 : old.length.clamp(5, 12);
+      op.update('Анализ курса',
+          nextDetail:
+              'Проверяю ${old.length} задач, сохраняю завершённые и id.',
+          current: 0,
+          total: target);
+      notifyListeners();
+      final generated = <Task>[];
+      final knownTitles = <String>{...old.map((t) => t.title)};
+      for (var i = 0; i < target; i++) {
+        op.throwIfCanceled();
+        final topic = course.syllabus.isEmpty
+            ? 'тема ${i + 1} курса «${course.title}»'
+            : course.syllabus[i % course.syllabus.length];
+        op.update('Генерация задач',
+            nextDetail: 'Задача ${i + 1} из $target: $topic',
+            current: i,
+            total: target);
+        notifyListeners();
+        final t = await ai!.generateTask(
+            course.title, topic, knownTitles.toList(), '',
+            mode: course.mode);
+        op.throwIfCanceled();
+        if (t.title.trim().isEmpty || t.goal.trim().isEmpty) {
+          throw Exception('ИИ вернул задачу без названия или условия.');
+        }
+        if (course.isTheory && t.quiz.isEmpty && !t.hasEditor) {
+          throw Exception('ИИ вернул урок без теста.');
+        }
+        if (t.id.isEmpty || generated.any((x) => x.id == t.id)) {
+          t.id = 'rebuild-${DateTime.now().millisecondsSinceEpoch % 100000}-$i';
+        }
+        generated.add(t);
+        knownTitles.add(t.title);
+        op.advance('Задача ${i + 1} из $target готова');
+      }
+
+      op.update('Сверка изменений',
+          nextDetail: 'Сопоставляю старые и новые задачи по названию');
+      notifyListeners();
+      final matchedOld = <Task>{};
+      final kept = <String>[];
+      final added = <String>[];
+      for (final t in generated) {
+        final key = _normalizedTitle(t.title);
+        Task? oldTask;
+        for (final o in old) {
+          if (matchedOld.contains(o)) continue;
+          if (_normalizedTitle(o.title) == key) {
+            oldTask = o;
+            break;
+          }
+        }
+        if (oldTask != null) {
+          t.id = oldTask.id;
+          t.peeked = oldTask.peeked;
+          matchedOld.add(oldTask);
+          kept.add(t.title);
+        } else {
+          added.add(t.title);
+        }
+      }
+      final preserved = <Task>[];
+      final preservedTitles = <String>[];
+      final oldIds = old.map((t) => t.id).toSet();
+      for (final t in generated) {
+        if (matchedOld.any((o) => o.id == t.id)) continue;
+        if (oldIds.contains(t.id)) {
+          t.id =
+              'rebuild-${DateTime.now().millisecondsSinceEpoch % 100000}-${t.id}';
+        }
+      }
+      for (final o in old) {
+        if (matchedOld.contains(o)) continue;
+        if (done[o.id] == true) {
+          preserved.add(o);
+          preservedTitles.add(o.title);
+        }
+      }
+      final proposed = <Task>[...generated, ...preserved];
+      final ids = <String>{};
+      var seq = 0;
+      for (final t in proposed) {
+        if (ids.contains(t.id) || t.id.isEmpty) {
+          t.id =
+              'rebuild-${DateTime.now().millisecondsSinceEpoch % 100000}-${seq++}';
+        }
+        ids.add(t.id);
+      }
+      final removed = old
+          .where((o) => !matchedOld.contains(o) && done[o.id] != true)
+          .map((o) => o.title)
+          .toList();
+      op.finish();
+      return CourseRebuildPlan(
+        course: course,
+        tasks: proposed,
+        keptTitles: kept,
+        addedTitles: added,
+        removedTitles: removed,
+        preservedCompleted: preservedTitles,
+      );
+    } catch (e) {
+      final canceled = e is GenerationCanceled || op.cancelRequested;
+      final message = canceled ? 'Пересборка отменена.' : _errMsg(e);
+      lastFillError = message;
+      op.finish(error: canceled ? null : message);
+      return null;
+    } finally {
+      generating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> applyCourseRebuild(CourseRebuildPlan plan) async {
+    final course = plan.course;
+    course.tasks = List<Task>.from(plan.tasks);
+    prog.rebuiltTasks[course.id] = List<Task>.from(plan.tasks);
+    viewIdx = 0;
+    await saveProgress();
+    notifyListeners();
+  }
+
+  Future<String> generateTask(String topic) async {
+    final cleanTopic = topic.trim();
+    if (cleanTopic.isEmpty) return 'Укажи тему новой задачи.';
+    if (courses.isEmpty)
+      return 'Нет доступных курсов — сначала создай или верни курс.';
+    if (ai == null || !ai!.ready) {
+      return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    }
+    final GenerationOperation op;
+    try {
+      op = operations.begin(GenerationKind.task, 'Новая задача: $cleanTopic');
+    } catch (e) {
+      return _errMsg(e);
+    }
+    notifyListeners();
+    try {
+      op.update('Запрос к ИИ',
+          nextDetail: 'Пишу задачу «$cleanTopic» для курса «${cur.title}»');
+      notifyListeners();
+      final t = await ai!.generateTask(
+          cur.title, cleanTopic, _recentTitles(10), '',
           mode: cur.mode);
+      op.throwIfCanceled();
+      if (t.title.trim().isEmpty || t.goal.trim().isEmpty) {
+        throw Exception('ИИ вернул задачу без названия или условия.');
+      }
+      if (cur.isTheory && t.quiz.isEmpty) {
+        throw Exception('ИИ вернул урок без теста.');
+      }
+      t.id = _uniqueTaskId(cur, t.id);
+      op.update('Сохранение',
+          nextDetail: 'Добавляю задачу в курс «${cur.title}»');
+      notifyListeners();
       cur.tasks.add(t);
       (prog.generated[cur.id] ??= []).add(t);
       await saveProgress();
+      op.finish();
+      selectTask(cur.tasks.length - 1);
       termLine('');
       termLine('  + новая задача добавлена: ${t.title}');
       refreshTerminal();
-      selectTask(cur.tasks.length - 1);
       return '';
     } catch (e) {
-      termLine('  ! не удалось сгенерировать: ${_errMsg(e)}');
-      refreshTerminal();
-      return _errMsg(e);
+      final canceled = e is GenerationCanceled || op.cancelRequested;
+      final message = canceled ? 'Операция отменена.' : _errMsg(e);
+      op.finish(error: canceled ? null : message);
+      if (!canceled) {
+        termLine('  ! не удалось сгенерировать: $message');
+        refreshTerminal();
+      }
+      return message;
     } finally {
-      termBusy = false;
       notifyListeners();
     }
   }
 
   Future<String> generateCourses(String goal) async {
-    if (busy) return '';
-    if (ai == null || !ai!.ready) return 'Нет API-ключа.';
-    termBusy = true;
-    notifyListeners();
+    final cleanGoal = goal.trim();
+    if (cleanGoal.isEmpty) return 'Опиши цель обучения.';
+    if (ai == null || !ai!.ready) {
+      return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    }
+    final GenerationOperation op;
     try {
-      final news = await ai!.generateCourses(goal);
-      for (final c in news) {
-        c.direction = config.activeDirection;
-        c.category = categoryForDirection(c.direction);
-        await ai!.ensureCourseFilled(c); // минимум 5 задач в каждом новом курсе
-      }
-      courses.addAll(news);
-      allCourses.addAll(news);
-      prog.extraCourses.addAll(news);
-      await saveProgress();
-      grant('architect');
-      addChatMessage('mentor',
-          'Собрал программу: ${news.map((c) => c.title).join(' → ')}. Начинаем с первого.');
-      switchCourse(courses.length - news.length);
-      return '';
+      op = operations.begin(
+          GenerationKind.courses, 'Программа курсов: $cleanGoal');
     } catch (e) {
       return _errMsg(e);
+    }
+    notifyListeners();
+    try {
+      op.update('Анализ цели',
+          nextDetail: 'ИИ строит последовательность курсов под цель.');
+      notifyListeners();
+      final news = await ai!.generateCourses(cleanGoal);
+      op.throwIfCanceled();
+      if (news.isEmpty) {
+        throw Exception('ИИ не вернул ни одного курса.');
+      }
+
+      final prepared = <Course>[];
+      for (final c in news) {
+        if (c.title.trim().isEmpty) {
+          throw Exception('ИИ вернул курс без названия.');
+        }
+        if (c.syllabus.isEmpty) {
+          throw Exception('ИИ вернул курс «${c.title}» без программы.');
+        }
+        c.id = _uniqueCourseId(c.id);
+        c.direction = config.activeDirection;
+        c.category = categoryForDirection(c.direction);
+        c.tasks.clear();
+        prepared.add(c);
+      }
+
+      op.update('Наполнение курсов',
+          nextDetail: '0 из ${prepared.length}',
+          current: 0,
+          total: prepared.length);
+      notifyListeners();
+      for (var i = 0; i < prepared.length; i++) {
+        op.throwIfCanceled();
+        final c = prepared[i];
+        op.update('Наполнение курсов',
+            nextDetail:
+                'Курс ${i + 1} из ${prepared.length}: «${c.title}» — задачи');
+        notifyListeners();
+        await ai!.ensureCourseFilled(c, isCanceled: () => op.cancelRequested);
+        op.throwIfCanceled();
+        if (c.tasks.length < 5 || c.tasks.any((t) => t.title.trim().isEmpty)) {
+          throw Exception(
+              'Курс «${c.title}» получился неполным — задачи не сохранены.');
+        }
+        op.advance('Курс ${i + 1} из ${prepared.length} готов');
+        notifyListeners();
+      }
+
+      op.update('Сохранение',
+          nextDetail: 'Записываю ${prepared.length} курсов в прогресс');
+      notifyListeners();
+      courses.addAll(prepared);
+      allCourses.addAll(prepared);
+      prog.extraCourses.addAll(prepared);
+      await saveProgress();
+      op.finish();
+      grant('architect');
+      addChatMessage('mentor',
+          'Собрал программу: ${prepared.map((c) => c.title).join(' → ')}. Начинаем с первого.');
+      switchCourse(courses.length - prepared.length);
+      return '';
+    } catch (e) {
+      final canceled = e is GenerationCanceled || op.cancelRequested;
+      final message = canceled ? 'Операция отменена.' : _errMsg(e);
+      op.finish(error: canceled ? null : message);
+      return message;
     } finally {
-      termBusy = false;
       notifyListeners();
     }
   }
@@ -1965,23 +2410,41 @@ extension AppCourses on AppController {
   /// continueCourse — «Продолжить курс»: ИИ смотрит на прогресс и добавляет
   /// следующие задачи. После каждого блока пройденных тем — экзамен.
   Future<String> continueCourse({int count = 4}) async {
-    if (busy) return '';
-    if (ai == null || !ai!.ready) return 'Нет API-ключа.';
+    if (ai == null || !ai!.ready) {
+      return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+    }
+    final GenerationOperation op;
+    try {
+      op = operations.begin(
+          GenerationKind.continuation, 'Продолжение курса «${cur.title}»');
+    } catch (e) {
+      return _errMsg(e);
+    }
     generating = true;
     fillCurrent = cur.title;
     lastFillError = '';
     notifyListeners();
     try {
       final course = cur;
+      op.update('Анализ прогресса',
+          nextDetail: 'Смотрю пройденные темы курса «${course.title}»');
+      notifyListeners();
       final completed = course.tasks
           .where((t) => prog.completed[course.id]?[t.id] ?? false)
           .map((t) => t.title)
           .toList();
+      op.update('Запрос к ИИ',
+          nextDetail: 'Подбираю следующие $count задач с учётом прогресса');
+      notifyListeners();
       final tasks = await ai!
           .generateContinuation(course, count, completedTitles: completed);
+      op.throwIfCanceled();
       if (tasks.isEmpty) {
         throw Exception('ИИ не предложил новых задач — попробуй ещё раз.');
       }
+      op.update('Проверка и сохранение',
+          nextDetail: 'Проверяю ${tasks.length} новых задач');
+      notifyListeners();
       var seq = 0;
       for (final t in tasks) {
         if (course.tasks.any((x) => x.id == t.id)) {
@@ -2005,13 +2468,17 @@ extension AppCourses on AppController {
         } catch (_) {}
       }
       await saveProgress();
+      op.finish();
       if (tasks.isNotEmpty) {
         selectTask(course.tasks.length - tasks.length);
       }
       return '';
     } catch (e) {
-      lastFillError = _errMsg(e);
-      return lastFillError;
+      final canceled = e is GenerationCanceled || op.cancelRequested;
+      final message = canceled ? 'Операция отменена.' : _errMsg(e);
+      lastFillError = message;
+      op.finish(error: canceled ? null : message);
+      return message;
     } finally {
       generating = false;
       notifyListeners();
@@ -2500,6 +2967,9 @@ extension AppMentorChats on AppController {
     c.updatedAt = DateTime.now().toIso8601String();
     saveProgress();
     notifyListeners();
+    if (message.role == 'mentor' && config.ttsEnabled && config.ttsAutoChat) {
+      unawaited(TtsService.instance.speak(message.text, config));
+    }
   }
 
   /// chatLogForAI — последние реплики для контекста ментора.

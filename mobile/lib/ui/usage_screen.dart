@@ -5,6 +5,7 @@ import '../main.dart';
 import '../usage.dart';
 import 'app_background.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -12,26 +13,13 @@ class UsageScreen extends StatelessWidget {
   const UsageScreen({super.key});
 
   Future<void> _reset(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Обнулить счётчик?'),
-        content: const Text('Статистика расхода токенов начнётся с нуля.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Обнулить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Обнулить счётчик?',
+      message: 'Статистика расхода токенов начнётся с нуля.',
+      confirmLabel: 'Обнулить',
     );
-    if (ok == true) controller.resetUsage();
+    if (ok) controller.resetUsage();
   }
 
   @override

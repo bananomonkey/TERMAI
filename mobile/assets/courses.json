@@ -54,7 +54,17 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker run --name hello hello-world\n```"
+        "solution": "```bash\ndocker run --name hello hello-world\n```",
+        "verify": {
+          "checks": [
+            {
+              "image": "hello-world"
+            },
+            {
+              "any_container_image_contains": "hello-world"
+            }
+          ]
+        }
       },
       {
         "id": "run-nginx",
@@ -107,7 +117,17 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker run -d --name web -p 8080:80 nginx\n```"
+        "solution": "```bash\ndocker run -d --name web -p 8080:80 nginx\n```",
+        "verify": {
+          "checks": [
+            {
+              "container": "web",
+              "image_contains": "nginx",
+              "status": "running",
+              "ports_contains": "8080->80"
+            }
+          ]
+        }
       },
       {
         "id": "exec",
@@ -173,7 +193,16 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker exec web touch /tmp/alive\n```"
+        "solution": "```bash\ndocker exec web touch /tmp/alive\n```",
+        "verify": {
+          "checks": [
+            {
+              "container": "web",
+              "status": "running",
+              "execs_contains": "/tmp/alive"
+            }
+          ]
+        }
       },
       {
         "id": "logs",
@@ -238,7 +267,16 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker logs logger\ndocker stop logger\n```"
+        "solution": "```bash\ndocker logs logger\ndocker stop logger\n```",
+        "verify": {
+          "checks": [
+            {
+              "container": "logger",
+              "logs_viewed": true,
+              "status": "exited"
+            }
+          ]
+        }
       },
       {
         "id": "build-basics",
@@ -292,7 +330,22 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM python:3.12-slim\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t myapp:1.0 .\n```"
+        "solution": "```dockerfile\nFROM python:3.12-slim\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t myapp:1.0 .\n```",
+        "verify": {
+          "checks": [
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "FROM\\s+python"
+            },
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "COPY\\s+app\\.py"
+            },
+            {
+              "image": "myapp:1.0"
+            }
+          ]
+        }
       },
       {
         "id": "copy-order",
@@ -346,7 +399,26 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY app.py .\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t site:2.0 .\n```"
+        "solution": "```dockerfile\nFROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY app.py .\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t site:2.0 .\n```",
+        "verify": {
+          "checks": [
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "COPY\\s+requirements\\.txt"
+            },
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "COPY\\s+app\\.py"
+            },
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "pip\\s+install"
+            },
+            {
+              "image": "site:2.0"
+            }
+          ]
+        }
       },
       {
         "id": "env",
@@ -400,7 +472,22 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM python:3.12-slim\nENV APP_ENV=production\nENV PORT=8000\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t envapp:1.0 .\n```"
+        "solution": "```dockerfile\nFROM python:3.12-slim\nENV APP_ENV=production\nENV PORT=8000\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t envapp:1.0 .\n```",
+        "verify": {
+          "checks": [
+            {
+              "image": "envapp:1.0",
+              "env_contains": [
+                "APP_ENV=production",
+                "PORT=8000"
+              ]
+            },
+            {
+              "file_contains": "Dockerfile",
+              "text": "ENV"
+            }
+          ]
+        }
       },
       {
         "id": "volumes",
@@ -458,7 +545,20 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker volume create appdata\ndocker run -d --name data-writer -v appdata:/data alpine sh -c 'while true; do date >> /data/log.txt; sleep 5; done'\n```"
+        "solution": "```bash\ndocker volume create appdata\ndocker run -d --name data-writer -v appdata:/data alpine sh -c 'while true; do date >> /data/log.txt; sleep 5; done'\n```",
+        "verify": {
+          "checks": [
+            {
+              "volume_exists": "appdata"
+            },
+            {
+              "container": "data-writer",
+              "image_contains": "alpine",
+              "mounts_contains": "appdata:/data",
+              "status": "running"
+            }
+          ]
+        }
       },
       {
         "id": "networks",
@@ -521,7 +621,26 @@
             "none"
           ]
         },
-        "solution": "```bash\ndocker network create appnet\ndocker run -d --name cache --network appnet redis:alpine\ndocker run -d --name front --network appnet nginx:alpine\n```"
+        "solution": "```bash\ndocker network create appnet\ndocker run -d --name cache --network appnet redis:alpine\ndocker run -d --name front --network appnet nginx:alpine\n```",
+        "verify": {
+          "checks": [
+            {
+              "network_exists": "appnet"
+            },
+            {
+              "container": "cache",
+              "image_contains": "redis",
+              "networks_contains": "appnet",
+              "status": "running"
+            },
+            {
+              "container": "front",
+              "image_contains": "nginx",
+              "networks_contains": "appnet",
+              "status": "running"
+            }
+          ]
+        }
       },
       {
         "id": "multi-stage",
@@ -575,7 +694,20 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM golang:1.22 AS build\nWORKDIR /src\nCOPY . .\nRUN go build -o /out/myapi .\nFROM alpine:3.19\nCOPY --from=build /out/myapi /usr/local/bin/myapi\nCMD [\"myapi\"]\n```\n```bash\ndocker build -t myapi:1.0 .\n```"
+        "solution": "```dockerfile\nFROM golang:1.22 AS build\nWORKDIR /src\nCOPY . .\nRUN go build -o /out/myapi .\nFROM alpine:3.19\nCOPY --from=build /out/myapi /usr/local/bin/myapi\nCMD [\"myapi\"]\n```\n```bash\ndocker build -t myapi:1.0 .\n```",
+        "verify": {
+          "checks": [
+            {
+              "image": "myapi:1.0",
+              "layers_count_gte": 2,
+              "layers_contains": [
+                "FROM golang",
+                "FROM alpine",
+                "COPY --from"
+              ]
+            }
+          ]
+        }
       },
       {
         "id": "compose",
@@ -639,7 +771,25 @@
             "none"
           ]
         },
-        "solution": "```yaml\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"8081:80\"\n  db:\n    image: redis:alpine\n```\n```bash\ndocker compose up -d\n```"
+        "solution": "```yaml\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"8081:80\"\n  db:\n    image: redis:alpine\n```\n```bash\ndocker compose up -d\n```",
+        "verify": {
+          "checks": [
+            {
+              "file_contains": "docker-compose.yml",
+              "text": "web:"
+            },
+            {
+              "file_contains": "docker-compose.yml",
+              "text": "db:"
+            },
+            {
+              "any_container_image_contains": "nginx"
+            },
+            {
+              "any_container_image_contains": "redis"
+            }
+          ]
+        }
       },
       {
         "id": "depends-on",
@@ -705,7 +855,29 @@
             "none"
           ]
         },
-        "solution": "Добавь к db healthcheck с `redis-cli ping`, к app — `depends_on: {db: {condition: service_healthy}}`, затем выполни `docker compose up -d`."
+        "solution": "Добавь к db healthcheck с `redis-cli ping`, к app — `depends_on: {db: {condition: service_healthy}}`, затем выполни `docker compose up -d`.",
+        "verify": {
+          "checks": [
+            {
+              "file_regex": "docker-compose.yml",
+              "pattern": "healthcheck"
+            },
+            {
+              "file_regex": "docker-compose.yml",
+              "pattern": "depends_on"
+            },
+            {
+              "file_regex": "docker-compose.yml",
+              "pattern": "service_healthy"
+            },
+            {
+              "any_container_name_contains": "app"
+            },
+            {
+              "any_container_name_contains": "db"
+            }
+          ]
+        }
       },
       {
         "id": "optimize",
@@ -772,7 +944,16 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM python:3.12-slim\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t small:1.0 .\n```"
+        "solution": "```dockerfile\nFROM python:3.12-slim\nCOPY app.py /app/app.py\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t small:1.0 .\n```",
+        "verify": {
+          "checks": [
+            {
+              "image": "small:1.0",
+              "size_mb_lt": 150,
+              "layers_first_contains": "python:3.12-slim"
+            }
+          ]
+        }
       },
       {
         "id": "entrypoint-cmd",
@@ -831,7 +1012,19 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM alpine\nENTRYPOINT [\"/bin/sh\", \"-c\"]\nCMD [\"echo hello from greeter\"]\n```\n```bash\ndocker build -t greeter:1.0 .\ndocker run --rm greeter:1.0\ndocker run --rm greeter:1.0 echo overridden\n```"
+        "solution": "```dockerfile\nFROM alpine\nENTRYPOINT [\"/bin/sh\", \"-c\"]\nCMD [\"echo hello from greeter\"]\n```\n```bash\ndocker build -t greeter:1.0 .\ndocker run --rm greeter:1.0\ndocker run --rm greeter:1.0 echo overridden\n```",
+        "verify": {
+          "checks": [
+            {
+              "image": "greeter:1.0",
+              "entrypoint_contains": "/bin/sh",
+              "cmd_contains": "echo hello"
+            },
+            {
+              "event_contains": "overridden"
+            }
+          ]
+        }
       },
       {
         "id": "debug-broken",
@@ -912,7 +1105,27 @@
             "none"
           ]
         },
-        "solution": "```dockerfile\nFROM python:3.12-slim\nWORKDIR /app\nCOPY app.py /app/\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t fixed:1.0 .\ndocker run -d --name job fixed:1.0\n```"
+        "solution": "```dockerfile\nFROM python:3.12-slim\nWORKDIR /app\nCOPY app.py /app/\nCMD [\"python\", \"/app/app.py\"]\n```\n```bash\ndocker build -t fixed:1.0 .\ndocker run -d --name job fixed:1.0\n```",
+        "verify": {
+          "checks": [
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "COPY\\s+app\\.py"
+            },
+            {
+              "file_regex": "Dockerfile",
+              "pattern": "CMD.*app\\.py"
+            },
+            {
+              "image": "fixed:1.0"
+            },
+            {
+              "container": "job",
+              "image_contains": "fixed",
+              "status": "running"
+            }
+          ]
+        }
       }
     ],
     "syllabus": [
@@ -1004,7 +1217,10 @@
         "verify": {
           "checks": [
             {
-              "last_output_contains": "/workspace"
+              "event_contains": "pwd"
+            },
+            {
+              "event_contains": "ls"
             }
           ]
         }
@@ -1107,6 +1323,10 @@
         },
         "verify": {
           "checks": [
+            {
+              "file_contains": "notes.txt",
+              "text": "first"
+            },
             {
               "file_contains": "notes.txt",
               "text": "second"
@@ -1275,7 +1495,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "rw-r-----"
+            }
+          ]
+        }
       },
       {
         "id": "linux-07-processes",
@@ -1321,7 +1547,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "kill"
+            }
+          ]
+        }
       },
       {
         "id": "linux-08-systemd",
@@ -1367,7 +1599,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "systemctl"
+            },
+            {
+              "event_contains": "enable"
+            }
+          ]
+        }
       },
       {
         "id": "linux-09-packages",
@@ -1413,7 +1654,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "apt"
+            },
+            {
+              "event_contains": "curl"
+            }
+          ]
+        }
       },
       {
         "id": "linux-10-pipes",
@@ -1459,7 +1709,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "grep"
+            },
+            {
+              "event_contains": "sort"
+            }
+          ]
+        }
       },
       {
         "id": "linux-11-ssh",
@@ -1505,7 +1764,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "id_ed25519"
+            },
+            {
+              "event_contains": "ssh-keygen"
+            }
+          ]
+        }
       },
       {
         "id": "linux-12-cron",
@@ -1551,7 +1819,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "*/5"
+            }
+          ]
+        }
       },
       {
         "id": "linux-13-env",
@@ -1597,7 +1871,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "PATH"
+            }
+          ]
+        }
       },
       {
         "id": "linux-14-script",
@@ -1643,7 +1923,14 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "file_contains": "check.sh",
+              "text": "OK"
+            }
+          ]
+        }
       }
     ]
   },
@@ -1716,6 +2003,9 @@
         "verify": {
           "checks": [
             {
+              "event_contains": "git init"
+            },
+            {
               "event_contains": "commit"
             }
           ]
@@ -1768,7 +2058,7 @@
         "verify": {
           "checks": [
             {
-              "last_output_contains": "git status"
+              "last_output_contains": "untracked"
             }
           ]
         }
@@ -1922,7 +2212,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "git add"
+            },
+            {
+              "last_output_contains": "commit"
+            }
+          ]
+        }
       },
       {
         "id": "git-06-rebase",
@@ -1968,7 +2267,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "rebase"
+            },
+            {
+              "last_output_contains": "линей"
+            }
+          ]
+        }
       },
       {
         "id": "git-07-remote",
@@ -2014,7 +2322,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "remote origin"
+            },
+            {
+              "event_contains": "push"
+            }
+          ]
+        }
       },
       {
         "id": "git-08-stash",
@@ -2060,7 +2377,16 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "stash"
+            },
+            {
+              "event_contains": "pop"
+            }
+          ]
+        }
       },
       {
         "id": "git-09-reset-revert",
@@ -2106,7 +2432,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "revert"
+            }
+          ]
+        }
       },
       {
         "id": "git-10-cherry",
@@ -2152,7 +2484,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "cherry-pick"
+            }
+          ]
+        }
       },
       {
         "id": "git-11-bisect",
@@ -2198,7 +2536,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "last_output_contains": "bisect"
+            }
+          ]
+        }
       },
       {
         "id": "git-12-hooks",
@@ -2244,7 +2588,13 @@
           "k8s_events": [],
           "last_output": ""
         },
-        "verify": {}
+        "verify": {
+          "checks": [
+            {
+              "file_exists": ".git/hooks/pre-commit"
+            }
+          ]
+        }
       }
     ]
   },
@@ -3369,6 +3719,232 @@
           "k8s_events": [],
           "last_output": ""
         }
+      },
+      {
+        "id": "cicd-11-basic",
+        "title": "Первый GitHub Actions workflow",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "GitHub Actions workflow — YAML-файл в `.github/workflows/`. У него есть три главные части: `on` (когда запускать), `jobs` (что делать) и шаги `steps` внутри job.",
+          "`runs-on` задаёт машину-исполнитель. Без него job не запустится. `uses` подключает готовое действие, а `run` выполняет shell-команду.",
+          "Структура, которую мы проверяем, — реальные ключи YAML, а не совпадение слов в тексте: `on.push.branches`, `jobs.build.runs-on`, `jobs.build.steps`."
+        ],
+        "quiz": [],
+        "goal": "Собери workflow `.github/workflows/ci.yml`: запускай на push в main, job build на ubuntu-latest, шаги checkout, setup-node и npm test.",
+        "check": "on.push.branches содержит main; jobs.build.runs-on=ubuntu-latest; шаги checkout, setup-node и npm test",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "name: CI\non: [push]\njobs:\n  build:\n    steps:\n      - run: echo \"пока пусто\"\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "on.push.branches",
+              "contains": "main",
+              "message": "Нужен запуск на push в ветку main."
+            },
+            {
+              "yaml_path": "jobs.build.runs-on",
+              "equals": "ubuntu-latest",
+              "message": "У job build должен быть runs-on: ubuntu-latest."
+            },
+            {
+              "yaml_path": "jobs.build.steps",
+              "list_item_contains": "actions/checkout@v4",
+              "message": "Добавь шаг actions/checkout@v4."
+            },
+            {
+              "yaml_path": "jobs.build.steps",
+              "list_item_contains": "setup-node@v4",
+              "message": "Добавь actions/setup-node@v4."
+            },
+            {
+              "yaml_path": "jobs.build.steps",
+              "list_item_contains": "npm test",
+              "message": "В workflow должна запускаться команда npm test."
+            }
+          ]
+        },
+        "solution": "name: CI\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - run: npm ci\n      - run: npm test\n",
+        "expected_output": "workflow проходит проверку структуры",
+        "start_state": {}
+      },
+      {
+        "id": "cicd-12-sequential",
+        "title": "Последовательные jobs",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "`needs` строит граф зависимостей: job test не начнётся, пока build не завершится успешно. Это и есть последовательные этапы pipeline.",
+          "Если не указать `needs`, GitHub может запустить jobs параллельно. Для проверки кода после сборки это не то, что нужно."
+        ],
+        "quiz": [],
+        "goal": "Сделай два job: build и test. test должен запускаться после build через needs.",
+        "check": "jobs.test.needs=build, оба job имеют runs-on",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo build\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "jobs.build.runs-on",
+              "equals": "ubuntu-latest",
+              "message": "build должен иметь runs-on."
+            },
+            {
+              "yaml_path": "jobs.test.runs-on",
+              "equals": "ubuntu-latest",
+              "message": "test должен иметь runs-on."
+            },
+            {
+              "yaml_path": "jobs.test.needs",
+              "equals": "build",
+              "message": "test должен зависеть от build через needs: build."
+            }
+          ]
+        },
+        "solution": "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci && npm run build\n  test:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n",
+        "expected_output": "workflow проходит проверку структуры",
+        "start_state": {}
+      },
+      {
+        "id": "cicd-13-docker",
+        "title": "Docker build и push с секретами",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Секреты в GitHub Actions не попадают в YAML: в workflow есть только ссылка `${{ secrets.NAME }}`. Значения хранятся в настройках репозитория.",
+          "Для Docker используем `docker/login-action@v3` и `docker/build-push-action@v6`. Пароль передаём через `password: ${{ secrets.DOCKERHUB_TOKEN }}`, а не открытым текстом.",
+          "Проверка смотрит структуру steps, имена actions и реальное наличие ссылок на секреты."
+        ],
+        "quiz": [],
+        "goal": "Собери job, который логинится в Docker Hub через secrets.DOCKERHUB_USERNAME и secrets.DOCKERHUB_TOKEN, собирает образ и делает push.",
+        "check": "есть login-action, build-push-action, secrets.DOCKERHUB_* и push: true",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "name: Docker\non: [push]\njobs:\n  image:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo \"добавь login и build-push\"\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "jobs.image.runs-on",
+              "equals": "ubuntu-latest",
+              "message": "Нужен runs-on: ubuntu-latest."
+            },
+            {
+              "yaml_path": "jobs.image.steps",
+              "list_item_contains": "docker/login-action@v3",
+              "message": "Добавь docker/login-action@v3."
+            },
+            {
+              "yaml_path": "jobs.image.steps",
+              "list_item_contains": "docker/build-push-action@v6",
+              "message": "Добавь docker/build-push-action@v6."
+            },
+            {
+              "yaml_regex": "secrets\\.DOCKERHUB_USERNAME",
+              "message": "Используй secrets.DOCKERHUB_USERNAME."
+            },
+            {
+              "yaml_regex": "secrets\\.DOCKERHUB_TOKEN",
+              "message": "Используй secrets.DOCKERHUB_TOKEN."
+            },
+            {
+              "yaml_regex": "push:\\s*true",
+              "message": "В build-push-action должен быть push: true."
+            }
+          ]
+        },
+        "solution": "name: Docker\non:\n  push:\n    branches: [main]\njobs:\n  image:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: docker/login-action@v3\n        with:\n          username: ${{ secrets.DOCKERHUB_USERNAME }}\n          password: ${{ secrets.DOCKERHUB_TOKEN }}\n      - uses: docker/build-push-action@v6\n        with:\n          context: .\n          push: true\n          tags: user/app:latest\n",
+        "expected_output": "workflow проходит проверку структуры",
+        "start_state": {}
+      },
+      {
+        "id": "cicd-14-repair",
+        "title": "Починить сломанный pipeline",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Сначала прочитай ошибку YAML: она указывает строку и позицию. Затем проверь обязательные поля job: `runs-on`, `steps`.",
+          "Секрет — это имя после `secrets.`. Опечатка в имени не даст токен, и pipeline упадёт на аутентификации."
+        ],
+        "quiz": [],
+        "goal": "В шаблоне сломан workflow: у build нет runs-on, а deploy использует неверный секрет. Исправь структуру и имена секретов.",
+        "check": "build.runs-on добавлен, deploy.needs=build, секрет DOCKERHUB_TOKEN",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "name: Broken CI\non: [push]\njobs:\n  build:\n    steps:\n      - uses: actions/checkout@v4\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ secrets.DOCKER_TOKEN }}\"\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "jobs.build.runs-on",
+              "equals": "ubuntu-latest",
+              "message": "Добавь build.runs-on: ubuntu-latest."
+            },
+            {
+              "yaml_path": "jobs.deploy.needs",
+              "equals": "build",
+              "message": "deploy должен зависеть от build."
+            },
+            {
+              "yaml_regex": "secrets\\.DOCKERHUB_TOKEN",
+              "message": "Замени неверный секрет на secrets.DOCKERHUB_TOKEN."
+            }
+          ]
+        },
+        "solution": "name: Fixed CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ secrets.DOCKERHUB_TOKEN }}\"\n",
+        "expected_output": "workflow проходит проверку структуры",
+        "start_state": {}
+      },
+      {
+        "id": "cicd-15-cache",
+        "title": "Кэш и артефакты",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Кэш ускоряет повторные запуски: `actions/cache@v4` сохраняет каталог и восстанавливает его по ключу. Артефакты — это файлы, которые остаются после job: `actions/upload-artifact@v4`.",
+          "Ключ кэша должен зависеть от lock-файла, иначе можно получить устаревшие зависимости."
+        ],
+        "quiz": [],
+        "goal": "Добавь кэш npm и загрузку артефакта dist: actions/cache@v4 и actions/upload-artifact@v4.",
+        "check": "есть actions/cache@v4, actions/upload-artifact@v4, package-lock.json и path: dist",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "name: Build\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run build\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "jobs.build.steps",
+              "list_item_contains": "actions/cache@v4",
+              "message": "Добавь actions/cache@v4."
+            },
+            {
+              "yaml_path": "jobs.build.steps",
+              "list_item_contains": "actions/upload-artifact@v4",
+              "message": "Добавь actions/upload-artifact@v4."
+            },
+            {
+              "yaml_regex": "package-lock\\.json",
+              "message": "Ключ кэша должен использовать package-lock.json."
+            },
+            {
+              "yaml_regex": "path:\\s*dist",
+              "message": "Артефакт должен загружать каталог dist."
+            }
+          ]
+        },
+        "solution": "name: Build\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/cache@v4\n        with:\n          path: ~/.npm\n          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n",
+        "expected_output": "workflow проходит проверку структуры",
+        "start_state": {}
       }
     ]
   },
@@ -4383,6 +4959,96 @@
           "k8s_events": [],
           "last_output": ""
         }
+      },
+      {
+        "id": "ans-09-playbook",
+        "title": "Playbook с apt",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Playbook — YAML-список play. У play есть `hosts`, `become` и `tasks`. Модуль `apt` объявляет желаемое состояние пакета, а не команду установки.",
+          "Идемпотентность означает: повторный запуск не ломает систему, а приводит её к тому же состоянию."
+        ],
+        "quiz": [],
+        "goal": "Напиши playbook: hosts web, become true, задача apt устанавливает nginx (state: present).",
+        "check": "hosts=web, become=true, задача apt со state=present",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "- name: Setup\n  hosts: web\n  tasks:\n    - name: TODO\n      debug:\n        msg: \"добавь установку nginx\"\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "0.hosts",
+              "equals": "web",
+              "message": "Первый play должен идти на hosts: web."
+            },
+            {
+              "yaml_path": "0.become",
+              "equals": true,
+              "message": "Для установки пакетов нужен become: true."
+            },
+            {
+              "yaml_path": "0.tasks",
+              "list_item_contains": "apt",
+              "message": "Добавь задачу с модулем apt."
+            },
+            {
+              "yaml_path": "0.tasks",
+              "list_item_contains": "present",
+              "message": "У пакета nginx должно быть state: present."
+            }
+          ]
+        },
+        "solution": "- name: Setup web\n  hosts: web\n  become: true\n  tasks:\n    - name: Install nginx\n      apt:\n        name: nginx\n        state: present\n",
+        "expected_output": "YAML проходит структурную проверку",
+        "start_state": {}
+      },
+      {
+        "id": "ans-10-handler",
+        "title": "Шаблон и handler",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "`template` копирует файл с подстановкой переменных. Если файл изменился, задача сообщает `changed` и вызывает handler через `notify`.",
+          "Handler — обычная задача из раздела `handlers`; он запускается один раз в конце play, даже если notify сработал несколько раз."
+        ],
+        "quiz": [],
+        "goal": "Добавь задачу template с notify и handler service, который перезапускает nginx.",
+        "check": "template + notify + handler restart nginx со state=restarted",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "- hosts: web\n  become: true\n  tasks:\n    - name: Config\n      copy:\n        src: nginx.conf\n        dest: /etc/nginx/nginx.conf\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "0.tasks",
+              "list_item_contains": "template",
+              "message": "Используй модуль template для конфигурации."
+            },
+            {
+              "yaml_path": "0.tasks",
+              "list_item_contains": "notify",
+              "message": "Задача должна уведомлять handler."
+            },
+            {
+              "yaml_path": "0.handlers",
+              "list_item_contains": "restart nginx",
+              "message": "Добавь handler с именем restart nginx."
+            },
+            {
+              "yaml_path": "0.handlers",
+              "list_item_contains": "restarted",
+              "message": "Handler должен перезапускать сервис."
+            }
+          ]
+        },
+        "solution": "- hosts: web\n  become: true\n  tasks:\n    - name: Nginx config\n      template:\n        src: nginx.conf.j2\n        dest: /etc/nginx/nginx.conf\n      notify: restart nginx\n  handlers:\n    - name: restart nginx\n      service:\n        name: nginx\n        state: restarted\n",
+        "expected_output": "YAML проходит структурную проверку",
+        "start_state": {}
       }
     ]
   },
@@ -4945,6 +5611,86 @@
           "k8s_events": [],
           "last_output": ""
         }
+      },
+      {
+        "id": "mon-11-prometheus",
+        "title": "Prometheus scrape config",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Prometheus забирает метрики через pull: в `scrape_configs` перечислены job_name и static_configs с targets.",
+          "`global.scrape_interval` задаёт период сбора по умолчанию. Ошибка в отступах YAML ломает конфиг целиком."
+        ],
+        "quiz": [],
+        "goal": "Собери prometheus.yml: scrape_interval 15s и job node с target localhost:9100.",
+        "check": "scrape_interval=15s, job node, target localhost:9100",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "global:\n  scrape_interval: 30s\nscrape_configs:\n  - job_name: TODO\n    static_configs:\n      - targets: []\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "global.scrape_interval",
+              "equals": "15s",
+              "message": "Нужен global.scrape_interval: 15s."
+            },
+            {
+              "yaml_path": "scrape_configs",
+              "list_item_contains": "job_name",
+              "message": "Добавь job_name: node."
+            },
+            {
+              "yaml_path": "scrape_configs",
+              "list_item_contains": "localhost:9100",
+              "message": "Target должен быть localhost:9100."
+            }
+          ]
+        },
+        "solution": "global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: node\n    static_configs:\n      - targets: [\"localhost:9100\"]\n",
+        "expected_output": "YAML проходит структурную проверку",
+        "start_state": {}
+      },
+      {
+        "id": "mon-12-alert",
+        "title": "Правило алерта",
+        "kind": "yaml",
+        "difficulty": 3,
+        "theory": [
+          "Alerting rules — YAML с groups → rules. У правила есть `alert`, `expr`, `for` и `labels`.",
+          "`up == 0` означает, что Prometheus не может собрать метрику цели. `for: 5m` не даёт алерту сработать на одном пропуске."
+        ],
+        "quiz": [],
+        "goal": "Добавь группу правил с alert InstanceDown и выражением up == 0, for: 5m.",
+        "check": "группа rules, alert InstanceDown, up == 0, for 5m",
+        "hints": [],
+        "editor": {
+          "language": "yaml",
+          "starter": "groups:\n  - name: basic\n    rules:\n      - alert: TODO\n        expr: up == 1\n"
+        },
+        "verify": {
+          "checks": [
+            {
+              "yaml_path": "groups",
+              "list_item_contains": "InstanceDown",
+              "message": "Добавь правило alert: InstanceDown."
+            },
+            {
+              "yaml_path": "groups",
+              "list_item_contains": "up == 0",
+              "message": "Условие должно быть up == 0."
+            },
+            {
+              "yaml_path": "groups",
+              "list_item_contains": "5m",
+              "message": "Добавь for: 5m."
+            }
+          ]
+        },
+        "solution": "groups:\n  - name: basic\n    rules:\n      - alert: InstanceDown\n        expr: up == 0\n        for: 5m\n        labels:\n          severity: critical\n",
+        "expected_output": "YAML проходит структурную проверку",
+        "start_state": {}
       }
     ]
   },

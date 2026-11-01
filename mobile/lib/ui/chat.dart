@@ -8,8 +8,11 @@ import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import '../theme_refresh.dart';
+import '../tts_service.dart';
 import 'app_background.dart';
 import 'attachment_view.dart';
+import 'dialogs.dart';
+import 'generation_status.dart';
 import 'mentor_avatar.dart';
 import 'theme.dart';
 
@@ -144,26 +147,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _delete(MentorChat chat) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Удалить чат?'),
-        content: Text('«${chat.title}» будет удалён безвозвратно.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Удалить чат?',
+      message: '«${chat.title}» будет удалён безвозвратно.',
     );
-    if (ok == true) controller.deleteChat(chat.id);
+    if (ok) controller.deleteChat(chat.id);
   }
 
   void _showHistory() {
@@ -376,6 +365,10 @@ class _ChatScreenState extends State<ChatScreen> {
           body: AppBackdrop(
             child: SafeArea(
               child: Column(children: [
+                const GenerationStatusCard(
+                  compact: true,
+                  margin: EdgeInsets.fromLTRB(12, 6, 12, 0),
+                ),
                 Expanded(
                   child: msgs.isEmpty
                       ? Center(
@@ -601,6 +594,39 @@ class _DiagnosticBubble extends StatelessWidget {
   }
 }
 
+class _SpeakButton extends StatelessWidget {
+  final String text;
+  const _SpeakButton({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    if (sanitizeForSpeech(text).isEmpty) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: TtsService.instance,
+      builder: (context, _) {
+        final speaking = TtsService.instance.speaking;
+        return Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 4),
+          child: IconButton(
+            tooltip: speaking ? 'Остановить озвучивание' : 'Озвучить ответ',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
+            padding: EdgeInsets.zero,
+            onPressed: speaking
+                ? TtsService.instance.stop
+                : () => TtsService.instance.speak(text, controller.config),
+            icon: Icon(
+              speaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined,
+              size: 17,
+              color: speaking ? C.accent : C.muted,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _Bubble extends StatelessWidget {
   final ChatMsg msg;
   const _Bubble({required this.msg});
@@ -650,8 +676,14 @@ class _Bubble extends StatelessWidget {
                 child: MentorAvatar(size: 28),
               ),
               Expanded(
-                  child: _wrap(msg.text, C.secondary.withAlpha(28),
-                      isUser: false)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _wrap(msg.text, C.secondary.withAlpha(28), isUser: false),
+                    _SpeakButton(text: msg.text),
+                  ],
+                ),
+              ),
             ],
           ),
         );

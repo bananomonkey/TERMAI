@@ -13,10 +13,12 @@ import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'direction_picker.dart';
 import 'help.dart';
 import 'local_ai.dart';
 import 'theme.dart';
+import 'tts_settings.dart';
 import 'widgets.dart';
 
 /// showSettings — открыть настройки с любого экрана.
@@ -205,9 +207,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     try {
-      final info = await UpdateService.check();
+      final info = await controller.checkUpdates(force: true);
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
+      if (info == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(controller.updateError.isEmpty
+                ? 'Не удалось проверить обновления'
+                : controller.updateError)));
+        return;
+      }
       if (!info.available) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('У тебя последняя версия ${info.current}')));
@@ -493,6 +502,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: TextStyle(fontSize: 12.5)),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // ---------- озвучивание ----------
+              _SectionTitle('Озвучивание'),
+              _Panel(
+                child: _LinkRow(
+                  icon: Icons.volume_up_outlined,
+                  title: 'Голос Термая',
+                  subtitle: controller.config.ttsEnabled
+                      ? 'Системный TTS · ${controller.config.ttsVariant}'
+                      : 'Выключено · системный русский голос Android',
+                  onTap: () => Navigator.of(context)
+                      .push(pageRoute(const TtsSettingsScreen())),
                 ),
               ),
               const SizedBox(height: 18),
@@ -864,16 +888,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               _Panel(
-                child: _LinkRow(
-                  icon: Icons.system_update_alt,
-                  title: 'Проверить обновления',
-                  subtitle: 'Скачать свежий APK с GitHub',
-                  onTap: () => _checkUpdates(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Проверять обновления',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: C.text)),
+                      subtitle: Text(
+                        'При запуске и в фоне, не чаще раза в 6 часов',
+                        style: TextStyle(fontSize: 11.5, color: C.muted),
+                      ),
+                      value: controller.config.updatesAutoCheck,
+                      activeThumbColor: C.accent,
+                      onChanged: (v) => controller.setUpdatesAutoCheck(v),
+                    ),
+                    Divider(color: C.border, height: 1),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Уведомлять о новой версии',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: C.text)),
+                      subtitle: Text(
+                        'Один раз на версию, без автоматической установки',
+                        style: TextStyle(fontSize: 11.5, color: C.muted),
+                      ),
+                      value: controller.config.updatesNotifications,
+                      activeThumbColor: C.accent,
+                      onChanged: controller.config.updatesAutoCheck
+                          ? (v) => controller.setUpdatesNotifications(v)
+                          : null,
+                    ),
+                    Divider(color: C.border, height: 1),
+                    _LinkRow(
+                      icon: Icons.system_update_alt,
+                      title: 'Проверить обновления',
+                      subtitle: controller.updateChecking
+                          ? 'Проверяю GitHub…'
+                          : 'Скачать свежий APK с GitHub',
+                      onTap: controller.updateChecking
+                          ? () {}
+                          : () => _checkUpdates(context),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.21.0',
+                child: Text('версия 1.22.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),
@@ -885,27 +952,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _deleteCloud(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Удалить облачные данные?'),
-        content: const Text('Из Firestore будет удалён прогресс, чаты, '
-            'настройки и email. Локальная копия останется.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dctx, false),
-              child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger),
-            onPressed: () => Navigator.pop(dctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Удалить облачные данные?',
+      message: 'Из Firestore будет удалён прогресс, чаты, настройки и email. '
+          'Локальная копия останется.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     final err = await controller.sync.deleteCloudData();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

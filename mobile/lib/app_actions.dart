@@ -23,6 +23,7 @@ import 'ui/more.dart';
 import 'ui/progress_map.dart';
 import 'ui/review.dart';
 import 'ui/settings_screen.dart';
+import 'ui/stats_screen.dart';
 import 'ui/theme.dart';
 import 'ui/usage_screen.dart';
 import 'ui/widgets.dart';
@@ -163,6 +164,8 @@ class AppActions {
         return _run('open_screen', {'screen': 'review'});
       case 'open_progress':
         return _run('open_screen', {'screen': 'progress'});
+      case 'open_stats':
+        return _run('open_screen', {'screen': 'stats'});
       case 'open_home':
         return _run('open_screen', {'screen': 'home'});
       case 'write_terminal':
@@ -333,6 +336,8 @@ class AppActions {
       'карта прогресса': 'progress',
       'ментальная карта': 'progress',
       'маршрут': 'progress',
+      'статистика': 'stats',
+      'статистика обучения': 'stats',
       'локальный ии': 'local_ai',
       'локальная модель': 'local_ai',
       'hugging face': 'hf',
@@ -362,6 +367,9 @@ class AppActions {
         return '';
       case 'usage':
         await _openNamed('UsageScreen', () => const UsageScreen());
+        return '';
+      case 'stats':
+        await _openNamed('StatsScreen', () => const StatsScreen());
         return '';
       case 'help':
         await _openNamed('HelpScreen', () => const HelpScreen());
@@ -752,21 +760,62 @@ class AppActions {
   Future<String> _generateCourse(String goal) async {
     if (goal.trim().isEmpty) return 'не указана цель курса';
     _toast('Термай собирает программу…');
+    final before = c.allCourses.length;
     final err = await c.generateCourses(goal);
-    if (err.isEmpty && c.courses.isNotEmpty) {
-      // Показываем свежую программу, а не оставляем пользователя в чате.
+    if (err.isNotEmpty) return err;
+    final added = c.allCourses.length - before;
+    if (added <= 0) {
+      return 'Курс не сохранился: список курсов не изменился.';
+    }
+    final fresh = c.allCourses.sublist(before);
+    _lastData = {
+      'saved': true,
+      'added_courses': added,
+      'courses': fresh
+          .map((course) => {
+                'id': course.id,
+                'title': course.title,
+                'tasks': course.tasks.length,
+              })
+          .toList(growable: false),
+      'current_course_id': c.cur.id,
+    };
+    _lastMessage =
+        'Сохранено курсов: $added. Открыт «${c.cur.title}» (${c.cur.tasks.length} задач).';
+    // Показываем свежую программу, а не оставляем пользователя в чате.
+    try {
       await _openNamed(
           'TaskListScreen', () => TaskListScreen(courseIdx: c.courseIdx));
+    } catch (e) {
+      // Курс уже сохранён; сбой навигации не должен превращать успех в
+      // «инструмент не сработал». Возвращаем это отдельным сообщением.
+      return 'Курс сохранён, но экран не открылся: ${_short(e)}';
     }
-    return err;
+    return '';
   }
 
   Future<String> _generateTask(String topic) async {
     if (topic.trim().isEmpty) return 'не указана тема задачи';
     if (c.courses.isEmpty) return 'нет доступных курсов';
+    final before = c.cur.tasks.length;
     _toast('Термай пишет задачу…');
     final err = await c.generateTask(topic);
-    return err;
+    if (err.isNotEmpty) return err;
+    final added = c.cur.tasks.length - before;
+    if (added <= 0) {
+      return 'Задача не сохранилась: список задач не изменился.';
+    }
+    final task = c.cur.tasks.last;
+    _lastData = {
+      'saved': true,
+      'added_tasks': added,
+      'task_id': task.id,
+      'title': task.title,
+      'course_id': c.cur.id,
+      'total_tasks': c.cur.tasks.length,
+    };
+    _lastMessage = 'Задача «${task.title}» сохранена в «${c.cur.title}».';
+    return '';
   }
 
   Future<String> _fillCourse(String query) async {

@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — тренажёр навыков с ИИ-наставником (языки, Linux, Docker, Git и другие курсы)"
 publish_to: "none"
-version: 1.21.0+47
+version: 1.22.0+48
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -28,6 +28,14 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   open_filex: ^5.0.0
   yaml: ^3.1.4
+  flutter_tts: ^4.2.5
+  nowa_runtime: ^0.2.0
+  workmanager: ^0.10.10
+  device_info_plus: ^13.3.0
+  sherpa_onnx: ^2.0.1
+  piper_phonemize: ^1.5.9
+  audioplayers: ^6.8.1
+  archive: ^4.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -40,6 +48,9 @@ flutter:
     - assets/icon/termai.png
     - assets/icon/termai_closed.png
     - assets/icon/termai_open.png
+    - assets/
+    - assets/fonts/
+    - assets/icon/
   fonts:
     - family: Inter
       fonts:
@@ -54,6 +65,39 @@ flutter:
 
 # Локальный ИИ: только llama.cpp (GGUF), без LiteRT-LM и Vulkan.
 # Это заметно уменьшает APK и оставляет CPU-инференс на arm64.
+    - family: Itim
+      fonts:
+        - asset: assets/fonts/Itim.ttf
+    - family: ADLaM Display
+      fonts:
+        - asset: assets/fonts/ADLaM Display.ttf
+    - family: Aclonica
+      fonts:
+        - asset: assets/fonts/Aclonica.ttf
+    - family: Abril Fatface
+      fonts:
+        - asset: assets/fonts/Abril Fatface.ttf
+    - family: Acme
+      fonts:
+        - asset: assets/fonts/Acme.ttf
+    - family: Alata
+      fonts:
+        - asset: assets/fonts/Alata.ttf
+    - family: Alfa Slab One
+      fonts:
+        - asset: assets/fonts/Alfa Slab One.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: Inter Tight
+      fonts:
+        - asset: assets/fonts/Inter Tight.ttf
+    - family: Quintessential
+      fonts:
+        - asset: assets/fonts/Quintessential.ttf
+    - family: Intel One Mono
+      fonts:
+        - asset: assets/fonts/Intel One Mono.ttf
 hooks:
   user_defines:
     llamadart:

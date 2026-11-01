@@ -1,0 +1,386 @@
+// local_tts.dart — офлайн-голоса Piper (VITS) через sherpa-onnx.
+//
+// Модели не входят в APK и никогда не скачиваются автоматически: только
+// по кнопке, с прогрессом/отменой/повтором и проверкой свободного места.
+// Для русского используем голоса ru_RU dmitri/denis (данные CC0).
+import 'dart:async';
+import 'dart:io';
+import 'dart:isolate';
+
+import 'package:archive/archive.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:piper_phonemize/piper_phonemize.dart' as piper;
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
+
+import 'download_manager.dart';
+import 'models.dart';
+
+class LocalTtsModel {
+  final String id, title, subtitle, url, archiveName, license;
+  final int archiveBytes, installedBytes;
+  const LocalTtsModel({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.url,
+    required this.archiveName,
+    required this.archiveBytes,
+    required this.installedBytes,
+    required this.license,
+  });
+
+  String get sizeLabel => '${(archiveBytes / (1024 * 1024)).round()} МБ';
+}
+
+const localTtsCatalog = <LocalTtsModel>[
+  LocalTtsModel(
+    id: 'piper-dmitri-int8',
+    title: 'Дмитрий',
+    subtitle: 'Piper · русский, мужской, medium',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-dmitri-medium-int8.tar.bz2',
+    archiveName: 'vits-piper-ru_RU-dmitri-medium-int8.tar.bz2',
+    archiveBytes: 21129441,
+    installedBytes: 36 * 1024 * 1024,
+    license: 'Piper MIT · голосовые данные CC0',
+  ),
+  LocalTtsModel(
+    id: 'piper-denis-int8',
+    title: 'Денис',
+    subtitle: 'Piper · русский, мужской, medium',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium-int8.tar.bz2',
+    archiveName: 'vits-piper-ru_RU-denis-medium-int8.tar.bz2',
+    archiveBytes: 21058905,
+    installedBytes: 36 * 1024 * 1024,
+    license: 'Piper MIT · голосовые данные CC0',
+  ),
+];
+
+LocalTtsModel? localTtsModelById(String id) {
+  for (final m in localTtsCatalog) {
+    if (m.id == id) return m;
+  }
+  return null;
+}
+
+class LocalTtsService extends ChangeNotifier {
+  LocalTtsService._();
+  static final LocalTtsService instance = LocalTtsService._();
+
+  final DownloadManager _downloads = DownloadManager.instance;
+  final Set<String> _extracting = {};
+  final Set<String> _failedExtract = {};
+  final Set<String> _installed = {};
+  AudioPlayer? _player;
+  bool _bound = false;
+  bool _speaking = false;
+  int _token = 0;
+  String _lastError = '';
+  String _activeModel = '';
+
+  bool get speaking => _speaking;
+  String get lastError => _lastError;
+  String get activeModel => _activeModel;
+
+  Future<void> init() async {
+    if (_bound) return;
+    _bound = true;
+    _downloads.addListener(_onDownloads);
+    await reconcile();
+  }
+
+  void _onDownloads() {
+    unawaited(reconcile());
+    notifyListeners();
+  }
+
+  Future<Directory> _ttsDir() async {
+    final models = await _downloads.modelsDir();
+    final dir = Directory('${models.path}/tts');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  Future<Directory> modelDir(String id) async =>
+      Directory('${(await _ttsDir()).path}/$id');
+
+  DownloadJob? jobFor(LocalTtsModel model) =>
+      _downloads.jobFor('tts', model.archiveName);
+
+  bool extractionFailed(String id) => _failedExtract.contains(id);
+
+  Future<void> retryExtract(LocalTtsModel model) async {
+    _failedExtract.remove(model.id);
+    await reconcile();
+    notifyListeners();
+  }
+
+  Future<void> reconcile() async {
+    for (final model in localTtsCatalog) {
+      if (_failedExtract.contains(model.id)) continue;
+      final job = jobFor(model);
+      if (job == null || job.status != DownloadStatus.completed) continue;
+      if (_extracting.contains(model.id)) continue;
+      _extracting.add(model.id);
+      try {
+        await _extract(model, job);
+        _installed.add(model.id);
+        _failedExtract.remove(model.id);
+      } catch (e) {
+        _failedExtract.add(model.id);
+        _lastError = 'Не удалось распаковать ${model.title}: $e';
+      } finally {
+        _extracting.remove(model.id);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<bool> isInstalled(String id) async {
+    if (_installed.contains(id)) return true;
+    final dir = await modelDir(id);
+    if (!await dir.exists()) return false;
+    var hasModel = false, hasTokens = false;
+    await for (final e in dir.list(recursive: true)) {
+      if (e is! File) continue;
+      if (e.path.endsWith('.onnx')) hasModel = true;
+      if (e.path.endsWith('/tokens.txt') || e.path.endsWith('\\tokens.txt')) {
+        hasTokens = true;
+      }
+    }
+    final ok = hasModel && hasTokens;
+    if (ok) _installed.add(id);
+    return ok;
+  }
+
+  Future<List<String>> installedIds() async {
+    final result = <String>[];
+    for (final m in localTtsCatalog) {
+      if (await isInstalled(m.id)) result.add(m.id);
+    }
+    return result;
+  }
+
+  Future<void> download(LocalTtsModel model) async {
+    await init();
+    _failedExtract.remove(model.id);
+    _lastError = '';
+    // DownloadManager сам проверяет свободное место и умеет отмену/повтор.
+    await _downloads.start(
+      repoId: 'tts',
+      fileName: model.archiveName,
+      url: model.url,
+      expectedBytes: model.archiveBytes,
+      etag: '',
+    );
+    notifyListeners();
+  }
+
+  Future<void> cancel(LocalTtsModel model) async {
+    final job = jobFor(model);
+    if (job != null) await _downloads.cancel(job.id);
+  }
+
+  Future<void> retry(LocalTtsModel model) async {
+    final job = jobFor(model);
+    if (job != null) {
+      await _downloads.retry(job.id);
+    } else {
+      await download(model);
+    }
+    notifyListeners();
+  }
+
+  Future<void> delete(LocalTtsModel model) async {
+    await stop();
+    final job = jobFor(model);
+    if (job != null && job.isActive) await _downloads.cancel(job.id);
+    if (job != null) await _downloads.removeRecord(job.id);
+    final dir = await modelDir(model.id);
+    if (await dir.exists()) await dir.delete(recursive: true);
+    final archive = await _archiveFile(model);
+    if (await archive.exists()) await archive.delete();
+    _installed.remove(model.id);
+    _failedExtract.remove(model.id);
+    notifyListeners();
+  }
+
+  Future<File> _archiveFile(LocalTtsModel model) async {
+    final models = await _downloads.modelsDir();
+    return File('${models.path}/${model.archiveName}');
+  }
+
+  Future<void> _extract(LocalTtsModel model, DownloadJob job) async {
+    final archiveFile = File(job.finalPath);
+    if (!await archiveFile.exists()) {
+      throw Exception('архив не найден');
+    }
+    final dir = await modelDir(model.id);
+    if (await dir.exists()) await dir.delete(recursive: true);
+    await dir.create(recursive: true);
+    final ok = await Isolate.run(
+        () => extractLocalTtsArchive(archiveFile.path, dir.path));
+    if (!ok) throw Exception('пустой или повреждённый архив');
+    // Архив больше не нужен; запись DownloadManager тоже, иначе при
+    // следующем запуске он будет искать удалённый файл.
+    try {
+      await _downloads.removeRecord(job.id);
+      if (await archiveFile.exists()) await archiveFile.delete();
+    } catch (_) {}
+  }
+
+  Future<bool> speak(String text, Config config) async {
+    final model = localTtsModelById(config.ttsLocalModelId);
+    if (model == null || !await isInstalled(model.id)) return false;
+    final token = ++_token;
+    _lastError = '';
+    _activeModel = model.id;
+    await _player?.stop();
+    final temp = await getTemporaryDirectory();
+    final wav = File(
+        '${temp.path}/termai_tts_${DateTime.now().microsecondsSinceEpoch}.wav');
+    _speaking = true;
+    notifyListeners();
+    try {
+      final dir = await modelDir(model.id);
+      final speed = (0.65 + config.ttsRate * 0.7).clamp(0.6, 1.4);
+      final ok = await Isolate.run(() => _generateWav(
+            modelPath: _findOnnx(dir.path),
+            tokensPath: '${dir.path}/tokens.txt',
+            espeakDir: '${dir.path}/espeak-ng-data',
+            text: text,
+            speed: speed.toDouble(),
+            wavPath: wav.path,
+          ));
+      if (!ok) throw Exception('движок не вернул звук');
+      if (token != _token) return true;
+      final player = AudioPlayer();
+      _player = player;
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.play(DeviceFileSource(wav.path));
+      await player.onPlayerComplete.first.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () {},
+      );
+      return true;
+    } catch (e) {
+      _lastError = 'Локальный голос не сработал: $e';
+      return false;
+    } finally {
+      if (token == _token) {
+        _speaking = false;
+        _activeModel = '';
+        notifyListeners();
+      }
+      try {
+        if (await wav.exists()) await wav.delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> stop() async {
+    _token++;
+    try {
+      await _player?.stop();
+    } catch (_) {}
+    _speaking = false;
+    _activeModel = '';
+    notifyListeners();
+  }
+}
+
+/// extractLocalTtsArchive — распаковка .tar.bz2 в отдельном isolate.
+/// Возвращает false для пустого/битого архива; наружу не выходит.
+bool extractLocalTtsArchive(String archivePath, String targetDir) {
+  final archiveFile = File(archivePath);
+  if (!archiveFile.existsSync()) return false;
+  try {
+    final bytes = archiveFile.readAsBytesSync();
+    final tarBytes = BZip2Decoder().decodeBytes(bytes);
+    final archive = TarDecoder().decodeBytes(tarBytes);
+    final files = archive.files.where((f) => f.isFile).toList();
+    if (files.isEmpty) return false;
+    // В архиве один корневой каталог вида vits-piper-.../ — убираем его.
+    String? prefix;
+    for (final f in files) {
+      final i = f.name.indexOf('/');
+      if (i > 0) {
+        prefix ??= f.name.substring(0, i + 1);
+      }
+    }
+    final dir = Directory(targetDir);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    for (final f in files) {
+      var relative = f.name;
+      if (prefix != null && relative.startsWith(prefix)) {
+        relative = relative.substring(prefix.length);
+      }
+      if (relative.isEmpty || relative.contains('..')) continue;
+      final target = File('${dir.path}/$relative');
+      target.parent.createSync(recursive: true);
+      target.writeAsBytesSync(f.content, flush: true);
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+String _findOnnx(String dir) {
+  final d = Directory(dir);
+  if (!d.existsSync()) return '';
+  for (final e in d.listSync(recursive: true)) {
+    if (e is File && e.path.endsWith('.onnx')) return e.path;
+  }
+  return '';
+}
+
+/// Выполняется в фоновом isolate: FFI-библиотеки инициализируются там.
+bool _generateWav({
+  required String modelPath,
+  required String tokensPath,
+  required String espeakDir,
+  required String text,
+  required double speed,
+  required String wavPath,
+}) {
+  if (modelPath.isEmpty || !Directory(espeakDir).existsSync()) return false;
+  sherpa.initBindings();
+  piper.initBindings();
+  final init = piper.PiperPhonemize.initialize(espeakDir);
+  if (init < 0) return false;
+  final sentences = piper.PiperPhonemize.phonemize(text, voice: 'ru')
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (sentences.isEmpty) return false;
+  final vits = sherpa.OfflineTtsVitsModelConfig(
+    model: modelPath,
+    tokens: tokensPath,
+  );
+  final tts = sherpa.OfflineTts(sherpa.OfflineTtsConfig(
+    model: sherpa.OfflineTtsModelConfig(vits: vits, numThreads: 2),
+    maxNumSentences: 1,
+  ));
+  try {
+    final audio = tts.generateWithConfig(
+      text: '',
+      config: sherpa.OfflineTtsGenerationConfig(
+        sid: 0,
+        speed: speed,
+        silenceScale: 0.2,
+        phonemeCodepoints: sentences,
+      ),
+    );
+    if (audio.samples.isEmpty) return false;
+    return sherpa.writeWave(
+      filename: wavPath,
+      samples: audio.samples,
+      sampleRate: audio.sampleRate,
+    );
+  } finally {
+    tts.free();
+  }
+}

@@ -120,6 +120,7 @@ const appToolSpecs = <AppToolSpec>[
             'fallbacks',
             'review',
             'progress',
+            'stats',
             'more',
             'chat',
             'interview',

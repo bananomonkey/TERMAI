@@ -20,24 +20,28 @@ class DirectionOptionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categories = [
+      for (final category in directionCategories.keys)
+        MapEntry(category, directionsForCategory(category)),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final category in directionCategories.keys) ...[
+        for (final entry in categories) ...[
           Padding(
             padding: EdgeInsets.fromLTRB(2, dense ? 14 : 18, 2, 6),
             child: Text(
-              directionCategoryTitle(category).toUpperCase(),
+              directionCategoryTitle(entry.key).toUpperCase(),
               style: AppText.section.copyWith(color: C.muted),
             ),
           ),
-          for (final d in directionsForCategory(category)) ...[
+          for (var i = 0; i < entry.value.length; i++) ...[
             _DirectionRow(
-              d: d,
-              checked: selected.contains(d.id),
-              onTap: () => onToggle(d.id),
+              d: entry.value[i],
+              checked: selected.contains(entry.value[i].id),
+              onTap: () => onToggle(entry.value[i].id),
             ),
-            if (d != directionsForCategory(category).last)
+            if (i < entry.value.length - 1)
               Divider(color: C.border.withAlpha(110), height: 1),
           ],
         ],
@@ -124,81 +128,109 @@ Future<Set<String>?> showDirectionPicker(
           BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
     ),
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(ctx).bottom,
-        ),
-        child: SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(ctx).height * 0.86,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 10, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Направления',
-                          style: AppText.screenTitle.copyWith(color: C.text),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Закрыть',
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: Icon(Icons.close, size: 20, color: C.muted),
-                      ),
-                    ],
-                  ),
+      builder: (ctx, setState) {
+        final media = MediaQuery.of(ctx);
+        final available = media.size.height -
+            media.padding.top -
+            media.viewInsets.bottom -
+            16;
+        final maxHeight =
+            available.clamp(180.0, media.size.height * 0.92).toDouble();
+        return AnimatedPadding(
+          duration: AppDuration.fast,
+          curve: AppDuration.curve,
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 640,
+                  maxHeight: maxHeight,
                 ),
-                Flexible(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    children: [
-                      DirectionOptionList(
-                        selected: local,
-                        onToggle: (id) => setState(() {
-                          if (local.contains(id)) {
-                            local.remove(id);
-                          } else {
-                            local.add(id);
-                          }
-                        }),
-                        dense: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 10, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Направления',
+                                  style: AppText.screenTitle
+                                      .copyWith(color: C.text),
+                                ),
+                                Text(
+                                  'Выбрано: ${local.length}',
+                                  style:
+                                      AppText.caption.copyWith(color: C.muted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Закрыть',
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: Icon(Icons.close, size: 20, color: C.muted),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Flexible(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        children: [
+                          DirectionOptionList(
+                            selected: local,
+                            onToggle: (id) => setState(() {
+                              if (local.contains(id)) {
+                                local.remove(id);
+                              } else {
+                                local.add(id);
+                              }
+                            }),
+                            dense: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            local.isEmpty
+                                ? 'Выбери хотя бы одно направление.'
+                                : 'Можно выбрать несколько. Прогресс '
+                                    'сохраняется при снятии.',
+                            style: AppText.caption.copyWith(color: C.muted),
+                          ),
+                          const SizedBox(height: 8),
+                          FilledButton(
+                            onPressed: local.isEmpty
+                                ? null
+                                : () => Navigator.pop(ctx, local),
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(44)),
+                            child: const Text('Готово'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Можно выбрать несколько. Прогресс сохраняется при снятии.',
-                          style: AppText.caption.copyWith(color: C.muted),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: local.isEmpty
-                            ? null
-                            : () => Navigator.pop(ctx, local),
-                        child: const Text('Готово'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     ),
   );
 }

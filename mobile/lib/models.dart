@@ -190,6 +190,10 @@ class Task {
   /// она проверяет состояние песочницы без обращения к модели.
   Map<String, dynamic> verify;
 
+  /// editor — задача с кодом/YAML вместо терминала. Поля: language,
+  /// starter (черновик), description.
+  Map<String, dynamic> editor;
+
   Task({
     required this.id,
     required this.title,
@@ -205,16 +209,22 @@ class Task {
     List<QuizQ>? quiz,
     SandboxState? start,
     Map<String, dynamic>? verify,
+    Map<String, dynamic>? editor,
   })  : theory = theory ?? [],
         hints = hints ?? [],
         quiz = quiz ?? [],
         start = start ?? SandboxState(),
-        verify = verify ?? {};
+        verify = verify ?? {},
+        editor = editor ?? {};
 
   factory Task.fromJson(Map<String, dynamic> j) {
     final rawKind = (j['kind'] as String?)?.toLowerCase();
-    final kind =
-        rawKind == 'quiz' ? 'quiz' : (rawKind == 'exam' ? 'exam' : 'cmd');
+    final kind = rawKind == 'quiz' ||
+            rawKind == 'exam' ||
+            rawKind == 'yaml' ||
+            rawKind == 'code'
+        ? rawKind!
+        : 'cmd';
     return Task(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '',
@@ -233,6 +243,7 @@ class Task {
       start: SandboxState.normalized(
           (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
       verify: (j['verify'] as Map?)?.cast<String, dynamic>() ?? {},
+      editor: (j['editor'] as Map?)?.cast<String, dynamic>() ?? {},
     );
   }
 
@@ -251,10 +262,14 @@ class Task {
         'peeked': peeked,
         'start_state': start.toJson(),
         if (verify.isNotEmpty) 'verify': verify,
+        if (editor.isNotEmpty) 'editor': editor,
       };
 
   bool get isQuiz => kind == 'quiz';
   bool get isExam => kind == 'exam';
+  bool get hasEditor => editor.isNotEmpty;
+  String get editorLanguage => (editor['language'] ?? 'text').toString();
+  String get editorStarter => (editor['starter'] ?? '').toString();
   int get xp => 15 * difficulty + 15;
 }
 
@@ -618,6 +633,29 @@ class Config {
   /// Размер контекста локальной модели в токенах.
   int localContextSize;
 
+  /// Озвучивание ответов. Системный TTS не требует загрузки модели.
+  bool ttsEnabled;
+  bool ttsAutoChat;
+  bool ttsAutoCompletion;
+  String ttsEngine;
+  String ttsVoice;
+  String ttsLocale;
+  String ttsVariant;
+  double ttsRate;
+  double ttsPitch;
+
+  /// Локальный нейросетевой голос (Piper/sherpa-onnx). Скачивается только
+  /// по явному действию пользователя.
+  bool ttsUseLocal;
+  String ttsLocalModelId;
+
+  /// Автоматическая проверка обновлений и уведомления о новой версии.
+  bool updatesAutoCheck;
+  bool updatesNotifications;
+  String lastNotifiedUpdate;
+  String ignoredUpdate;
+  int lastUpdateCheckAt;
+
   /// Время последнего изменения конфига (ISO). Нужно для merge с облаком.
   String updatedAt;
 
@@ -659,6 +697,22 @@ class Config {
     List<CustomThemeData>? customThemes,
     this.localModelPath = '',
     this.localContextSize = 4096,
+    this.ttsEnabled = false,
+    this.ttsAutoChat = true,
+    this.ttsAutoCompletion = true,
+    this.ttsEngine = '',
+    this.ttsVoice = '',
+    this.ttsLocale = 'ru-RU',
+    this.ttsVariant = 'ru-RU',
+    this.ttsRate = 0.5,
+    this.ttsPitch = 1.0,
+    this.ttsUseLocal = false,
+    this.ttsLocalModelId = '',
+    this.updatesAutoCheck = true,
+    this.updatesNotifications = true,
+    this.lastNotifiedUpdate = '',
+    this.ignoredUpdate = '',
+    this.lastUpdateCheckAt = 0,
     this.updatedAt = '',
     this.primaryFailStreak = 0,
     this.primaryLastErrorAt = 0,
@@ -711,6 +765,26 @@ class Config {
         localContextSize: ((j['local_context_size'] as num?)?.toInt() ?? 4096)
             .clamp(512, 32768)
             .toInt(),
+        ttsEnabled: j['tts_enabled'] as bool? ?? false,
+        ttsAutoChat: j['tts_auto_chat'] as bool? ?? true,
+        ttsAutoCompletion: j['tts_auto_completion'] as bool? ?? true,
+        ttsEngine: j['tts_engine'] as String? ?? '',
+        ttsVoice: j['tts_voice'] as String? ?? '',
+        ttsLocale: j['tts_locale'] as String? ?? 'ru-RU',
+        ttsVariant: j['tts_variant'] as String? ?? 'ru-RU',
+        ttsRate: ((j['tts_rate'] as num?)?.toDouble() ?? 0.5)
+            .clamp(0.2, 1.0)
+            .toDouble(),
+        ttsPitch: ((j['tts_pitch'] as num?)?.toDouble() ?? 1.0)
+            .clamp(0.5, 1.5)
+            .toDouble(),
+        ttsUseLocal: j['tts_use_local'] as bool? ?? false,
+        ttsLocalModelId: j['tts_local_model_id'] as String? ?? '',
+        updatesAutoCheck: j['updates_auto_check'] as bool? ?? true,
+        updatesNotifications: j['updates_notifications'] as bool? ?? true,
+        lastNotifiedUpdate: j['last_notified_update'] as String? ?? '',
+        ignoredUpdate: j['ignored_update'] as String? ?? '',
+        lastUpdateCheckAt: (j['last_update_check_at'] as num?)?.toInt() ?? 0,
         updatedAt: j['updated_at'] as String? ?? '',
         primaryFailStreak: (j['primary_fail_streak'] as num?)?.toInt() ?? 0,
         primaryLastErrorAt: (j['primary_last_error_at'] as num?)?.toInt() ?? 0,
@@ -749,6 +823,22 @@ class Config {
         'mascot_visible': mascotVisible,
         'local_model_path': localModelPath,
         'local_context_size': localContextSize,
+        'tts_enabled': ttsEnabled,
+        'tts_auto_chat': ttsAutoChat,
+        'tts_auto_completion': ttsAutoCompletion,
+        'tts_engine': ttsEngine,
+        'tts_voice': ttsVoice,
+        'tts_locale': ttsLocale,
+        'tts_variant': ttsVariant,
+        'tts_rate': ttsRate,
+        'tts_pitch': ttsPitch,
+        'tts_use_local': ttsUseLocal,
+        'tts_local_model_id': ttsLocalModelId,
+        'updates_auto_check': updatesAutoCheck,
+        'updates_notifications': updatesNotifications,
+        'last_notified_update': lastNotifiedUpdate,
+        'ignored_update': ignoredUpdate,
+        'last_update_check_at': lastUpdateCheckAt,
         'custom_themes': customThemes.map((e) => e.toJson()).toList(),
         if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
         if (primaryFailStreak > 0) 'primary_fail_streak': primaryFailStreak,
@@ -823,7 +913,77 @@ class Progress {
   /// Расход токенов по моделям: модель → [вход, выход].
   Map<String, List<int>> aiUsage = {};
 
+  /// Реальная история активности. Ключ — локальная дата YYYY-MM-DD.
+  /// Поля появились в 1.22: старые отметки задним числом не выдумываем,
+  /// поэтому графики начинают заполняться с первого нового действия.
+  Map<String, int> dailyXp = {};
+  Map<String, int> dailySolved = {};
+  Map<String, int> dailySeconds = {};
+  Map<String, Map<String, int>> dailyDirectionXp = {};
+  Map<String, Map<String, int>> dailyDirectionSolved = {};
+  Map<String, Map<String, int>> dailyDirectionSeconds = {};
+
+  /// Время решения задачи: "courseId|taskId" → epoch seconds.
+  Map<String, int> solvedAt = {};
+
+  /// Черновики редактора кода/YAML: "courseId|taskId" → текст.
+  Map<String, String> drafts = {};
+
+  /// Безопасная пересборка курса: полный новый список задач. Перекрывает
+  /// задачи из встроенного ассета, сохраняя прежние id и completed.
+  Map<String, List<Task>> rebuiltTasks = {};
+
   Progress();
+
+  static String dayKey(DateTime d) {
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
+  static String taskKey(String courseId, String taskId) => '$courseId|$taskId';
+
+  static Map<String, int> _intMap(Object? raw) => ((raw as Map?) ?? {})
+      .map((k, v) => MapEntry(k as String, (v as num?)?.toInt() ?? 0));
+
+  static Map<String, Map<String, int>> _nestedIntMap(Object? raw) =>
+      ((raw as Map?) ?? {}).map(
+        (k, v) => MapEntry(k as String, _intMap(v)),
+      );
+
+  /// recordSolved — фиксирует solved/XP по дню и направлению.
+  /// Вызывается только из _completeTask, поэтому двойного счёта нет.
+  void recordSolved({
+    required String courseId,
+    required String taskId,
+    required String direction,
+    required int xp,
+    DateTime? at,
+  }) {
+    final moment = at ?? DateTime.now();
+    final day = dayKey(moment);
+    dailySolved[day] = (dailySolved[day] ?? 0) + 1;
+    dailyXp[day] = (dailyXp[day] ?? 0) + xp;
+    final ds = dailyDirectionSolved.putIfAbsent(day, () => {});
+    ds[direction] = (ds[direction] ?? 0) + 1;
+    final dx = dailyDirectionXp.putIfAbsent(day, () => {});
+    dx[direction] = (dx[direction] ?? 0) + xp;
+    solvedAt[taskKey(courseId, taskId)] = moment.millisecondsSinceEpoch ~/ 1000;
+  }
+
+  /// recordStudy — добавляет реально проведённое в уроке время.
+  void recordStudy({
+    required String direction,
+    required int seconds,
+    DateTime? at,
+  }) {
+    if (seconds <= 0) return;
+    final day = dayKey(at ?? DateTime.now());
+    dailySeconds[day] = (dailySeconds[day] ?? 0) + seconds;
+    final d = dailyDirectionSeconds.putIfAbsent(day, () => {});
+    d[direction] = (d[direction] ?? 0) + seconds;
+  }
 
   /// tokensIn / tokensOut / totalTokens — сводка расхода.
   int get tokensIn =>
@@ -879,6 +1039,21 @@ class Progress {
     p.aiUsage = ((j['ai_usage'] as Map?) ?? {}).map((k, v) => MapEntry(
         k as String,
         ((v as List?) ?? []).map((e) => (e as num).toInt()).toList()));
+    p.dailyXp = _intMap(j['daily_xp']);
+    p.dailySolved = _intMap(j['daily_solved']);
+    p.dailySeconds = _intMap(j['daily_seconds']);
+    p.dailyDirectionXp = _nestedIntMap(j['daily_direction_xp']);
+    p.dailyDirectionSolved = _nestedIntMap(j['daily_direction_solved']);
+    p.dailyDirectionSeconds = _nestedIntMap(j['daily_direction_seconds']);
+    p.solvedAt = _intMap(j['solved_at']);
+    p.drafts = ((j['drafts'] as Map?) ?? {})
+        .map((k, v) => MapEntry(k as String, v.toString()));
+    p.rebuiltTasks = ((j['rebuilt_tasks'] as Map?) ?? {}).map((k, v) =>
+        MapEntry(
+            k as String,
+            ((v as List?) ?? [])
+                .map((t) => Task.fromJson((t as Map).cast<String, dynamic>()))
+                .toList()));
     return p;
   }
 
@@ -909,6 +1084,16 @@ class Progress {
         'hidden_courses': hiddenCourses,
         'archived': archived,
         'ai_usage': aiUsage,
+        'daily_xp': dailyXp,
+        'daily_solved': dailySolved,
+        'daily_seconds': dailySeconds,
+        'daily_direction_xp': dailyDirectionXp,
+        'daily_direction_solved': dailyDirectionSolved,
+        'daily_direction_seconds': dailyDirectionSeconds,
+        'solved_at': solvedAt,
+        'drafts': drafts,
+        'rebuilt_tasks': rebuiltTasks
+            .map((k, v) => MapEntry(k, v.map((t) => t.toJson()).toList())),
       };
 
   int get level => xp ~/ 100 + 1;

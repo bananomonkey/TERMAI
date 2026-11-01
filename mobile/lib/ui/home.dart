@@ -9,10 +9,13 @@ import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'direction_switcher.dart';
+import 'generation_status.dart';
 import 'lesson.dart';
 import 'review.dart';
 import 'theme.dart';
+import 'update_banner.dart';
 import 'widgets.dart';
 
 /// CourseGraphView — чистые плитки курсов: название, зелёный прогресс-бар,
@@ -82,6 +85,8 @@ class CourseGraphView extends StatelessWidget {
               total: totalTasks,
               percent: overall,
             ),
+            const GenerationStatusCard(),
+            const UpdateBanner(),
             if (controller.generating && controller.fillTotal > 0)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -120,8 +125,9 @@ class CourseGraphView extends StatelessWidget {
                   16,
                   10,
                   16,
-                  // Нижний ряд (Термай + док) не должен закрывать последний курс.
-                  140 + MediaQuery.paddingOf(context).bottom,
+                  // Нижняя панель (Термай + навигация) не должна закрывать
+                  // последний курс; SafeArea панели учитывает системный отступ.
+                  104,
                 ),
                 buildDefaultDragHandles: false,
                 itemCount: courses.length,
@@ -414,6 +420,15 @@ void _showCourseActions(BuildContext context, int courseIdx) {
                   OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(ctx);
+                      _rebuildCourse(context, c.id);
+                    },
+                    icon: const Icon(Icons.auto_fix_high, size: 18),
+                    label: const Text('Пересобрать программу'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
                       controller.archiveCourse(c.id);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text('«${c.title}» в архиве'),
@@ -428,38 +443,16 @@ void _showCourseActions(BuildContext context, int courseIdx) {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: ctx,
-                        builder: (dctx) => AlertDialog(
-                          backgroundColor: C.surface,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          title: const Text('Удалить курс?'),
-                          content: Text('«' +
-                              c.title +
-                              '» исчезнет из списка. Прогресс сохранится.'),
-                          actions: [
-                            OutlinedButton(
-                              onPressed: () => Navigator.pop(dctx),
-                              style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(64, 42)),
-                              child: const Text('Отмена'),
-                            ),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                  backgroundColor: C.danger,
-                                  minimumSize: const Size(64, 42)),
-                              onPressed: () {
-                                Navigator.pop(dctx);
-                                controller.deleteCourse(idx);
-                                Navigator.pop(ctx);
-                              },
-                              child: const Text('Удалить'),
-                            ),
-                          ],
-                        ),
+                    onPressed: () async {
+                      final ok = await showConfirmDialog(
+                        ctx,
+                        title: 'Удалить курс?',
+                        message: '«${c.title}» исчезнет из списка. '
+                            'Прогресс сохранится.',
                       );
+                      if (!ok || !ctx.mounted) return;
+                      controller.deleteCourse(idx);
+                      Navigator.pop(ctx);
                     },
                     icon: Icon(Icons.delete_outline, size: 18, color: C.danger),
                     label: Text('Удалить', style: TextStyle(color: C.danger)),
@@ -472,6 +465,99 @@ void _showCourseActions(BuildContext context, int courseIdx) {
       );
     },
   );
+}
+
+/// _rebuildCourse — ИИ пересобирает программу, но сначала показывает diff.
+/// Завершённые задачи и их id сохраняются даже при смене программы.
+Future<void> _rebuildCourse(BuildContext context, String courseId) async {
+  final idx = controller.courses.indexWhere((c) => c.id == courseId);
+  if (idx < 0) return;
+  final course = controller.courses[idx];
+  if (controller.ai == null || !controller.ai!.ready) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Нет API-ключа — настрой ИИ в «Ещё» → Настройки.')));
+    return;
+  }
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: C.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.panel)),
+      title: const Text('Пересобираю программу'),
+      content: ListenableBuilder(
+        listenable: controller,
+        builder: (_, __) {
+          final op = controller.operations.active;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(op?.stage ?? 'Подготовка',
+                  style: AppText.title.copyWith(fontSize: 13.5)),
+              const SizedBox(height: 4),
+              Text(op?.detail ?? 'Собираю новый план курса…',
+                  style: AppText.caption.copyWith(color: C.muted)),
+              if (op != null && op.total > 0) ...[
+                const SizedBox(height: 10),
+                LinearProgressIndicator(
+                  value: op.current / op.total,
+                  minHeight: 4,
+                  borderRadius: BorderRadius.circular(2),
+                  backgroundColor: C.card2,
+                  color: C.accent,
+                ),
+              ],
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => op?.requestCancel(),
+                  child: const Text('Отменить'),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    ),
+  );
+
+  final plan = await controller.prepareCourseRebuild(course);
+  if (!context.mounted) return;
+  Navigator.of(context, rootNavigator: true).pop();
+
+  if (plan == null) {
+    final msg = controller.lastFillError.isEmpty
+        ? 'Не удалось пересобрать курс.'
+        : controller.lastFillError;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    return;
+  }
+  final lines = <String>[
+    'Сохранено прежних: ${plan.keptTitles.length}',
+    'Новых: ${plan.addedTitles.length}',
+    'Удалено незавершённых: ${plan.removedTitles.length}',
+    if (plan.preservedCompleted.isNotEmpty)
+      'Завершённые сохранены отдельно: ${plan.preservedCompleted.length}',
+    if (plan.removedTitles.isNotEmpty)
+      'Будут убраны: ${plan.removedTitles.take(4).join(', ')}'
+          '${plan.removedTitles.length > 4 ? '…' : ''}',
+    'Прогресс и XP уже выполненных задач не сбрасываются.',
+  ];
+  final ok = await showConfirmDialog(
+    context,
+    title: 'Пересобрать «${course.title}»?',
+    message: lines.join('\n'),
+    confirmLabel: 'Пересобрать',
+    destructive: true,
+  );
+  if (!ok) return;
+  await controller.applyCourseRebuild(plan);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Курс «${course.title}» пересобран')));
 }
 
 // ---------- список задач курса ----------
@@ -586,6 +672,7 @@ class _TaskGroups extends StatelessWidget {
       }
       groups.add(const SizedBox(height: 14));
     }
+    groups.insert(0, const GenerationStatusCard());
     groups.add(_EndActions());
     // ленивая сборка строк: длинные курсы не строят все элементы сразу
     return ListView.builder(
@@ -692,15 +779,13 @@ class _EndActions extends StatelessWidget {
       listenable: controller,
       builder: (context, _) => Column(children: [
         GestureDetector(
-          onTap: (controller.generating || controller.busy)
-              ? null
-              : () async {
-                  final err = await controller.continueCourse();
-                  if (err.isNotEmpty && context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(err)));
-                  }
-                },
+          onTap: () async {
+            final err = await controller.continueCourse();
+            if (err.isNotEmpty && context.mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(err)));
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
@@ -730,18 +815,16 @@ class _EndActions extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         TextButton.icon(
-          onPressed: (controller.generating || controller.busy)
-              ? null
-              : () async {
-                  final topic = await askText(context, 'Новая задача от ИИ',
-                      'тема: например «времена в английском» или «проброс портов»');
-                  if (topic == null || topic.isEmpty) return;
-                  final err = await controller.generateTask(topic);
-                  if (err.isNotEmpty && context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(err)));
-                  }
-                },
+          onPressed: () async {
+            final topic = await askText(context, 'Новая задача от ИИ',
+                'тема: например «времена в английском» или «проброс портов»');
+            if (topic == null || topic.trim().isEmpty) return;
+            final err = await controller.generateTask(topic.trim());
+            if (err.isNotEmpty && context.mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(err)));
+            }
+          },
           icon: const Icon(Icons.add, size: 16),
           label:
               const Text('Создать одну задачу', style: TextStyle(fontSize: 12)),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'direction_picker.dart';
 import 'theme.dart';
 
@@ -23,27 +24,15 @@ class DirectionSwitcher extends StatelessWidget {
 
   Future<void> _remove(BuildContext context, String id, String title) async {
     if (controller.config.directions.length <= 1) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        title: Text('Убрать «$title»?'),
-        content: const Text(
-          'Курсы и прогресс останутся в приложении. Направление можно вернуть через «+».',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Отмена', style: TextStyle(color: C.muted)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Убрать'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Убрать «$title»?',
+      message: 'Курсы и прогресс останутся в приложении. '
+          'Направление можно вернуть через «+».',
+      confirmLabel: 'Убрать',
+      destructive: false,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final next = controller.config.directions.where((x) => x != id).toSet();
     await controller.setDirections(next);
   }
@@ -110,12 +99,17 @@ class DirectionSwitcher extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 7),
-                      Text(
-                        d.shortTitle,
-                        style: AppText.caption.copyWith(
-                          color: active ? C.text : C.muted,
-                          fontWeight:
-                              active ? FontWeight.w800 : FontWeight.w600,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 116),
+                        child: Text(
+                          d.shortTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(
+                            color: active ? C.text : C.muted,
+                            fontWeight:
+                                active ? FontWeight.w800 : FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],

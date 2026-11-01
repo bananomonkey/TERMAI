@@ -9,6 +9,7 @@ import '../store.dart';
 import 'ai_fallbacks.dart';
 import 'background_settings.dart';
 import 'chat.dart';
+import 'dialogs.dart';
 import 'help.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
@@ -49,16 +50,6 @@ void showMoreSheet(BuildContext context) {
             onTap: () {
               Navigator.pop(ctx);
               Navigator.of(context).push(pageRoute(const HelpScreen()));
-            },
-          ),
-          const SizedBox(height: 8),
-          _SheetButton(
-            icon: Icons.bar_chart_outlined,
-            title: 'Статистика и достижения',
-            subtitle: 'XP, серия и открытые награды',
-            onTap: () {
-              Navigator.pop(ctx);
-              _showStats(context);
             },
           ),
           const SizedBox(height: 8),
@@ -152,34 +143,20 @@ void showMoreSheet(BuildContext context) {
   );
 }
 
-void _confirmReset(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Сбросить весь прогресс?'),
-      content: const Text(
-          'Весь прогресс, курсы от ИИ и достижения будут удалены безвозвратно.'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Отмена', style: TextStyle(color: C.muted))),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: C.danger),
-          onPressed: () {
-            Navigator.pop(ctx);
-            controller.prog = Progress();
-            controller.saveProgress();
-            controller.termText = '';
-            controller.chatMsgs = [];
-            controller.notifyListeners();
-          },
-          child: const Text('Удалить'),
-        ),
-      ],
-    ),
+Future<void> _confirmReset(BuildContext context) async {
+  final ok = await showConfirmDialog(
+    context,
+    title: 'Сбросить весь прогресс?',
+    message: 'Весь прогресс, курсы от ИИ и достижения будут удалены '
+        'безвозвратно.',
+    confirmLabel: 'Сбросить',
   );
+  if (!ok) return;
+  controller.prog = Progress();
+  controller.saveProgress();
+  controller.termText = '';
+  controller.chatMsgs = [];
+  controller.notifyListeners();
 }
 
 class _SheetButton extends StatelessWidget {
@@ -228,50 +205,4 @@ class _SheetButton extends StatelessWidget {
       ),
     );
   }
-}
-
-void _showStats(BuildContext context) {
-  final p = controller.prog;
-  final direction = controller.activeDirectionDef;
-  final stats = controller.activeStats;
-  final ach = achievementList
-      .map((a) =>
-          (p.achieved.containsKey(a.id) ? '✓ ' : '○ ') +
-          a.title +
-          ' — ' +
-          a.desc)
-      .join('\n');
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Статистика'),
-      content: SingleChildScrollView(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Уровень ${p.level} · ${p.xp} XP'),
-          Text('Решено задач: ${p.solvedTotal}'),
-          Text('Серия: ${p.streak} дн. подряд'),
-          if (direction != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${direction.title}: ${stats.solved}/${stats.total} · '
-              '${stats.xp} XP',
-              style: TextStyle(fontSize: 12.5, color: C.muted),
-            ),
-          ],
-          const SizedBox(height: 12),
-          caption('Достижения', color: C.accent),
-          const SizedBox(height: 6),
-          Text(ach,
-              style: TextStyle(fontSize: 12.5, height: 1.6, color: C.muted)),
-        ]),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Закрыть', style: TextStyle(color: C.accent)))
-      ],
-    ),
-  );
 }

@@ -8,6 +8,7 @@ import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'mentor_avatar.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -40,26 +41,12 @@ class ChatsScreen extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, MentorChat chat) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Удалить чат?'),
-        content: Text('«${chat.title}» будет удалён безвозвратно.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Удалить чат?',
+      message: '«${chat.title}» будет удалён безвозвратно.',
     );
-    if (ok == true) controller.deleteChat(chat.id);
+    if (ok) controller.deleteChat(chat.id);
   }
 
   void _open(BuildContext context, MentorChat c) {

@@ -15,6 +15,7 @@ import '../main.dart';
 import '../secret_store.dart';
 import 'app_background.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'hugging_face.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -201,32 +202,15 @@ class _LocalAiScreenState extends State<LocalAiScreen> {
   Future<void> _deleteFile(File file) async {
     final active = controller.config.localModelPath == file.path;
     final loaded = _local.loadedPath == file.path;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.panel)),
-        title: const Text('Удалить модель?'),
-        content: Text(
-          active || loaded
-              ? 'Модель сейчас используется. Она будет выгружена и удалена с устройства.'
-              : 'Файл модели будет удалён с устройства. Скачать его можно снова.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Отмена', style: TextStyle(color: C.muted)),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: C.danger),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Удалить модель?',
+      message: active || loaded
+          ? 'Модель сейчас используется. Она будет выгружена и удалена '
+              'с устройства.'
+          : 'Файл модели будет удалён с устройства. Скачать его можно снова.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     await _local.deleteModel(file.path);
     if (active) {
       controller.config.localModelPath = '';

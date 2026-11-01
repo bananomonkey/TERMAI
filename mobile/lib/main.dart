@@ -1,30 +1,30 @@
-// main.dart — TERMAI mobile (Flutter). Сплэш → плашка ключа → карта курсов.
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-
 import 'app_actions.dart';
 import 'download_manager.dart';
 import 'local_ai.dart';
 import 'navigation.dart';
 import 'store.dart';
 import 'theme_refresh.dart';
+import 'update_background.dart';
 import 'ui/app_background.dart';
-import 'ui/dock.dart';
+import 'ui/home_bottom_bar.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
-import 'ui/home_terai_launcher.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
 
 final AppController controller = AppController();
+
 AppLifecycleListener? _downloadLifecycle;
+
 bool diagAutoLesson = false;
 
 void _appendDiag(String entry) {
@@ -58,7 +58,10 @@ Future<void> main() async {
   _installErrorHandlers();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
   _downloadLifecycle = AppLifecycleListener(
-    onResume: () => DownloadManager.instance.refresh(),
+    onResume: () {
+      DownloadManager.instance.refresh();
+      unawaited(controller.checkUpdates(silent: true));
+    },
   );
   // ИИ-наставник получает доступ к действиям приложения.
   final actions = AppActions(controller);
@@ -105,11 +108,14 @@ class BootScreen extends StatefulWidget {
   State<BootScreen> createState() => _BootScreenState();
 }
 
+@NowaGenerated()
 class _BootScreenState extends State<BootScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1200), value: 0)
-    ..repeat(reverse: true);
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+    value: 0.0,
+  )..repeat(reverse: true);
 
   @override
   void initState() {
@@ -120,7 +126,6 @@ class _BootScreenState extends State<BootScreen>
   Future<void> _boot() async {
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
-    // Переносим модели из старой внутренней папки, если она была.
     try {
       final moved = await LocalAiService.instance.migrateLegacyModels();
       final oldPath = controller.config.localModelPath;
@@ -129,22 +134,24 @@ class _BootScreenState extends State<BootScreen>
         await controller.saveConfig(autofill: false);
       }
     } catch (_) {}
-    // Восстанавливаем системные задачи загрузки моделей после перезапуска.
     try {
       await DownloadManager.instance.init();
     } catch (_) {}
     C.p = presetById(controller.config.theme);
     C.buttonBrightness = controller.config.buttonBrightness.clamp(0.6, 1.4);
     unawaited(controller.scheduleNotifications());
-    // диагностика: авто-открытие урока на слайде терминала
-    if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) diagAutoLesson = true;
+    unawaited(initUpdateWorker());
+    unawaited(controller.checkUpdates(silent: true));
+    if (const bool.fromEnvironment('TERMAI_AUTO_LESSON')) {
+      diagAutoLesson = true;
+    }
     await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(pageRoute(
-      controller.config.onboarded
-          ? const HomeScreen()
-          : const OnboardingScreen(),
-    ));
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushReplacement(pageRoute(controller.config.onboarded
+        ? const HomeScreen()
+        : const OnboardingScreen()));
   }
 
   @override
@@ -161,28 +168,39 @@ class _BootScreenState extends State<BootScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ScaleTransition(
-              scale: Tween(begin: 0.96, end: 1.04).animate(
-                CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  'assets/icon/termai.png',
-                  width: 112,
-                  height: 112,
-                  cacheWidth: 224,
-                  fit: BoxFit.cover,
+            FlexSizedBox(
+              width: 258.0,
+              height: 258.0,
+              child: ScaleTransition(
+                scale: Tween(begin: 0.96, end: 1.04).animate(
+                    CurvedAnimation(parent: _pulse, curve: Curves.easeInOut)),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24.0),
+                  child: Image.asset(
+                    'assets/icon/termai.png',
+                    width: 112.0,
+                    height: 112.0,
+                    cacheWidth: 224,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text('тренажёр навыков с ИИ-наставником',
+            const SizedBox(
+              height: 67.0,
+            ),
+            FlexSizedBox(
+              child: Text(
+                'TERMAI',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: C.text,
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w600)),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 67.0,
+                  fontFamily: 'Intel One Mono',
+                  shadows: [],
+                ),
+              ),
+            )
           ],
         ),
       ),
@@ -214,6 +232,8 @@ class _HomeScreenState extends State<HomeScreen> implements PreserveOnTheme {
     return ValueListenableBuilder<int>(
       valueListenable: themeRevision,
       builder: (_, __, ___) => Scaffold(
+        extendBody: true,
+        bottomNavigationBar: const HomeBottomBar(),
         appBar: AppBar(
           toolbarHeight: 56,
           leadingWidth: 60,
@@ -286,23 +306,6 @@ class _HomeScreenState extends State<HomeScreen> implements PreserveOnTheme {
                   }
                 },
                 child: const CourseGraphView(),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
-                    HomeTeraiLauncher(),
-                    Spacer(),
-                    GlassDock(),
-                  ],
-                ),
               ),
             ),
           ]),

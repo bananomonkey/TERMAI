@@ -526,20 +526,52 @@ LocalResult _exec(SandboxState st, List<String> a, String namespace) {
   return LocalResult(true, st.lastOutput);
 }
 
-/// tryVerifyTask — локальная проверка Kubernetes-практики. Возвращает null,
+String? _findSandboxImage(SandboxState st, String ref) {
+  if (st.images.containsKey(ref)) return ref;
+  for (final e in st.images.entries) {
+    final img = e.value;
+    if (img.id == ref || img.id.startsWith(ref)) return e.key;
+    if ('${img.repo}:${img.tag}' == ref || img.repo == ref) return e.key;
+  }
+  return null;
+}
+
+/// tryVerifyTask — локальная проверка практики по реальному состоянию
+/// песочницы: Kubernetes, Docker, файлы и события Git/Linux. Возвращает null,
 /// если задача не содержит машинной проверки и должна идти в ИИ.
-LocalCheck? tryVerifyTask(Task task, SandboxState st) {
+LocalCheck? tryVerifyTask(Task task, SandboxState st,
+    {List<HistEntry> history = const []}) {
   if (task.verify.isEmpty) return null;
   final rawChecks = task.verify['checks'];
   final checks = rawChecks is List
       ? rawChecks.map((e) => _asMap(e)).toList()
       : [task.verify];
+  final transcript = [
+    st.lastOutput,
+    for (final h in history) '${h.cmd}\n${h.out}',
+  ].join('\n').toLowerCase();
+  final eventHay = '${st.events.join('\n')}\n$transcript'.toLowerCase();
   for (final c in checks) {
     if (c.containsKey('last_output_contains')) {
       final needle = c['last_output_contains'].toString().toLowerCase();
-      if (!st.lastOutput.toLowerCase().contains(needle)) {
+      if (!transcript.contains(needle)) {
         return LocalCheck(false,
             'В выводе пока нет «${c['last_output_contains']}». Выполни нужную команду.');
+      }
+      continue;
+    }
+    if (c.containsKey('last_output_regex')) {
+      final raw = c['last_output_regex'].toString();
+      RegExp re;
+      try {
+        re = RegExp(raw,
+            caseSensitive: c['case_sensitive'] == true, multiLine: true);
+      } catch (_) {
+        return const LocalCheck(false, 'Ошибка в критерии проверки вывода.');
+      }
+      if (!re.hasMatch(transcript)) {
+        return const LocalCheck(
+            false, 'В выводе пока нет нужной структуры. Выполни задание.');
       }
       continue;
     }
@@ -560,10 +592,178 @@ LocalCheck? tryVerifyTask(Task task, SandboxState st) {
       }
       continue;
     }
+    if (c.containsKey('file_regex')) {
+      final file = c['file_regex'].toString();
+      final body = st.files[file] ?? '';
+      final raw = c['pattern']?.toString() ?? c['text']?.toString() ?? '';
+      RegExp re;
+      try {
+        re = RegExp(raw,
+            caseSensitive: c['case_sensitive'] == true, multiLine: true);
+      } catch (_) {
+        return const LocalCheck(false, 'Ошибка в критерии проверки файла.');
+      }
+      if (!re.hasMatch(body)) {
+        return LocalCheck(false, 'В файле «$file» ещё нет нужной структуры.');
+      }
+      continue;
+    }
+    if (c.containsKey('image') || c.containsKey('image_exists')) {
+      final ref = (c['image'] ?? c['image_exists']).toString();
+      final key = _findSandboxImage(st, ref);
+      if (key == null) {
+        return LocalCheck(false, 'Образ «$ref» пока не собран.');
+      }
+      final image = st.images[key]!;
+      if (c.containsKey('tag') && image.tag != c['tag'].toString()) {
+        return LocalCheck(
+            false, 'У образа «$ref» тег ${image.tag}, ожидается ${c['tag']}.');
+      }
+      if (c.containsKey('entrypoint_contains') &&
+          !image.entrypoint
+              .toLowerCase()
+              .contains(c['entrypoint_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'В ENTRYPOINT образа «$ref» нет нужной команды.');
+      }
+      if (c.containsKey('cmd_contains') &&
+          !image.cmd
+              .toLowerCase()
+              .contains(c['cmd_contains'].toString().toLowerCase())) {
+        return LocalCheck(false, 'В CMD образа «$ref» нет нужной команды.');
+      }
+      if (c.containsKey('env_contains')) {
+        final needles = c['env_contains'] is List
+            ? (c['env_contains'] as List).map((e) => e.toString()).toList()
+            : [c['env_contains'].toString()];
+        final env = image.env.join('\n').toLowerCase();
+        for (final n in needles) {
+          if (!env.contains(n.toLowerCase())) {
+            return LocalCheck(false, 'В окружении образа «$ref» нет «$n».');
+          }
+        }
+      }
+      if (c.containsKey('size_mb_lt') &&
+          image.sizeMb >= (c['size_mb_lt'] as num)) {
+        return LocalCheck(false,
+            'Образ «$ref» весит ${image.sizeMb.round()} МБ, нужно меньше ${c['size_mb_lt']} МБ.');
+      }
+      if (c.containsKey('layers_count_gte') &&
+          image.layers.length < (c['layers_count_gte'] as num)) {
+        return LocalCheck(
+            false, 'У образа «$ref» меньше слоёв, чем нужно для задания.');
+      }
+      if (c.containsKey('layers_contains')) {
+        final needles = c['layers_contains'] is List
+            ? (c['layers_contains'] as List).map((e) => e.toString()).toList()
+            : [c['layers_contains'].toString()];
+        final layers = image.layers.join('\n').toLowerCase();
+        for (final n in needles) {
+          if (!layers.contains(n.toLowerCase())) {
+            return LocalCheck(false, 'В слоях образа «$ref» нет «$n».');
+          }
+        }
+      }
+      if (c.containsKey('layers_first_contains')) {
+        final first = image.layers.isEmpty ? '' : image.layers.first;
+        if (!first
+            .toLowerCase()
+            .contains(c['layers_first_contains'].toString().toLowerCase())) {
+          return LocalCheck(
+              false, 'Первый слой образа «$ref» не та база, которая нужна.');
+        }
+      }
+      continue;
+    }
+    if (c.containsKey('container') || c.containsKey('container_exists')) {
+      final name = (c['container'] ?? c['container_exists']).toString();
+      final box = st.containers[name];
+      if (box == null) {
+        return LocalCheck(false, 'Контейнер «$name» пока не запущен.');
+      }
+      if (c.containsKey('status') && box.status != c['status'].toString()) {
+        return LocalCheck(false,
+            'Контейнер «$name» в статусе ${box.status}, ожидается ${c['status']}.');
+      }
+      if (c.containsKey('image_contains') &&
+          !box.image
+              .toLowerCase()
+              .contains(c['image_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'Контейнер «$name» запущен не из нужного образа.');
+      }
+      if (c.containsKey('ports_contains') &&
+          !box.ports
+              .toLowerCase()
+              .contains(c['ports_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'У контейнера «$name» не тот проброс портов: ${box.ports}.');
+      }
+      if (c.containsKey('mounts_contains') &&
+          !box.mounts
+              .join('\n')
+              .toLowerCase()
+              .contains(c['mounts_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'У контейнера «$name» нет нужного монтирования.');
+      }
+      if (c.containsKey('networks_contains') &&
+          !box.networks
+              .join('\n')
+              .toLowerCase()
+              .contains(c['networks_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'Контейнер «$name» не подключён к нужной сети.');
+      }
+      if (c.containsKey('execs_contains') &&
+          !box.execs
+              .join('\n')
+              .toLowerCase()
+              .contains(c['execs_contains'].toString().toLowerCase())) {
+        return LocalCheck(
+            false, 'Внутри контейнера «$name» не выполнена нужная команда.');
+      }
+      if (c['logs_viewed'] == true && !box.logsViewed) {
+        return LocalCheck(false, 'Логи контейнера «$name» ещё не просмотрены.');
+      }
+      continue;
+    }
+    if (c.containsKey('any_container_image_contains')) {
+      final needle = c['any_container_image_contains'].toString().toLowerCase();
+      final found = st.containers.values
+          .any((box) => box.image.toLowerCase().contains(needle));
+      if (!found) {
+        return LocalCheck(
+            false, 'Нет запущенного контейнера из образа «$needle».');
+      }
+      continue;
+    }
+    if (c.containsKey('any_container_name_contains')) {
+      final needle = c['any_container_name_contains'].toString().toLowerCase();
+      final found =
+          st.containers.keys.any((name) => name.toLowerCase().contains(needle));
+      if (!found) {
+        return LocalCheck(false, 'Нет контейнера с именем «$needle».');
+      }
+      continue;
+    }
+    if (c.containsKey('volume_exists')) {
+      final name = c['volume_exists'].toString();
+      if (!st.volumes.containsKey(name)) {
+        return LocalCheck(false, 'Том «$name» пока не создан.');
+      }
+      continue;
+    }
+    if (c.containsKey('network_exists')) {
+      final name = c['network_exists'].toString();
+      if (!st.networks.contains(name)) {
+        return LocalCheck(false, 'Сеть «$name» пока не создана.');
+      }
+      continue;
+    }
     if (c.containsKey('event_contains')) {
       final needle = c['event_contains'].toString().toLowerCase();
-      final hay = st.events.join('\n').toLowerCase();
-      if (!hay.contains(needle)) {
+      if (!eventHay.contains(needle)) {
         return LocalCheck(
             false, 'Команда ещё не оставила нужный след в песочнице.');
       }

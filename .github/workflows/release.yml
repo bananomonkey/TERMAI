@@ -10,8 +10,29 @@ permissions:
   contents: write
 
 jobs:
-  android:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Pub get
+        run: flutter pub get
+        working-directory: mobile
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        working-directory: mobile
+      - name: Tests
+        run: flutter test
+        working-directory: mobile
+
+  android:
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}

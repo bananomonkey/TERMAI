@@ -77,6 +77,36 @@ class NotificationService {
     }
   }
 
+  /// showUpdate — уведомление о новой версии. Не показывает дубль: решение
+  /// принимает UpdateService.shouldNotify() по сохранённому last_notified.
+  Future<bool> showUpdate(String version, String notes) async {
+    try {
+      await init();
+      if (!await areEnabled()) return false;
+      final body = notes.trim().isEmpty
+          ? 'Открой TERMAI и установи обновление из GitHub.'
+          : notes.trim().replaceAll(RegExp(r'\s+'), ' ');
+      await _plugin.show(
+        1001,
+        'TERMAI $version доступна',
+        body.length > 180 ? '${body.substring(0, 177)}…' : body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'updates',
+            'Обновления',
+            channelDescription: 'Новая версия TERMAI на GitHub',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> areEnabled() async {
     try {
       await init();
@@ -152,9 +182,8 @@ class NotificationService {
 
     final day = DateTime.now().difference(DateTime(2020)).inDays;
     final base = dailyReminders[day % dailyReminders.length];
-    final text = streak > 0
-        ? '$userName, $base Серия: $streak дн.'
-        : '$userName, $base';
+    final text =
+        streak > 0 ? '$userName, $base Серия: $streak дн.' : '$userName, $base';
     await _plugin.zonedSchedule(
       1,
       'TERMAI — Термай ждёт',

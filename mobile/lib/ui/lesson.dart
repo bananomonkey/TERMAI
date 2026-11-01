@@ -5,11 +5,14 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../editor_verify.dart';
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
 import 'chat.dart';
+import 'design_system.dart';
+import 'dialogs.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -20,7 +23,8 @@ class LessonScreen extends StatefulWidget {
 }
 
 class _LessonScreenState extends State<LessonScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  DateTime? _studySince;
   String _search = '';
   List<int> _answers = const [];
   String _answersFor = '';
@@ -32,6 +36,8 @@ class _LessonScreenState extends State<LessonScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startStudy();
     if (diagAutoLesson) _tabIdx = 2;
     _lastSlideSeq = controller.lessonSlideSeq;
     if (controller.lessonSlideRequest >= 0) {
@@ -57,10 +63,8 @@ class _LessonScreenState extends State<LessonScreen>
     }
     if (controller.lessonSlideSeq != _lastSlideSeq) {
       _lastSlideSeq = controller.lessonSlideSeq;
-      final last =
-          (controller.cur.isTheory || (controller.currentTask?.isExam ?? false))
-              ? 2
-              : 3;
+      final task = controller.currentTask;
+      final last = task == null ? 2 : _slideNames(task).length - 1;
       final req = controller.lessonSlideRequest.clamp(0, last).toInt();
       controller.lessonSlideRequest = -1;
       if (mounted) setState(() => _tabIdx = req);
@@ -74,8 +78,39 @@ class _LessonScreenState extends State<LessonScreen>
     _answers = List.filled(t?.quiz.length ?? 0, -1, growable: false);
   }
 
+  List<String> _slideNames(Task t) {
+    if (t.hasEditor) return const ['Справка', 'Задача', 'Редактор', 'Решение'];
+    return (controller.cur.isTheory || t.isExam)
+        ? const ['Справка', 'Задача', 'Решение']
+        : const ['Справка', 'Задача', 'Терминал', 'Решение'];
+  }
+
+  void _startStudy() {
+    if (controller.currentTask == null) return;
+    _studySince ??= DateTime.now();
+  }
+
+  void _pauseStudy() {
+    final start = _studySince;
+    _studySince = null;
+    if (start == null) return;
+    final seconds = DateTime.now().difference(start).inSeconds;
+    if (seconds > 0) unawaited(controller.addStudySeconds(seconds));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startStudy();
+    } else {
+      _pauseStudy();
+    }
+  }
+
   @override
   void dispose() {
+    _pauseStudy();
+    WidgetsBinding.instance.removeObserver(this);
     controller.removeListener(_onController);
     super.dispose();
   }
@@ -253,11 +288,10 @@ class _LessonScreenState extends State<LessonScreen>
               _answers = List.filled(t.quiz.length, -1);
             }
             // своя строка слайдов: TabBar падал с null-check и рендерил серую заглушку.
-            // В курсах-теориях терминал не нужен — остаются справка, задача и решение.
+            // В курсах-теориях терминал не нужен; задачи с editor получают
+            // отдельный слайд «Редактор» вместо терминала.
             final theory = controller.cur.isTheory || t.isExam;
-            final slideNames = theory
-                ? ['Справка', 'Задача', 'Решение']
-                : ['Справка', 'Задача', 'Терминал', 'Решение'];
+            final slideNames = _slideNames(t);
             final last = slideNames.length - 1;
             final current = _tabIdx.clamp(0, last);
             return Column(
@@ -314,7 +348,18 @@ class _LessonScreenState extends State<LessonScreen>
                               onSnack: _snack,
                             ),
                           ),
-                          if (theory)
+                          if (t.hasEditor) ...[
+                            _LiveSlide(
+                              active: current == 2,
+                              builder: () =>
+                                  _EditorSlide(t: t, onSnack: _snack),
+                            ),
+                            _LiveSlide(
+                              active: current == 3,
+                              builder: () =>
+                                  _SolutionSlide(t: t, onSnack: _snack),
+                            ),
+                          ] else if (theory)
                             _LiveSlide(
                               active: current == 2,
                               builder: () =>
@@ -505,6 +550,26 @@ class _TaskSlide extends StatelessWidget {
             MarkdownBody(data: t.goal, styleSheet: mdStyle()),
           ]),
         ),
+        if (t.check.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          cardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                caption('Критерий проверки', color: C.secondary),
+                const SizedBox(height: 5),
+                Text(t.check,
+                    style:
+                        TextStyle(fontSize: 12.5, height: 1.4, color: C.text)),
+                if (t.expected.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text('Ожидаемый результат: ${t.expected}',
+                      style: AppText.caption.copyWith(color: C.muted)),
+                ],
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Row(children: [
           Expanded(
@@ -674,6 +739,274 @@ class _HintTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ---------- слайд 3: Редактор YAML/кода ----------
+
+class _EditorSlide extends StatefulWidget {
+  final Task t;
+  final void Function(String) onSnack;
+  const _EditorSlide({required this.t, required this.onSnack});
+
+  @override
+  State<_EditorSlide> createState() => _EditorSlideState();
+}
+
+class _EditorSlideState extends State<_EditorSlide> {
+  late _CodeController _text;
+  Timer? _timer;
+  EditorCheck? _check;
+  bool _submitting = false;
+  String _lastSaved = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _text = _CodeController(
+      controller.editorDraft(widget.t),
+      widget.t.editorLanguage,
+    )..addListener(_changed);
+    _lastSaved = _text.text;
+    _validate();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditorSlide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.t.id != widget.t.id) {
+      _timer?.cancel();
+      if (_text.text != _lastSaved) {
+        controller.saveEditorDraft(oldWidget.t, _text.text);
+      }
+      _text
+        ..removeListener(_changed)
+        ..dispose();
+      _text = _CodeController(
+        controller.editorDraft(widget.t),
+        widget.t.editorLanguage,
+      )..addListener(_changed);
+      _lastSaved = _text.text;
+      _check = null;
+      _validate();
+    }
+  }
+
+  void _changed() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 380), () {
+      controller.saveEditorDraft(widget.t, _text.text);
+      _lastSaved = _text.text;
+      _validate();
+    });
+  }
+
+  void _validate() {
+    final result = verifyEditorTask(widget.t, _text.text);
+    if (mounted) setState(() => _check = result);
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    final err = await controller.submitEditorTask(widget.t, _text.text);
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (err.isNotEmpty) {
+      widget.onSnack(err);
+    } else {
+      widget.onSnack('✓ Проверка пройдена');
+    }
+  }
+
+  Future<void> _reset() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Сбросить редактор?',
+      message: 'Черновик вернётся к исходному шаблону.',
+      confirmLabel: 'Сбросить',
+      destructive: false,
+    );
+    if (!ok) return;
+    _text.text = widget.t.editorStarter;
+    controller.saveEditorDraft(widget.t, _text.text);
+    _lastSaved = _text.text;
+    _validate();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    if (_text.text != _lastSaved) {
+      controller.saveEditorDraft(widget.t, _text.text);
+    }
+    _text.removeListener(_changed);
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = widget.t.editorLanguage.toUpperCase();
+    final check = _check;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 140),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Icon(Icons.code, size: 17, color: C.accent),
+              const SizedBox(width: 7),
+              Text('$language-редактор',
+                  style: AppText.section.copyWith(color: C.accent)),
+              const Spacer(),
+              if (check != null && check.ok)
+                Icon(Icons.check_circle_outline, size: 17, color: C.good),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+              'Проверяется структура, а не только слова. Ошибка покажет '
+              'строку и позицию.',
+              style: AppText.caption.copyWith(color: C.muted),
+            ),
+            if (check != null && !check.ok) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: C.warn.withAlpha(22),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: C.warn.withAlpha(90)),
+                ),
+                child: Text(check.message,
+                    style:
+                        TextStyle(fontSize: 11.5, height: 1.3, color: C.text)),
+              ),
+            ],
+            if (check != null && check.ok) ...[
+              const SizedBox(height: 6),
+              Text('Структура в порядке. Можно проверять задачу.',
+                  style: TextStyle(fontSize: 11.5, color: C.good)),
+            ],
+            const SizedBox(height: 8),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: C.termBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: (check?.ok == false) ? C.warn : C.border,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: TextField(
+                  key: const ValueKey('editor-field'),
+                  controller: _text,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  keyboardType: TextInputType.multiline,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    height: 1.5,
+                    color: C.text,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.all(12),
+                    hintText: '# введи конфигурацию…',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              OutlinedButton(
+                onPressed: _reset,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(92, 44),
+                ),
+                child: const Text('Сбросить'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _submitting ? null : _submit,
+                  child: Text(_submitting
+                      ? 'Проверяю…'
+                      : 'Проверить ${language.isEmpty ? 'код' : language}'),
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CodeController extends TextEditingController {
+  final String language;
+  _CodeController(String text, this.language) : super(text: text);
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (withComposing || language != 'yaml' || text.isEmpty) {
+      return super.buildTextSpan(
+          context: context, style: style, withComposing: withComposing);
+    }
+    final base = style ?? TextStyle(color: C.text);
+    final spans = <TextSpan>[];
+    final lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final trimmed = line.trimLeft();
+      if (trimmed.startsWith('#')) {
+        spans.add(TextSpan(
+            text: line,
+            style: base.copyWith(color: C.muted, fontStyle: FontStyle.italic)));
+      } else {
+        final m = RegExp(r'^(\s*)(-\s+)?([^:#\n]+?)(:)(.*)$').firstMatch(line);
+        if (m != null) {
+          spans.add(TextSpan(text: m.group(1) ?? '', style: base));
+          if ((m.group(2) ?? '').isNotEmpty) {
+            spans.add(TextSpan(
+                text: m.group(2), style: base.copyWith(color: C.accent)));
+          }
+          spans.add(TextSpan(
+              text: m.group(3),
+              style: base.copyWith(
+                  color: C.secondary, fontWeight: FontWeight.w700)));
+          spans.add(
+              TextSpan(text: m.group(4), style: base.copyWith(color: C.muted)));
+          final value = m.group(5) ?? '';
+          spans.add(TextSpan(
+              text: value,
+              style: base.copyWith(
+                color: value.trim().startsWith('#') ? C.muted : C.text,
+                fontStyle: value.trim().startsWith('#')
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+              )));
+        } else {
+          spans.add(TextSpan(text: line, style: base));
+        }
+      }
+      if (i < lines.length - 1) spans.add(TextSpan(text: '\n', style: base));
+    }
+    return TextSpan(style: base, children: spans);
   }
 }
 

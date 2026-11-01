@@ -7,9 +7,8 @@ import 'package:termai/main.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/app_background.dart';
 import 'package:termai/ui/chat.dart';
-import 'package:termai/ui/dock.dart';
 import 'package:termai/ui/home.dart';
-import 'package:termai/ui/home_terai_launcher.dart';
+import 'package:termai/ui/home_bottom_bar.dart';
 import 'package:termai/ui/lesson.dart';
 import 'package:termai/ui/onboarding.dart';
 import 'package:termai/ui/progress_map.dart';
@@ -112,9 +111,12 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.byType(HomeTeraiLauncher), findsOneWidget);
+    expect(find.byType(HomeBottomBar), findsOneWidget);
     expect(find.byTooltip('Открыть чат с Термаем'), findsOneWidget);
-    expect(find.byType(GlassDock), findsOneWidget);
+    expect(find.byTooltip('Статистика'), findsOneWidget);
+    expect(find.byTooltip('Карта прогресса'), findsOneWidget);
+    expect(find.byTooltip('Архив курсов'), findsOneWidget);
+    expect(find.byTooltip('Расход токенов'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Открыть чат с Термаем'));
     await tester.pumpAndSettle();
@@ -343,6 +345,85 @@ void main() {
     final b1 = tester.getTopLeft(find.text('Вторая команда'));
     expect(a1, isNot(a0));
     expect((b1 - b0).distance, lessThan(1.0));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('yaml editor validates structure and keeps a draft',
+      (tester) async {
+    final temp = Directory.systemTemp.createTempSync('termai-editor-');
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathChannel, (call) async {
+      if (call.method == 'getApplicationDocumentsDirectory') return temp.path;
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathChannel, null);
+      temp.deleteSync(recursive: true);
+    });
+    controller.config = Config()
+      ..directions = ['devops']
+      ..activeDirection = 'devops';
+    controller.prog = Progress();
+    final task = Task(
+      id: 'yaml',
+      title: 'Workflow',
+      kind: 'yaml',
+      goal: 'Собери workflow',
+      check: 'Нужен шаг checkout',
+      editor: {
+        'language': 'yaml',
+        'starter': 'name: CI\non: [push]\n',
+      },
+      verify: {
+        'checks': [
+          {'yaml_path': 'jobs.build.runs-on', 'equals': 'ubuntu-latest'},
+          {
+            'yaml_path': 'jobs.build.steps',
+            'list_item_contains': 'actions/checkout@v4',
+          },
+        ],
+      },
+    );
+    final course = Course(
+      id: 'cicd',
+      title: 'CI/CD',
+      category: 'professions',
+      direction: 'devops',
+      mode: 'theory',
+      tasks: [task],
+    );
+    controller.courses = [course];
+    controller.allCourses = [course];
+    controller.courseIdx = 0;
+    controller.viewIdx = 0;
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: const LessonScreen(),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('Редактор'));
+    await tester.pump();
+
+    final editor = find.byKey(const ValueKey('editor-field'));
+    expect(editor, findsOneWidget);
+    await tester.enterText(editor,
+        'name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(controller.prog.drafts['cicd|yaml'], contains('runs-on'));
+    expect(find.textContaining('В YAML нет пути'), findsOneWidget);
+
+    await tester.enterText(
+        editor,
+        'name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n'
+        '    steps:\n      - uses: actions/checkout@v4\n');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Структура в порядке. Можно проверять задачу.'),
+        findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 220));
     expect(tester.takeException(), isNull);
   });
 

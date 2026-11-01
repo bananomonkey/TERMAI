@@ -1,47 +1,41 @@
-// archive.dart — архив курсов: сюда курс убирают, отсюда возвращают.
-// Прогресс и чаты курса не теряются, пока курс лежит в архиве.
 import 'package:flutter/material.dart';
-
 import '../main.dart';
 import '../models.dart';
 import '../store.dart';
 import 'app_background.dart';
 import 'design_system.dart';
+import 'dialogs.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
 
+@NowaGenerated()
 class ArchiveScreen extends StatelessWidget {
+  @NowaGenerated({'loader': 'auto-constructor'})
   const ArchiveScreen({super.key});
 
   Future<void> _rename(BuildContext context, Course c) async {
-    final t = await askText(context, 'Переименовать курс', 'новое название',
-        initial: c.title);
-    if (t != null && t.isNotEmpty) controller.renameCourseById(c.id, t);
+    final t = await askText(
+      context,
+      'Переименовать курс',
+      'новое название',
+      initial: c.title,
+    );
+    if (t != null && t.isNotEmpty) {
+      controller.renameCourseById(c.id, t);
+    }
   }
 
   Future<void> _delete(BuildContext context, Course c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Удалить навсегда?'),
-        content: Text(
-            '«${c.title}» исчезнет вместе со своими задачами. Прогресс по нему останется в статистике.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена', style: TextStyle(color: C.muted))),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: C.danger, minimumSize: const Size(64, 42)),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Удалить навсегда?',
+      message:
+          '«${c.title}» исчезнет вместе со своими задачами. Прогресс по нему останется в статистике.',
     );
-    if (ok == true) controller.deleteArchivedCourse(c.id);
+    if (ok) {
+      controller.deleteArchivedCourse(c.id);
+    }
   }
 
   @override
@@ -49,7 +43,10 @@ class ArchiveScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Архив курсов', style: AppText.screenTitle),
+        title: const Text(
+          'Архив курсов',
+          style: AppText.screenTitle,
+        ),
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -65,13 +62,16 @@ class ArchiveScreen extends StatelessWidget {
               );
             }
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              padding: const EdgeInsets.fromLTRB(
+                16.0,
+                12.0,
+                16.0,
+                28.0,
+              ),
               children: [
-                Text(
-                  'Спрятанные курсы: ${list.length}. Прогресс сохранён — верни любой.',
-                  style: TextStyle(fontSize: 12.5, color: C.muted),
+                const SizedBox(
+                  height: 14.0,
                 ),
-                const SizedBox(height: 14),
                 for (final c in list) ...[
                   _ArchiveTile(
                     course: c,
@@ -79,8 +79,10 @@ class ArchiveScreen extends StatelessWidget {
                     onDelete: () => _delete(context, c),
                     onRename: () => _rename(context, c),
                   ),
-                  const SizedBox(height: 10),
-                ],
+                  const SizedBox(
+                    height: 10.0,
+                  )
+                ]
               ],
             );
           },
