@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import 'design_system.dart';
+import 'direction_picker.dart';
 import 'help.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -16,6 +18,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
   final _key = TextEditingController(text: controller.config.apiKey);
   final _name = TextEditingController(text: controller.config.userName);
+  final _selected = <String>{'devops'};
   int _idx = 0;
   bool _starting = false;
   bool _showKey = false;
@@ -34,11 +37,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (saveKey) controller.config.apiKey = _key.text.trim();
     controller.config.userName = _name.text.trim();
     controller.config.onboarded = true;
+    if (_selected.isEmpty) _selected.add('devops');
     // даже если запись файла не удалась — пользователь не должен застрять
     try {
-      await controller.saveConfig();
+      await controller.setDirections(_selected, active: _selected.first);
       await controller.scheduleNotifications();
-    } catch (_) {}
+    } catch (_) {
+      try {
+        await controller.saveConfig();
+      } catch (_) {}
+    }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(pageRoute(const HomeScreen()));
   }
@@ -68,7 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           PageView(
             controller: _page,
             onPageChanged: (i) => setState(() => _idx = i),
-            children: [_intro(), _nameStep(), _setup()],
+            children: [_intro(), _directionsStep(), _nameStep(), _setup()],
           ),
           // Кнопки поверх PageView: раньше «Пропустить» лежала ПОД ним
           // и не получала нажатия.
@@ -97,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _dots() => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (var i = 0; i < 3; i++)
+          for (var i = 0; i < 4; i++)
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -113,74 +121,123 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _intro() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 52, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+            child: ClipOval(
               child: Image.asset(
                 'assets/icon/termai.png',
-                width: 108,
-                height: 108,
-                cacheWidth: 216,
+                width: 92,
+                height: 92,
+                cacheWidth: 184,
                 fit: BoxFit.cover,
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 17),
           Center(
             child: Text(
-              'тренажёр навыков с ИИ-наставником',
+              'TERMAI',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.1,
-                color: C.text,
+              style: AppText.section.copyWith(
+                color: C.accent,
+                letterSpacing: 2.4,
               ),
             ),
           ),
-          const SizedBox(height: 26),
-          Text('Учись делать, а не смотреть',
-              style: TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w800, color: C.text)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
-            'Короткие уроки, практика и наставник, который объясняет ошибки. '
-            'Курсы можно собрать под любую цель: языки, Linux, Docker, профессию или школьный предмет.',
-            style: TextStyle(fontSize: 14, height: 1.45, color: C.muted),
+            'Учись делать.',
+            style: TextStyle(
+              fontSize: 31,
+              height: 1.05,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.8,
+              color: C.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Направления, уроки и проверяемая практика — в одном месте.',
+            style: AppText.body.copyWith(color: C.muted),
+          ),
+          const SizedBox(height: 28),
+          const _IntroPoint(
+            number: '01',
+            title: 'Выбери направление',
+            text:
+                'DevOps, английский или Go. Позже можно добавить ещё — прогресс не смешается.',
+          ),
+          const _IntroPoint(
+            number: '02',
+            title: 'Иди по маршруту',
+            text:
+                'Короткие уроки, тесты, терминал и понятная следующая задача.',
+          ),
+          const _IntroPoint(
+            number: '03',
+            title: 'Спроси Термая',
+            text:
+                'Наставник разбирает ошибки, объясняет команды и возвращает к практике.',
           ),
           const SizedBox(height: 22),
-          _FeatureRow(
-            icon: Icons.route_outlined,
-            title: 'Курсы-тропинки',
-            text: 'От базы к цели, с прогрессом и достижениями.',
-          ),
-          _FeatureRow(
-            icon: Icons.psychology_outlined,
-            title: 'ИИ-наставник',
-            text: 'Разбирает ошибки, задаёт вопросы и подсказывает.',
-          ),
-          _FeatureRow(
-            icon: Icons.terminal,
-            title: 'Терминал или теория',
-            text: 'Практика в песочнице — или тесты по любому предмету.',
-          ),
-          _FeatureRow(
-            icon: Icons.cloud_sync_outlined,
-            title: 'Прогресс с собой',
-            text: 'Локально или в Google-аккаунте между устройствами.',
-          ),
-          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               onPressed: _next,
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-              child: const Text('Далее'),
+              child: const Text('Выбрать направление'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(child: _dots()),
+        ],
+      ),
+    );
+  }
+
+  Widget _directionsStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          caption('Шаг 1 из 3 · можно несколько', color: C.accent),
+          const SizedBox(height: 10),
+          Text(
+            'Что учим?',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.4,
+              color: C.text,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'У каждого направления свой маршрут, XP и статистика. '
+            'DevOps + English + Go — нормальный выбор.',
+            style: AppText.body.copyWith(color: C.muted),
+          ),
+          const SizedBox(height: 4),
+          DirectionOptionList(
+            selected: _selected,
+            onToggle: (id) => setState(() {
+              if (_selected.contains(id)) {
+                _selected.remove(id);
+              } else {
+                _selected.add(id);
+              }
+            }),
+            dense: true,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _selected.isEmpty ? null : _next,
+              child: Text(_selected.isEmpty ? 'Выбери хотя бы одно' : 'Далее'),
             ),
           ),
           const SizedBox(height: 10),
@@ -356,42 +413,45 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _FeatureRow extends StatelessWidget {
-  final IconData icon;
-  final String title, text;
-  const _FeatureRow(
-      {required this.icon, required this.title, required this.text});
+class _IntroPoint extends StatelessWidget {
+  final String number, title, text;
+  const _IntroPoint({
+    required this.number,
+    required this.title,
+    required this.text,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: C.card,
-              borderRadius: BorderRadius.circular(12),
+          SizedBox(
+            width: 30,
+            child: Text(
+              number,
+              style: AppText.mono.copyWith(
+                color: C.accent,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            child: Icon(icon, size: 20, color: C.accent),
           ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: C.text)),
+                Text(
+                  title,
+                  style: AppText.title.copyWith(color: C.text),
+                ),
                 const SizedBox(height: 2),
-                Text(text,
-                    style: TextStyle(
-                        fontSize: 12.5, height: 1.35, color: C.muted)),
+                Text(
+                  text,
+                  style: AppText.caption.copyWith(color: C.muted),
+                ),
               ],
             ),
           ),

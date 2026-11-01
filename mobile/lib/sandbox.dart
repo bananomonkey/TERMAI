@@ -1,6 +1,7 @@
 // sandbox.dart — локальный fast-path команд без ИИ (порт local.go):
 // pwd/echo/ls/cat/cd и docker ps/images/volume/network/rm/stop/start/restart/rmi.
 import 'dart:math';
+import 'k8s_sandbox.dart';
 import 'models.dart';
 
 String fakeID(String seed) {
@@ -11,7 +12,9 @@ String fakeID(String seed) {
     h = (h * 0x01000193) & 0xffffffff;
   }
   final r = Random(h).nextInt(0xffffffff);
-  return (h.toRadixString(16).padLeft(8, '0') + r.toRadixString(16).padLeft(8, '0')).substring(0, 12);
+  return (h.toRadixString(16).padLeft(8, '0') +
+          r.toRadixString(16).padLeft(8, '0'))
+      .substring(0, 12);
 }
 
 class LocalResult {
@@ -27,19 +30,23 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
     final inner = tryLocalCommand(redirect.group(1)!, st);
     if (inner != null && inner.handled) {
       final file = redirect.group(3)!;
-      final prev = redirect.group(2) == '>>' && st.files.containsKey(file) ? st.files[file]! : '';
+      final prev = redirect.group(2) == '>>' && st.files.containsKey(file)
+          ? st.files[file]!
+          : '';
       st.files[file] = prev + inner.out;
       return LocalResult(true, '');
     }
     return null;
   }
-  final fields = raw.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+  final fields =
+      raw.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
   if (fields.isEmpty) return null;
   switch (fields[0]) {
     case 'whoami':
       return LocalResult(true, 'user');
     case 'uname':
-      return LocalResult(true, 'Linux termai 6.1.0-generic #1 SMP x86_64 GNU/Linux');
+      return LocalResult(
+          true, 'Linux termai 6.1.0-generic #1 SMP x86_64 GNU/Linux');
     case 'date':
       return LocalResult(true, DateTime.now().toString().substring(0, 19));
     case 'mkdir':
@@ -53,7 +60,10 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
       }
       return LocalResult(true, '');
     case 'rm':
-      final targets = fields.skip(1).where((x) => x != '-r' && x != '-f' && x != '-rf').toList();
+      final targets = fields
+          .skip(1)
+          .where((x) => x != '-r' && x != '-f' && x != '-rf')
+          .toList();
       if (targets.isEmpty) return LocalResult(true, 'rm: missing operand');
       for (final t in targets) {
         st.files.remove(t);
@@ -63,15 +73,21 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
       return LocalResult(true, '');
     case 'mv':
     case 'cp':
-      if (fields.length < 3) return LocalResult(true, fields[0] + ': missing destination');
+      if (fields.length < 3)
+        return LocalResult(true, fields[0] + ': missing destination');
       final src = fields[1], dst = fields[2];
       final body = st.files[src];
       if (body == null && !st.files.containsKey('' + src + '/')) {
-        return LocalResult(true, fields[0] + ': cannot stat ' + src + ': No such file or directory');
+        return LocalResult(true,
+            fields[0] + ': cannot stat ' + src + ': No such file or directory');
       }
       if (st.files.containsKey('' + src + '/')) {
         // перенос каталога
-        st.files = st.files.map((k, v) => MapEntry(k.startsWith('' + src + '/') ? dst + '/' + k.substring(('' + src + '/').length) : k, v));
+        st.files = st.files.map((k, v) => MapEntry(
+            k.startsWith('' + src + '/')
+                ? dst + '/' + k.substring(('' + src + '/').length)
+                : k,
+            v));
         if (fields[0] == 'mv') st.files.remove('' + src + '/');
         st.files['' + dst + '/'] = '';
       } else {
@@ -80,18 +96,32 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
       }
       return LocalResult(true, '');
     case 'grep':
-      if (fields.length < 3) return LocalResult(true, 'usage: grep PATTERN FILE');
+      if (fields.length < 3)
+        return LocalResult(true, 'usage: grep PATTERN FILE');
       final body = st.files[fields[2]];
-      if (body == null) return LocalResult(true, 'grep: ' + fields[2] + ': No such file or directory');
-      final hits = body.split('\n').where((l) => l.contains(fields[1])).toList();
+      if (body == null)
+        return LocalResult(
+            true, 'grep: ' + fields[2] + ': No such file or directory');
+      final hits =
+          body.split('\n').where((l) => l.contains(fields[1])).toList();
       return LocalResult(true, hits.isEmpty ? '' : hits.join('\n'));
     case 'head':
     case 'tail':
-      if (fields.length < 2) return LocalResult(true, 'usage: ' + fields[0] + ' FILE');
+      if (fields.length < 2)
+        return LocalResult(true, 'usage: ' + fields[0] + ' FILE');
       final body = st.files[fields[1]];
-      if (body == null) return LocalResult(true, fields[0] + ': ' + fields[1] + ': No such file or directory');
+      if (body == null)
+        return LocalResult(
+            true, fields[0] + ': ' + fields[1] + ': No such file or directory');
       final lines = body.split('\n');
-      return LocalResult(true, (fields[0] == 'head' ? lines.take(10) : lines.length > 10 ? lines.skip(lines.length - 10) : lines).join('\n'));
+      return LocalResult(
+          true,
+          (fields[0] == 'head'
+                  ? lines.take(10)
+                  : lines.length > 10
+                      ? lines.skip(lines.length - 10)
+                      : lines)
+              .join('\n'));
     case 'git':
       return _git(fields.sublist(1), st);
     case 'pwd':
@@ -99,18 +129,24 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
     case 'echo':
       return LocalResult(true, fields.skip(1).join(' '));
     case 'ls':
-      final prefix = fields.length > 1 ? fields[1].replaceAll(RegExp(r'^/+|/+$'), '') : '';
-      final names = st.files.keys.where((n) => prefix.isEmpty || n.startsWith(prefix)).toList()..sort();
+      final prefix =
+          fields.length > 1 ? fields[1].replaceAll(RegExp(r'^/+|/+$'), '') : '';
+      final names = st.files.keys
+          .where((n) => prefix.isEmpty || n.startsWith(prefix))
+          .toList()
+        ..sort();
       return LocalResult(true, names.join('   '));
     case 'cat':
       if (fields.length < 2) return LocalResult(true, 'cat: missing operand');
       final body = st.files[fields[1]];
-      return LocalResult(true, body ?? 'cat: ${fields[1]}: No such file or directory');
+      return LocalResult(
+          true, body ?? 'cat: ${fields[1]}: No such file or directory');
     case 'cd':
       String target;
       if (fields.length > 1) {
         target = fields[1];
-        if (!target.startsWith('/')) target = '${st.workdir.replaceAll(RegExp(r'/+$'), '')}/$target';
+        if (!target.startsWith('/'))
+          target = '${st.workdir.replaceAll(RegExp(r'/+$'), '')}/$target';
         st.workdir = _clean(target);
       } else {
         st.workdir = '/';
@@ -119,6 +155,8 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
     case 'docker':
       if (fields.length < 2) return null;
       return _localDocker(fields.sublist(1), st);
+    case 'kubectl':
+      return tryKubectl(fields.sublist(1), st);
   }
   return null;
 }
@@ -141,14 +179,18 @@ LocalResult? _localDocker(List<String> a, SandboxState st) {
   switch (a[0]) {
     case 'ps':
       final all = a.length > 1 && (a[1] == '-a' || a[1] == '--all');
-      final b = StringBuffer('CONTAINER ID   IMAGE                  STATUS         PORTS                    NAMES');
+      final b = StringBuffer(
+          'CONTAINER ID   IMAGE                  STATUS         PORTS                    NAMES');
       final names = st.containers.keys.toList()..sort();
       for (final n in names) {
         final c = st.containers[n]!;
         if (!all && c.status != 'running') continue;
         var status = 'Up';
-        if (c.status != 'running') status = c.status.startsWith('exited') ? 'Exited' : 'Exited (${c.status})';
-        b.write('\n${c.id.padRight(14)} ${c.image.padRight(22)} ${status.padRight(14)} ${c.ports.padRight(24)} $n');
+        if (c.status != 'running')
+          status =
+              c.status.startsWith('exited') ? 'Exited' : 'Exited (${c.status})';
+        b.write(
+            '\n${c.id.padRight(14)} ${c.image.padRight(22)} ${status.padRight(14)} ${c.ports.padRight(24)} $n');
       }
       return LocalResult(true, b.toString());
     case 'images':
@@ -157,7 +199,8 @@ LocalResult? _localDocker(List<String> a, SandboxState st) {
       for (final k in keys) {
         final img = st.images[k]!;
         final id = img.id.replaceFirst('sha256:', '');
-        b.write('\n${img.repo.padRight(15)} ${img.tag.padRight(9)} sha256:$id ${img.sizeMb.round()}MB');
+        b.write(
+            '\n${img.repo.padRight(15)} ${img.tag.padRight(9)} sha256:$id ${img.sizeMb.round()}MB');
       }
       return LocalResult(true, b.toString());
     case 'volume':
@@ -171,7 +214,8 @@ LocalResult? _localDocker(List<String> a, SandboxState st) {
       if (a.length < 2 || a[1] != 'ls') return null;
       final b = StringBuffer('NETWORK ID     NAME     DRIVER');
       for (final n in st.networks) {
-        b.write('\n${fakeID('net:$n').padRight(14)} ${n.padRight(8)} ${n == 'none' ? 'null' : n}');
+        b.write(
+            '\n${fakeID('net:$n').padRight(14)} ${n.padRight(8)} ${n == 'none' ? 'null' : n}');
       }
       return LocalResult(true, b.toString());
     case 'rm':
@@ -206,7 +250,8 @@ LocalResult _dockerRM(List<String> args, SandboxState st) {
       targets.add(x);
     }
   }
-  if (targets.isEmpty) return LocalResult(true, '"docker rm" requires at least 1 argument.');
+  if (targets.isEmpty)
+    return LocalResult(true, '"docker rm" requires at least 1 argument.');
   final out = <String>[];
   for (final t in targets) {
     final name = _findContainer(st, t);
@@ -215,7 +260,8 @@ LocalResult _dockerRM(List<String> args, SandboxState st) {
       continue;
     }
     if (st.containers[name]!.status == 'running' && !force) {
-      out.add('Error response from daemon: You cannot remove a running container $name. Stop the container before attempting removal or force remove');
+      out.add(
+          'Error response from daemon: You cannot remove a running container $name. Stop the container before attempting removal or force remove');
       continue;
     }
     st.containers.remove(name);
@@ -224,8 +270,10 @@ LocalResult _dockerRM(List<String> args, SandboxState st) {
   return LocalResult(true, out.join('\n'));
 }
 
-LocalResult _dockerLifecycle(List<String> args, SandboxState st, String cmd, String status) {
-  if (args.isEmpty) return LocalResult(true, '"docker $cmd" requires at least 1 argument.');
+LocalResult _dockerLifecycle(
+    List<String> args, SandboxState st, String cmd, String status) {
+  if (args.isEmpty)
+    return LocalResult(true, '"docker $cmd" requires at least 1 argument.');
   final out = <String>[];
   for (final t in args) {
     final name = _findContainer(st, t);
@@ -250,7 +298,8 @@ String? _findImage(SandboxState st, String ref) {
 }
 
 LocalResult _dockerRMI(List<String> args, SandboxState st) {
-  if (args.isEmpty) return LocalResult(true, '"docker rmi" requires at least 1 argument.');
+  if (args.isEmpty)
+    return LocalResult(true, '"docker rmi" requires at least 1 argument.');
   final out = <String>[];
   for (final t in args) {
     final key = _findImage(st, t);
@@ -284,30 +333,52 @@ LocalResult _git(List<String> args, SandboxState st) {
       st.files[gitDir] = 'ref: refs/heads/main';
       st.files['.git/committed.txt'] = '';
       st.events.add('git init');
-      return LocalResult(true, 'Initialized empty Git repository in /workspace/.git');
+      return LocalResult(
+          true, 'Initialized empty Git repository in /workspace/.git');
     case 'add':
-      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository (or any of the parent directories): .git');
+      if (!st.files.containsKey(gitDir))
+        return LocalResult(true,
+            'fatal: not a git repository (or any of the parent directories): .git');
       st.events.add('git add ' + args.skip(1).join(' '));
       return LocalResult(true, '');
     case 'commit':
-      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
+      if (!st.files.containsKey(gitDir))
+        return LocalResult(true, 'fatal: not a git repository');
       final mi = args.indexOf('-m');
-      final msg = mi >= 0 && mi + 1 < args.length ? args[mi + 1] : '(без сообщения)';
-      st.files['.git/committed.txt'] = st.files.keys.where((k) => !k.startsWith('.git')).join('\n');
+      final msg =
+          mi >= 0 && mi + 1 < args.length ? args[mi + 1] : '(без сообщения)';
+      st.files['.git/committed.txt'] =
+          st.files.keys.where((k) => !k.startsWith('.git')).join('\n');
       final id = fakeID('commit:' + msg + st.events.length.toString());
       st.events.add('commit ' + id + ' ' + msg);
       return LocalResult(true, '[main ' + id.substring(0, 7) + '] ' + msg);
     case 'status':
-      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
-      final committed = (st.files['.git/committed.txt'] ?? '').split('\n').where((s) => s.isNotEmpty).toSet();
-      final untracked = st.files.keys.where((k) => !k.startsWith('.git') && !committed.contains(k)).toList();
-      if (untracked.isEmpty) return LocalResult(true, 'On branch main\nnothing to commit, working tree clean');
-      return LocalResult(true, 'On branch main\nUntracked files:\n' + untracked.map((u) => '  ' + u).join('\n'));
+      if (!st.files.containsKey(gitDir))
+        return LocalResult(true, 'fatal: not a git repository');
+      final committed = (st.files['.git/committed.txt'] ?? '')
+          .split('\n')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      final untracked = st.files.keys
+          .where((k) => !k.startsWith('.git') && !committed.contains(k))
+          .toList();
+      if (untracked.isEmpty)
+        return LocalResult(
+            true, 'On branch main\nnothing to commit, working tree clean');
+      return LocalResult(
+          true,
+          'On branch main\nUntracked files:\n' +
+              untracked.map((u) => '  ' + u).join('\n'));
     case 'log':
-      if (!st.files.containsKey(gitDir)) return LocalResult(true, 'fatal: not a git repository');
-      final commits = st.events.where((e) => e.startsWith('commit ')).toList().reversed;
-      if (commits.isEmpty) return LocalResult(true, 'fatal: your current branch (main) does not have any commits yet');
-      return LocalResult(true, commits.map((c) => c.replaceFirst('commit ', 'commit ')).join('\n'));
+      if (!st.files.containsKey(gitDir))
+        return LocalResult(true, 'fatal: not a git repository');
+      final commits =
+          st.events.where((e) => e.startsWith('commit ')).toList().reversed;
+      if (commits.isEmpty)
+        return LocalResult(true,
+            'fatal: your current branch (main) does not have any commits yet');
+      return LocalResult(true,
+          commits.map((c) => c.replaceFirst('commit ', 'commit ')).join('\n'));
     case 'branch':
       if (args.length > 1) {
         st.events.add('branch ' + args[1]);
@@ -315,5 +386,6 @@ LocalResult _git(List<String> args, SandboxState st) {
       }
       return LocalResult(true, '* main');
   }
-  return LocalResult(true, 'git: ' + (args.isEmpty ? '' : args[0]) + ' — см. help');
+  return LocalResult(
+      true, 'git: ' + (args.isEmpty ? '' : args[0]) + ' — см. help');
 }

@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
 import 'app_action.dart';
 import 'diagnostics.dart';
+import 'directions.dart';
+import 'k8s_sandbox.dart';
 import 'models.dart';
 import 'navigation.dart';
 import 'notifications.dart';
@@ -204,6 +206,10 @@ class AppController extends ChangeNotifier {
     config.reminderMinute = remote.reminderMinute;
     config.aiMotivationEnabled = remote.aiMotivationEnabled;
     config.mascotVisible = remote.mascotVisible;
+    if (remote.directions.isNotEmpty) {
+      config.directions = remote.directions;
+      config.activeDirection = remote.activeDirection;
+    }
     config.customThemes = remote.customThemes;
     config.buttonBrightness = remote.buttonBrightness;
     config.bgBlur = remote.bgBlur;
@@ -223,6 +229,9 @@ class AppController extends ChangeNotifier {
       }
     }
     config.updatedAt = remote.updatedAt;
+    _ensureDirections();
+    _migrateDirectionData();
+    _applyCourseFilter();
     await saveConfig(autofill: false);
     await scheduleNotifications();
   }
@@ -245,32 +254,189 @@ class AppController extends ChangeNotifier {
     for (final c in allCourses) {
       final t = prog.courseTitles[c.id];
       if (t != null && t.isNotEmpty) c.title = t;
+      if (c.direction.isEmpty) c.direction = directionForCourse(c);
+      if (c.category.isEmpty) c.category = categoryForDirection(c.direction);
       // задачи, сгенерированные ИИ, живут в прогрессе — подмешиваем без дублей
       for (final t2 in prog.generated[c.id] ?? <Task>[]) {
         if (!c.tasks.any((x) => x.id == t2.id)) c.tasks.add(t2);
       }
     }
+    _ensureDirections();
+    _migrateDirectionData();
     _applyCourseFilter();
   }
 
-  /// _applyCourseFilter — видимый список: без удалённых и архивных курсов.
+  /// _ensureDirections — старые пользователи получают пространства по своим
+  /// курсам. Новый пользователь выбирает их в онбординге.
+  void _ensureDirections() {
+    final valid = directionCatalog.map((d) => d.id).toSet();
+    var selected =
+        config.directions.where(valid.contains).toSet().toList(growable: true);
+    if (selected.isEmpty) {
+      // Существующий пользователь: DevOps открываем всегда (там появился
+      // Kubernetes), остальные направления — если по ним уже есть прогресс.
+      final ids = <String>{
+        ...prog.completed.keys,
+        ...prog.extraCourses.map((c) => c.id),
+        if (prog.lastCourse.isNotEmpty) prog.lastCourse,
+      };
+      selected.add('devops');
+      for (final d in directionCatalog) {
+        if (d.id == 'devops') continue;
+        if (d.courseIds.any(ids.contains)) selected.add(d.id);
+      }
+      for (final c in allCourses) {
+        if (selected.contains(c.direction)) continue;
+        if (prog.extraCourses.any((e) => e.id == c.id)) {
+          selected.add(c.direction);
+        }
+      }
+    }
+    config.directions = selected;
+    if (!selected.contains(config.activeDirection)) {
+      config.activeDirection = selected.first;
+    }
+  }
+
+  /// _migrateDirectionData — раскладывает старый общий порядок курсов по
+  /// направлениям и считает базовую статистику для уже пройденных задач.
+  void _migrateDirectionData() {
+    if (prog.courseOrderByDirection.isEmpty && prog.courseOrder.isNotEmpty) {
+      for (final id in prog.courseOrder) {
+        final c = allCourses.where((x) => x.id == id).firstOrNull;
+        if (c == null) continue;
+        (prog.courseOrderByDirection[c.direction] ??= []).add(id);
+      }
+    }
+    for (final d in config.directions) {
+      if (prog.directionSolved.containsKey(d)) continue;
+      var solved = 0;
+      var xp = 0;
+      for (final c in allCourses.where((x) => x.direction == d)) {
+        final done = prog.completed[c.id] ?? const <String, bool>{};
+        for (final t in c.tasks) {
+          if (done[t.id] == true) {
+            solved++;
+            if (!t.peeked) xp += t.xp;
+          }
+        }
+      }
+      prog.directionSolved[d] = solved;
+      prog.directionXp[d] = xp;
+    }
+  }
+
+  /// _applyCourseFilter — видимый список активного направления: без
+  /// удалённых и архивных курсов, в пользовательском или дорожном порядке.
   void _applyCourseFilter() {
+    final dir = config.activeDirection;
+    for (final c in allCourses) {
+      if (c.direction.isEmpty) c.direction = directionForCourse(c);
+      if (c.category.isEmpty) c.category = categoryForDirection(c.direction);
+    }
     courses = allCourses
         .where((c) =>
-            !prog.hiddenCourses.contains(c.id) && !prog.archived.contains(c.id))
+            c.direction == dir &&
+            !prog.hiddenCourses.contains(c.id) &&
+            !prog.archived.contains(c.id))
         .toList();
-    if (prog.courseOrder.isNotEmpty) {
-      courses.sort((a, b) {
-        final ia = prog.courseOrder.indexOf(a.id),
-            ib = prog.courseOrder.indexOf(b.id);
+    final order = prog.courseOrderByDirection[dir] ?? const <String>[];
+    final roadmap = directionById(dir)?.courseIds ?? const <String>[];
+    courses.sort((a, b) {
+      final ia = order.indexOf(a.id);
+      final ib = order.indexOf(b.id);
+      if (ia != ib && (ia >= 0 || ib >= 0)) {
         return (ia < 0 ? 9999 : ia).compareTo(ib < 0 ? 9999 : ib);
-      });
-    }
-    if (prog.lastCourse.isNotEmpty) {
+      }
+      final ra = roadmap.indexOf(a.id);
+      final rb = roadmap.indexOf(b.id);
+      return (ra < 0 ? 9999 : ra).compareTo(rb < 0 ? 9999 : rb);
+    });
+    final saved = prog.activeCourseByDirection[dir];
+    if (saved != null && saved.isNotEmpty) {
+      final i = courses.indexWhere((c) => c.id == saved);
+      if (i >= 0) courseIdx = i;
+    } else if (prog.lastCourse.isNotEmpty) {
       final i = courses.indexWhere((c) => c.id == prog.lastCourse);
       if (i >= 0) courseIdx = i;
     }
     if (courseIdx >= courses.length) courseIdx = 0;
+    if (courses.isNotEmpty) prog.activeCourseByDirection[dir] = cur.id;
+  }
+
+  List<DirectionDef> get selectedDirections => [
+        for (final d in directionCatalog)
+          if (config.directions.contains(d.id)) d,
+      ];
+
+  DirectionDef? get activeDirectionDef => directionById(config.activeDirection);
+
+  DirectionStats statsForDirection(String id) {
+    final list = allCourses.where((c) => c.direction == id).toList();
+    var solved = 0;
+    var total = 0;
+    for (final c in list) {
+      total += c.tasks.length;
+      final done = prog.completed[c.id] ?? const <String, bool>{};
+      solved += c.tasks.where((t) => done[t.id] == true).length;
+    }
+    final xp = prog.directionXp[id] ?? 0;
+    return DirectionStats(
+      courses: list.length,
+      solved: solved,
+      total: total,
+      xp: xp,
+    );
+  }
+
+  DirectionStats get activeStats => statsForDirection(config.activeDirection);
+
+  Future<void> setDirections(Iterable<String> ids, {String? active}) async {
+    final valid = directionCatalog.map((d) => d.id).toSet();
+    final next = ids.where(valid.contains).toSet().toList();
+    if (next.isEmpty) next.add('devops');
+    config.directions = next;
+    config.activeDirection =
+        active != null && next.contains(active) ? active : next.first;
+    _migrateDirectionData();
+    prog.activeCourseByDirection.putIfAbsent(config.activeDirection,
+        () => directionById(config.activeDirection)?.defaultCourseId ?? '');
+    _applyCourseFilter();
+    resetCourseState();
+    bindChatForCurrentTask();
+    await saveConfig(autofill: false);
+    await saveProgress();
+    notifyListeners();
+  }
+
+  Future<void> switchDirection(String id) async {
+    if (!config.directions.contains(id) || id == config.activeDirection) return;
+    config.activeDirection = id;
+    courseIdx = 0;
+    viewIdx = 0;
+    termInput.clear();
+    _applyCourseFilter();
+    resetCourseState();
+    bindChatForCurrentTask();
+    await saveConfig(autofill: false);
+    await saveProgress();
+    notifyListeners();
+  }
+
+  void _persistCourseOrder() {
+    prog.courseOrderByDirection[config.activeDirection] =
+        courses.map((c) => c.id).toList();
+    prog.courseOrder = [
+      for (final d in config.directions)
+        ...(prog.courseOrderByDirection[d] ?? const <String>[]),
+    ];
+  }
+
+  void _removeFromCourseOrder(String id) {
+    prog.courseOrder.remove(id);
+    for (final e in prog.courseOrderByDirection.entries) {
+      e.value.remove(id);
+    }
   }
 
   static Future<String> _dataDir() async {
@@ -464,17 +630,6 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> setLauncherPosition(double x, double y) async {
-    config.launcherX = x.clamp(0.0, 1.0);
-    config.launcherY = y.clamp(0.0, 1.0);
-    await saveConfig(autofill: false);
-  }
-
-  Future<void> setMascotVisible(bool value) async {
-    config.mascotVisible = value;
-    await saveConfig(autofill: false);
-  }
-
   /// swapPrimaryWithFallback — мгновенно меняет основную и резервную модели.
   Future<String> swapPrimaryWithFallback(int index) async {
     if (index < 0 || index >= config.fallbacks.length) {
@@ -504,7 +659,7 @@ class AppController extends ChangeNotifier {
     final activeId = courses.isEmpty ? '' : cur.id;
     final item = courses.removeAt(oldIndex);
     courses.insert(newIndex, item);
-    prog.courseOrder = courses.map((c) => c.id).toList();
+    _persistCourseOrder();
     final active = courses.indexWhere((c) => c.id == activeId);
     if (active >= 0) courseIdx = active;
     await saveProgress();
@@ -983,6 +1138,7 @@ extension AppCourses on AppController {
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
+    prog.activeCourseByDirection[config.activeDirection] = cur.id;
     saveProgress();
     resetCourseState();
     bindChatForCurrentTask();
@@ -997,6 +1153,7 @@ extension AppCourses on AppController {
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
+    prog.activeCourseByDirection[config.activeDirection] = cur.id;
     saveProgress();
     resetCourseState();
     bindChatForCurrentTask();
@@ -1054,7 +1211,7 @@ extension AppCourses on AppController {
     }
     if (cmd.toLowerCase() == 'help') {
       termLine(
-          '  Локально и мгновенно: docker ps/ps -a/images/volume ls/network ls/rm/rmi/stop/start/restart, ls, cat, pwd, echo, cd, clear, help.');
+          '  Локально и мгновенно: kubectl get/apply/describe/scale/rollout/logs, docker ps/ps -a/images/volume ls/network ls/rm/rmi/stop/start/restart, ls, cat, pwd, echo, cd, clear, help.');
       termLine(
           '  Всё остальное исполняет ИИ-симулятор. Tab-подсказки и ↑/↓ — история.');
       refreshTerminal();
@@ -1069,6 +1226,7 @@ extension AppCourses on AppController {
     final st = state;
     final local = tryLocalCommand(cmd, st);
     if (local != null && local.handled) {
+      if (local.out.trim().isNotEmpty) st.lastOutput = local.out;
       if (local.out.trim().isNotEmpty) termLine(local.out);
       _pushHist(cmd, local.out);
       refreshTerminal();
@@ -1196,11 +1354,21 @@ extension AppCourses on AppController {
     final task = currentTask;
     if (task == null) return 'Активной задачи нет.';
     if (busy) return '';
-    if (ai == null || !ai!.ready)
-      return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
     if (task.isQuiz && !quizDone(task) && !isDone(task))
       return 'Сначала пройди тест по теории.';
     if (isDone(task)) return 'Эта задача уже решена.';
+    final local = tryVerifyTask(task, state);
+    if (local != null) {
+      if (local.ok) {
+        await _completeTask(task, local.message, task.difficulty);
+        return '';
+      }
+      termLine('  ✗ пока не выполнено: ${local.message}');
+      refreshTerminal();
+      return local.message;
+    }
+    if (ai == null || !ai!.ready)
+      return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
     termBusy = true;
     refreshTerminal();
     try {
@@ -1253,6 +1421,9 @@ extension AppCourses on AppController {
     prog.completed[cur.id] = m;
     prog.xp += xp;
     prog.solvedTotal++;
+    final dir = config.activeDirection;
+    prog.directionXp[dir] = (prog.directionXp[dir] ?? 0) + xp;
+    prog.directionSolved[dir] = (prog.directionSolved[dir] ?? 0) + 1;
     _bumpStreak();
     _checkAchievements();
     await saveProgress();
@@ -1718,6 +1889,8 @@ extension AppCourses on AppController {
     try {
       final news = await ai!.generateCourses(goal);
       for (final c in news) {
+        c.direction = config.activeDirection;
+        c.category = categoryForDirection(c.direction);
         await ai!.ensureCourseFilled(c); // минимум 5 задач в каждом новом курсе
       }
       courses.addAll(news);
@@ -1919,7 +2092,7 @@ extension AppCourses on AppController {
       return;
     final c = courses.removeAt(from);
     courses.insert(to, c);
-    prog.courseOrder = courses.map((x) => x.id).toList();
+    _persistCourseOrder();
     if (courseIdx == from) courseIdx = to;
     saveProgress();
     notifyListeners();
@@ -1935,7 +2108,7 @@ extension AppCourses on AppController {
     } else {
       prog.hiddenCourses.add(c.id);
     }
-    prog.courseOrder = courses.map((x) => x.id).toList();
+    _removeFromCourseOrder(c.id);
     if (wasCurrent) {
       courseIdx = courseIdx.clamp(0, courses.length - 1);
     } else if (i < courseIdx) {
@@ -1965,7 +2138,7 @@ extension AppCourses on AppController {
     final currentId = courses.isEmpty ? '' : cur.id;
     final oldCourseIdx = courseIdx;
     prog.archived.add(id);
-    prog.courseOrder.remove(id);
+    _removeFromCourseOrder(id);
     _applyCourseFilter();
     if (courses.isNotEmpty) {
       // Если архивировали текущий курс, остаёмся на соседнем, а не
@@ -1986,14 +2159,22 @@ extension AppCourses on AppController {
   }
 
   /// unarchiveCourse — вернуть курс из архива в основной список.
-  void unarchiveCourse(String id) {
+  Future<void> unarchiveCourse(String id) async {
     if (!prog.archived.contains(id)) return;
+    final course = allCourses.where((c) => c.id == id).firstOrNull;
+    if (course != null &&
+        course.direction != config.activeDirection &&
+        config.directions.contains(course.direction)) {
+      config.activeDirection = course.direction;
+      await saveConfig(autofill: false);
+    }
     prog.archived.remove(id);
     _applyCourseFilter();
     final i = courses.indexWhere((c) => c.id == id);
     if (i >= 0) {
       courseIdx = i;
       prog.lastCourse = id;
+      prog.activeCourseByDirection[config.activeDirection] = id;
       bindChatForCurrentTask();
     }
     saveProgress();
@@ -2006,7 +2187,7 @@ extension AppCourses on AppController {
     prog.extraCourses.removeWhere((x) => x.id == id);
     allCourses.removeWhere((x) => x.id == id);
     if (!prog.hiddenCourses.contains(id)) prog.hiddenCourses.add(id);
-    prog.courseOrder.remove(id);
+    _removeFromCourseOrder(id);
     _applyCourseFilter();
     saveProgress();
     notifyListeners();
@@ -2046,9 +2227,22 @@ extension AppCourses on AppController {
     return out;
   }
 
-  void reviewFromBookmark(String key) {
+  Future<void> reviewFromBookmark(String key) async {
     final b = prog.bookmarks[key];
     if (b == null) return;
+    final course = allCourses.where((c) => c.id == b.courseId).firstOrNull;
+    if (course == null) {
+      prog.bookmarks.remove(key);
+      saveProgress();
+      return;
+    }
+    if (!config.directions.contains(course.direction)) {
+      config.directions = [...config.directions, course.direction];
+    }
+    if (course.direction != config.activeDirection &&
+        config.directions.contains(course.direction)) {
+      await switchDirection(course.direction);
+    }
     final ci = courses.indexWhere((c) => c.id == b.courseId);
     if (ci < 0) {
       prog.bookmarks.remove(key);

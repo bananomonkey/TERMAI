@@ -88,11 +88,8 @@ class UsageScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
               children: [
-                glass(
-                  radius: 20,
-                  blur: 30,
+                appCard(
                   padding: const EdgeInsets.all(18),
-                  glow: C.glow(color: C.accent, alpha: 55),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -20,7 +20,8 @@ void showMoreSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: C.surface,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.85,
@@ -72,7 +73,8 @@ void showMoreSheet(BuildContext context) {
               if (goal != null && goal.isNotEmpty) {
                 final err = await controller.generateCourses(goal);
                 if (err.isNotEmpty && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(err)));
                 }
               }
             },
@@ -95,7 +97,8 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Своё фото, размытие и затемнение',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context).push(pageRoute(const BackgroundSettingsScreen()));
+              Navigator.of(context)
+                  .push(pageRoute(const BackgroundSettingsScreen()));
             },
           ),
           const SizedBox(height: 8),
@@ -128,8 +131,8 @@ void showMoreSheet(BuildContext context) {
             onTap: () {
               Navigator.pop(ctx);
               controller.clearGeneratedTasks();
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Сгенерированные задачи курса удалены')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Сгенерированные задачи курса удалены')));
             },
           ),
           const SizedBox(height: 8),
@@ -156,7 +159,8 @@ void _confirmReset(BuildContext context) {
       backgroundColor: C.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text('Сбросить весь прогресс?'),
-      content: const Text('Весь прогресс, курсы от ИИ и достижения будут удалены безвозвратно.'),
+      content: const Text(
+          'Весь прогресс, курсы от ИИ и достижения будут удалены безвозвратно.'),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -195,28 +199,30 @@ class _SheetButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: C.button,
-      borderRadius: BorderRadius.circular(14),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
           child: Row(children: [
-            Icon(icon, size: 22, color: danger ? C.danger : C.accent),
-            const SizedBox(width: 13),
+            Icon(icon, size: 20, color: danger ? C.danger : C.muted),
+            const SizedBox(width: 14),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: danger ? C.danger : C.text)),
-                if (subtitle != null)
-                  Text(subtitle!, style: TextStyle(fontSize: 12, color: C.muted)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: danger ? C.danger : C.text)),
+                    if (subtitle != null)
+                      Text(subtitle!,
+                          style: TextStyle(fontSize: 11.5, color: C.muted)),
+                  ]),
             ),
-            chevron(size: 22, color: danger ? C.danger : C.muted),
+            chevron(size: 20, color: danger ? C.danger : C.muted),
           ]),
         ),
       ),
@@ -226,8 +232,14 @@ class _SheetButton extends StatelessWidget {
 
 void _showStats(BuildContext context) {
   final p = controller.prog;
+  final direction = controller.activeDirectionDef;
+  final stats = controller.activeStats;
   final ach = achievementList
-      .map((a) => (p.achieved.containsKey(a.id) ? '✓ ' : '○ ') + a.title + ' — ' + a.desc)
+      .map((a) =>
+          (p.achieved.containsKey(a.id) ? '✓ ' : '○ ') +
+          a.title +
+          ' — ' +
+          a.desc)
       .join('\n');
   showDialog(
     context: context,
@@ -240,10 +252,19 @@ void _showStats(BuildContext context) {
           Text('Уровень ${p.level} · ${p.xp} XP'),
           Text('Решено задач: ${p.solvedTotal}'),
           Text('Серия: ${p.streak} дн. подряд'),
+          if (direction != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${direction.title}: ${stats.solved}/${stats.total} · '
+              '${stats.xp} XP',
+              style: TextStyle(fontSize: 12.5, color: C.muted),
+            ),
+          ],
           const SizedBox(height: 12),
           caption('Достижения', color: C.accent),
           const SizedBox(height: 6),
-          Text(ach, style: TextStyle(fontSize: 12.5, height: 1.6, color: C.muted)),
+          Text(ach,
+              style: TextStyle(fontSize: 12.5, height: 1.6, color: C.muted)),
         ]),
       ),
       actions: [

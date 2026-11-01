@@ -18,10 +18,10 @@ import 'ui/dock.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
 import 'ui/home.dart';
+import 'ui/home_terai_launcher.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
-import 'ui/termai_overlay.dart';
 
 final AppController controller = AppController();
 AppLifecycleListener? _downloadLifecycle;
@@ -92,10 +92,6 @@ class TermaiApp extends StatelessWidget {
         theme: buildTheme(),
         navigatorKey: rootNavigatorKey,
         navigatorObservers: [screenObserver],
-        // Свой слой нужен Tooltip-ам панели: builder находится выше
-        // навигатора, а Tooltip ищет Overlay-предка.
-        builder: (context, child) =>
-            TermaiHost(child: child ?? const SizedBox.shrink()),
         home: const BootScreen(),
       ),
     );
@@ -275,14 +271,38 @@ class _HomeScreenState extends State<HomeScreen> implements PreserveOnTheme {
         ),
         body: AppBackdrop(
           child: Stack(children: [
-            const Positioned.fill(child: CourseGraphView()),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragEnd: (details) {
+                  final v = details.primaryVelocity ?? 0;
+                  if (v.abs() < 260) return;
+                  final dirs = controller.selectedDirections;
+                  final i = dirs.indexWhere(
+                      (d) => d.id == controller.config.activeDirection);
+                  final next = i + (v < 0 ? 1 : -1);
+                  if (i >= 0 && next >= 0 && next < dirs.length) {
+                    controller.switchDirection(dirs[next].id);
+                  }
+                },
+                child: const CourseGraphView(),
+              ),
+            ),
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: SafeArea(
                 top: false,
-                child: const Center(child: GlassDock()),
+                minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: const [
+                    HomeTeraiLauncher(),
+                    Spacer(),
+                    GlassDock(),
+                  ],
+                ),
               ),
             ),
           ]),

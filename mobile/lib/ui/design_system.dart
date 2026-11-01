@@ -149,20 +149,10 @@ Widget appRow({
         ),
         child: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: (iconColor ?? (danger ? C.danger : C.accent)).withAlpha(
-                  C.isLight ? 16 : 22,
-                ),
-                borderRadius: BorderRadius.circular(AppRadius.chip),
-              ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: iconColor ?? (danger ? C.danger : C.accent),
-              ),
+            Icon(
+              icon,
+              size: 19,
+              color: iconColor ?? (danger ? C.danger : C.muted),
             ),
             const SizedBox(width: AppSpace.x3),
             Expanded(

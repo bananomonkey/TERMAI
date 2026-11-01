@@ -133,6 +133,15 @@ class AppActions {
   int _visibleIndex(Course course) =>
       c.courses.indexWhere((x) => x.id == course.id);
 
+  Future<int> _visibleIndexFor(Course course) async {
+    var i = _visibleIndex(course);
+    if (i < 0 && c.config.directions.contains(course.direction)) {
+      await c.switchDirection(course.direction);
+      i = _visibleIndex(course);
+    }
+    return i;
+  }
+
   Future<String> _run(String name, Map<String, dynamic> args) async {
     // Синонимы: модели иногда называют действия по-своему.
     switch (name) {
@@ -577,7 +586,7 @@ class AppActions {
   Future<String> _openCourse(String query) async {
     final course = _findCourse(query);
     if (course == null) return 'курс не найден';
-    final i = _visibleIndex(course);
+    final i = await _visibleIndexFor(course);
     if (i < 0) return 'курс «${course.title}» в архиве — сначала верни его';
     c.switchCourseSilent(i);
     await _openNamed(
@@ -589,7 +598,7 @@ class AppActions {
     if (c.courses.isEmpty) return 'нет доступных курсов';
     Course? target = course.trim().isEmpty ? c.cur : _findCourse(course);
     if (target == null) return 'курс не найден';
-    final i = _visibleIndex(target);
+    final i = await _visibleIndexFor(target);
     if (i < 0) return 'курс «${target.title}» в архиве';
     c.switchCourseSilent(i);
     if (task.trim().isNotEmpty) {
@@ -668,7 +677,7 @@ class AppActions {
   Future<String> _selectCourse(String query) async {
     final course = _findCourse(query);
     if (course == null) return 'курс не найден';
-    final i = _visibleIndex(course);
+    final i = await _visibleIndexFor(course);
     if (i < 0) return 'курс в архиве';
     c.switchCourseSilent(i);
     return '';
@@ -679,7 +688,7 @@ class AppActions {
     final course =
         courseQuery.trim().isEmpty ? c.cur : _findCourse(courseQuery);
     if (course == null) return 'курс не найден';
-    final i = _visibleIndex(course);
+    final i = await _visibleIndexFor(course);
     if (i < 0) return 'курс в архиве';
     c.switchCourseSilent(i);
     final task = _findTask(course, query);
@@ -710,7 +719,7 @@ class AppActions {
   Future<String> _unarchive(String query) async {
     final course = _findCourse(query);
     if (course == null) return 'курс не найден';
-    c.unarchiveCourse(course.id);
+    await c.unarchiveCourse(course.id);
     _toast('«${course.title}» возвращён');
     return '';
   }

@@ -41,15 +41,28 @@ void main() {
   });
 
   test('Course mode and onboarding flag survive JSON round-trip', () {
-    final course = Course(id: 'english', title: 'English A1', mode: 'theory');
+    final course = Course(
+        id: 'english',
+        title: 'English A1',
+        mode: 'theory',
+        category: 'languages',
+        direction: 'english');
     final back = Course.fromJson(course.toJson());
     expect(back.isTheory, isTrue);
+    expect(back.direction, 'english');
+    expect(back.category, 'languages');
 
     final legacy = Course.fromJson({'id': 'linux', 'title': 'Linux'});
     expect(legacy.isTheory, isFalse);
 
-    final cfg = Config()..onboarded = true;
-    expect(Config.fromJson(cfg.toJson()).onboarded, isTrue);
+    final cfg = Config()
+      ..onboarded = true
+      ..directions = ['devops', 'english']
+      ..activeDirection = 'english';
+    final cfgBack = Config.fromJson(cfg.toJson());
+    expect(cfgBack.onboarded, isTrue);
+    expect(cfgBack.directions, ['devops', 'english']);
+    expect(cfgBack.activeDirection, 'english');
   });
 
   test('built-in courses asset parses and has a theory course', () {
@@ -58,14 +71,24 @@ void main() {
     final courses = list.map(Course.fromJson).toList();
     expect(courses.any((c) => c.isTheory), isTrue);
     final english = courses.firstWhere((c) => c.id == 'english-a1');
-    expect(english.tasks, hasLength(3));
+    expect(english.tasks.length, greaterThanOrEqualTo(12));
     expect(english.tasks.every((t) => t.isQuiz), isTrue);
-    expect(english.tasks.every((t) => t.quiz.length == 2), isTrue);
+    expect(english.tasks.every((t) => t.quiz.length >= 2), isTrue);
+    final k8s = courses.firstWhere((c) => c.id == 'kubernetes');
+    expect(k8s.tasks.length, greaterThanOrEqualTo(32));
+    expect(k8s.tasks.where((t) => t.verify.isNotEmpty).length,
+        greaterThanOrEqualTo(30));
   });
 
   test('archive list and token usage survive Progress JSON round-trip', () {
     final p = Progress()
       ..archived = ['linux', 'english-a1']
+      ..courseOrderByDirection = {
+        'devops': ['linux', 'docker']
+      }
+      ..activeCourseByDirection = {'devops': 'docker'}
+      ..directionXp = {'devops': 120}
+      ..directionSolved = {'devops': 4}
       ..aiUsage = {
         'deepseek-chat': [1200, 340],
         'gpt-4o-mini': [50, 10],
@@ -74,6 +97,10 @@ void main() {
     final back = Progress.fromJson(p.toJson());
 
     expect(back.archived, ['linux', 'english-a1']);
+    expect(back.courseOrderByDirection['devops'], ['linux', 'docker']);
+    expect(back.activeCourseByDirection['devops'], 'docker');
+    expect(back.directionXp['devops'], 120);
+    expect(back.directionSolved['devops'], 4);
     expect(back.aiUsage['deepseek-chat'], [1200, 340]);
     expect(back.tokensIn, 1250);
     expect(back.tokensOut, 350);

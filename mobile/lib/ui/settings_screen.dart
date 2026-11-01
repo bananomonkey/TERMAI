@@ -13,6 +13,7 @@ import 'ai_fallbacks.dart';
 import 'app_background.dart';
 import 'background_settings.dart';
 import 'design_system.dart';
+import 'direction_picker.dart';
 import 'help.dart';
 import 'local_ai.dart';
 import 'theme.dart';
@@ -63,6 +64,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Имя сохранено')));
+  }
+
+  Future<void> _pickDirections() async {
+    final selected = await showDirectionPicker(
+      context,
+      selected: controller.config.directions.toSet(),
+    );
+    if (selected == null || !mounted) return;
+    await controller.setDirections(
+      selected,
+      active: controller.config.activeDirection,
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _testNotification() async {
@@ -286,22 +300,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             style: TextStyle(fontSize: 12.5, color: C.accent)),
                       ),
                       const SizedBox(height: 8),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text('Показывать Термая',
-                            style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: C.text)),
-                        subtitle: Text(
-                          'Плавающий персонаж на экранах приложения',
-                          style: TextStyle(fontSize: 11.5, color: C.muted),
-                        ),
-                        value: controller.config.mascotVisible,
-                        activeThumbColor: C.accent,
-                        onChanged: controller.setMascotVisible,
-                      ),
-                      const SizedBox(height: 16),
                       Text('Яркость кнопок',
                           style: TextStyle(fontSize: 12.5, color: C.muted)),
                       Row(children: [
@@ -382,6 +380,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: const Text('Сохранить имя'),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // ---------- направления ----------
+              _SectionTitle('Направления'),
+              _Panel(
+                child: _LinkRow(
+                  icon: Icons.route_outlined,
+                  title: controller.selectedDirections
+                      .map((d) => d.shortTitle)
+                      .join(' · '),
+                  subtitle:
+                      'Выбрано: ${controller.selectedDirections.length}. Можно учить несколько параллельно.',
+                  onTap: _pickDirections,
                 ),
               ),
               const SizedBox(height: 18),
@@ -558,7 +571,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: ExpansionTile(
                             tilePadding:
                                 const EdgeInsets.symmetric(horizontal: 2),
-                            childrenPadding: EdgeInsets.zero,
+                            // Нулевой childrenPadding ставил поле вплотную к
+                            // заголовку: всплывающий label «Модель» уходил
+                            // под header. Верхний inset — часть раскрытия.
+                            childrenPadding:
+                                const EdgeInsets.only(top: AppSpace.x3),
+                            clipBehavior: Clip.none,
                             iconColor: C.muted,
                             collapsedIconColor: C.muted,
                             title: Text(
@@ -855,7 +873,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text('версия 1.20.0',
+                child: Text('версия 1.21.0',
                     style:
                         TextStyle(fontSize: 11, color: C.muted.withAlpha(160))),
               ),

@@ -98,15 +98,6 @@ Widget statusGlyph(bool done, bool current, {double size = 24}) {
         color: color.withAlpha(done || current ? 150 : 80),
         width: 1.2,
       ),
-      boxShadow: current
-          ? [
-              BoxShadow(
-                color: color.withAlpha(45),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ]
-          : null,
     ),
     child: Icon(
       done

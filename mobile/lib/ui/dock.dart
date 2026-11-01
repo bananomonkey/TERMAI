@@ -15,41 +15,38 @@ class GlassDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: glass(
-        radius: 22,
-        blur: 0,
-        background: C.button,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _DockButton(
-              icon: Icons.route_outlined,
-              label: 'Карта',
-              tooltip: 'Карта прогресса',
-              onTap: () => Navigator.of(context)
-                  .push(pageRoute(const ProgressMapScreen())),
-            ),
-            const SizedBox(width: 4),
-            _DockButton(
-              icon: Icons.inventory_2_outlined,
-              label: 'Архив',
-              tooltip: 'Архив курсов',
-              onTap: () =>
-                  Navigator.of(context).push(pageRoute(const ArchiveScreen())),
-            ),
-            const SizedBox(width: 4),
-            _DockButton(
-              icon: Icons.payments_outlined,
-              label: 'Расход',
-              tooltip: 'Расход токенов',
-              onTap: () =>
-                  Navigator.of(context).push(pageRoute(const UsageScreen())),
-            ),
-          ],
-        ),
+    return glass(
+      radius: 22,
+      blur: 0,
+      background: C.button,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _DockButton(
+            icon: Icons.route_outlined,
+            label: 'Карта',
+            tooltip: 'Карта прогресса',
+            onTap: () => Navigator.of(context)
+                .push(pageRoute(const ProgressMapScreen())),
+          ),
+          const SizedBox(width: 4),
+          _DockButton(
+            icon: Icons.inventory_2_outlined,
+            label: 'Архив',
+            tooltip: 'Архив курсов',
+            onTap: () =>
+                Navigator.of(context).push(pageRoute(const ArchiveScreen())),
+          ),
+          const SizedBox(width: 4),
+          _DockButton(
+            icon: Icons.payments_outlined,
+            label: 'Расход',
+            tooltip: 'Расход токенов',
+            onTap: () =>
+                Navigator.of(context).push(pageRoute(const UsageScreen())),
+          ),
+        ],
       ),
     );
   }

@@ -94,6 +94,11 @@ class SandboxState {
   List<String> networks;
   List<String> events;
 
+  /// Мини-кластер Kubernetes для практики: ключ kind/namespace/name.
+  Map<String, Map<String, dynamic>> k8s;
+  List<String> k8sEvents;
+  String lastOutput;
+
   SandboxState({
     this.workdir = '/workspace',
     Map<String, String>? files,
@@ -102,12 +107,17 @@ class SandboxState {
     Map<String, String>? volumes,
     List<String>? networks,
     List<String>? events,
+    Map<String, Map<String, dynamic>>? k8s,
+    List<String>? k8sEvents,
+    this.lastOutput = '',
   })  : files = files ?? {},
         images = images ?? {},
         containers = containers ?? {},
         volumes = volumes ?? {},
         networks = networks ?? ['bridge', 'host', 'none'],
-        events = events ?? [];
+        events = events ?? [],
+        k8s = k8s ?? {},
+        k8sEvents = k8sEvents ?? [];
 
   factory SandboxState.fromJson(Map<String, dynamic> j) => SandboxState(
         workdir: j['workdir'] as String? ?? '/workspace',
@@ -120,6 +130,10 @@ class SandboxState {
         networks: (j['networks'] as List?)?.cast<String>() ??
             ['bridge', 'host', 'none'],
         events: (j['events'] as List?)?.cast<String>() ?? [],
+        k8s: ((j['k8s'] as Map?) ?? {}).map((k, v) =>
+            MapEntry(k as String, (v as Map).cast<String, dynamic>())),
+        k8sEvents: (j['k8s_events'] as List?)?.cast<String>() ?? [],
+        lastOutput: j['last_output'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -130,6 +144,9 @@ class SandboxState {
         'volumes': volumes,
         'networks': networks,
         'events': events,
+        'k8s': k8s,
+        'k8s_events': k8sEvents,
+        if (lastOutput.isNotEmpty) 'last_output': lastOutput,
       };
 
   SandboxState clone() => SandboxState.fromJson(
@@ -169,6 +186,10 @@ class Task {
   bool peeked;
   SandboxState start;
 
+  /// verify — необязательная локальная проверка практики. Для Kubernetes
+  /// она проверяет состояние песочницы без обращения к модели.
+  Map<String, dynamic> verify;
+
   Task({
     required this.id,
     required this.title,
@@ -183,10 +204,12 @@ class Task {
     List<String>? hints,
     List<QuizQ>? quiz,
     SandboxState? start,
+    Map<String, dynamic>? verify,
   })  : theory = theory ?? [],
         hints = hints ?? [],
         quiz = quiz ?? [],
-        start = start ?? SandboxState();
+        start = start ?? SandboxState(),
+        verify = verify ?? {};
 
   factory Task.fromJson(Map<String, dynamic> j) {
     final rawKind = (j['kind'] as String?)?.toLowerCase();
@@ -209,6 +232,7 @@ class Task {
           .toList(),
       start: SandboxState.normalized(
           (j['start_state'] as Map?)?.cast<String, dynamic>() ?? {}),
+      verify: (j['verify'] as Map?)?.cast<String, dynamic>() ?? {},
     );
   }
 
@@ -226,6 +250,7 @@ class Task {
         'solution': solution,
         'peeked': peeked,
         'start_state': start.toJson(),
+        if (verify.isNotEmpty) 'verify': verify,
       };
 
   bool get isQuiz => kind == 'quiz';
@@ -236,6 +261,13 @@ class Task {
 class Course {
   String id, title, desc;
 
+  /// category — languages | programming | professions.
+  String category;
+
+  /// direction — devops | english | go. Старые курсы без поля получают
+  /// направление при загрузке, чтобы прогресс не потерялся.
+  String direction;
+
   /// terminal — практика командами в песочнице; theory — теория, тесты и ментор.
   String mode;
   List<String> syllabus;
@@ -245,6 +277,8 @@ class Course {
     required this.id,
     required this.title,
     this.desc = '',
+    this.category = '',
+    this.direction = '',
     this.mode = 'terminal',
     List<String>? syllabus,
     List<Task>? tasks,
@@ -255,6 +289,8 @@ class Course {
         id: j['id'] as String? ?? '',
         title: j['title'] as String? ?? '',
         desc: j['desc'] as String? ?? '',
+        category: j['category'] as String? ?? '',
+        direction: j['direction'] as String? ?? '',
         mode: (j['mode'] as String?)?.toLowerCase() == 'theory'
             ? 'theory'
             : 'terminal',
@@ -268,6 +304,8 @@ class Course {
         'id': id,
         'title': title,
         'desc': desc,
+        if (category.isNotEmpty) 'category': category,
+        if (direction.isNotEmpty) 'direction': direction,
         'mode': mode,
         'syllabus': syllabus,
         'tasks': tasks.map((t) => t.toJson()).toList(),
@@ -518,6 +556,11 @@ class Config {
   bool ambient;
   bool onboarded;
 
+  /// Выбранные направления и последнее открытое. Пустой список — старый
+  /// пользователь: направления восстановятся по его курсам при загрузке.
+  List<String> directions;
+  String activeDirection;
+
   /// Как обращаться к пользователю. Пусто — «Друг».
   String userName;
 
@@ -532,8 +575,8 @@ class Config {
   List<String> motivationQueue;
   String motivationGeneratedAt;
 
-  /// Позиция плавающей панели Термая: 0..1 от свободной области экрана.
-  /// -1 — позиция по умолчанию (слева внизу).
+  /// Старые координаты глобальной панели Термая. Оставлены только для
+  /// совместимости с прежними JSON/облаком; интерфейс их больше не использует.
   double launcherX;
   double launcherY;
 
@@ -561,7 +604,8 @@ class Config {
   /// По умолчанию включено; пользователь может выключить в настройках.
   bool syncKeysToCloud;
 
-  /// Показывать ли плавающего Термая на экране.
+  /// Старый переключатель глобального Термая. Оставлен для совместимости:
+  /// теперь персонаж показывается только на главном экране.
   bool mascotVisible;
 
   /// Пользовательские темы, сгенерированные ИИ.
@@ -592,6 +636,8 @@ class Config {
     this.theme = 'dark',
     this.ambient = true,
     this.onboarded = false,
+    List<String>? directions,
+    this.activeDirection = '',
     this.userName = '',
     this.notificationsEnabled = true,
     this.dailyReminderEnabled = true,
@@ -620,6 +666,7 @@ class Config {
     this.primaryLastOkAt = 0,
     this.primaryLastError = '',
   })  : motivationQueue = motivationQueue ?? [],
+        directions = directions ?? [],
         fallbacks = fallbacks ?? [],
         customThemes = customThemes ?? [];
 
@@ -631,6 +678,8 @@ class Config {
         theme: j['theme'] as String? ?? 'dark',
         ambient: j['ambient'] as bool? ?? true,
         onboarded: j['onboarded'] as bool? ?? false,
+        directions: (j['directions'] as List?)?.cast<String>() ?? [],
+        activeDirection: j['active_direction'] as String? ?? '',
         userName: j['user_name'] as String? ?? '',
         notificationsEnabled: j['notifications_enabled'] as bool? ?? true,
         dailyReminderEnabled: j['daily_reminder_enabled'] as bool? ?? true,
@@ -678,6 +727,8 @@ class Config {
         'theme': theme,
         'ambient': ambient,
         'onboarded': onboarded,
+        'directions': directions,
+        'active_direction': activeDirection,
         'user_name': userName,
         'notifications_enabled': notificationsEnabled,
         'daily_reminder_enabled': dailyReminderEnabled,
@@ -756,6 +807,16 @@ class Progress {
   List<String> courseOrder = [];
   List<String> hiddenCourses = [];
 
+  /// Порядок курсов внутри каждого направления. Старый courseOrder
+  /// распределяется по направлениям при первом запуске.
+  Map<String, List<String>> courseOrderByDirection = {};
+  Map<String, String> activeCourseByDirection = {};
+
+  /// Статистика направления. XP и solved обновляются при завершении задачи;
+  /// у старых пользователей значения досчитываются из completed.
+  Map<String, int> directionXp = {};
+  Map<String, int> directionSolved = {};
+
   /// Курсы, убранные в архив (в основном списке не показываются).
   List<String> archived = [];
 
@@ -804,6 +865,15 @@ class Progress {
     p.courseTitles = (j['course_titles'] as Map?)?.cast<String, String>() ?? {};
     p.genCleaned = j['gen_cleaned'] as bool? ?? false;
     p.courseOrder = (j['course_order'] as List?)?.cast<String>() ?? [];
+    p.courseOrderByDirection = ((j['course_order_by_direction'] as Map?) ?? {})
+        .map((k, v) =>
+            MapEntry(k as String, (v as List?)?.cast<String>() ?? []));
+    p.activeCourseByDirection =
+        (j['active_course_by_direction'] as Map?)?.cast<String, String>() ?? {};
+    p.directionXp = ((j['direction_xp'] as Map?) ?? {})
+        .map((k, v) => MapEntry(k as String, (v as num?)?.toInt() ?? 0));
+    p.directionSolved = ((j['direction_solved'] as Map?) ?? {})
+        .map((k, v) => MapEntry(k as String, (v as num?)?.toInt() ?? 0));
     p.hiddenCourses = (j['hidden_courses'] as List?)?.cast<String>() ?? [];
     p.archived = (j['archived'] as List?)?.cast<String>() ?? [];
     p.aiUsage = ((j['ai_usage'] as Map?) ?? {}).map((k, v) => MapEntry(
@@ -832,6 +902,10 @@ class Progress {
         'gen_cleaned': genCleaned,
         'course_titles': courseTitles,
         'course_order': courseOrder,
+        'course_order_by_direction': courseOrderByDirection,
+        'active_course_by_direction': activeCourseByDirection,
+        'direction_xp': directionXp,
+        'direction_solved': directionSolved,
         'hidden_courses': hiddenCourses,
         'archived': archived,
         'ai_usage': aiUsage,

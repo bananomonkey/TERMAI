@@ -57,10 +57,10 @@ class _LessonScreenState extends State<LessonScreen>
     }
     if (controller.lessonSlideSeq != _lastSlideSeq) {
       _lastSlideSeq = controller.lessonSlideSeq;
-      final last = (controller.cur.isTheory ||
-              (controller.currentTask?.isExam ?? false))
-          ? 2
-          : 3;
+      final last =
+          (controller.cur.isTheory || (controller.currentTask?.isExam ?? false))
+              ? 2
+              : 3;
       final req = controller.lessonSlideRequest.clamp(0, last).toInt();
       controller.lessonSlideRequest = -1;
       if (mounted) setState(() => _tabIdx = req);
@@ -410,10 +410,9 @@ class _HelpSlide extends StatelessWidget {
           )
         else
           ...paras.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: cardBox(
-                    child: MarkdownBody(
-                        data: p, selectable: true, styleSheet: mdStyle())),
+                padding: const EdgeInsets.only(bottom: 18),
+                child: MarkdownBody(
+                    data: p, selectable: true, styleSheet: mdStyle()),
               )),
       ],
     );
@@ -760,8 +759,8 @@ class _TermSlideState extends State<_TermSlide> {
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Чат с ментором',
-                    onPressed: () => Navigator.of(context).push(pageRoute(
-                        const ChatScreen(scope: ChatScope.task))),
+                    onPressed: () => Navigator.of(context).push(
+                        pageRoute(const ChatScreen(scope: ChatScope.task))),
                     icon: Icon(Icons.chat_bubble_outline,
                         size: 17, color: C.secondary),
                   ),
@@ -844,8 +843,8 @@ class _TermSlideState extends State<_TermSlide> {
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                    pageRoute(const ChatScreen(scope: ChatScope.task))),
+                onPressed: () => Navigator.of(context)
+                    .push(pageRoute(const ChatScreen(scope: ChatScope.task))),
                 icon: Icon(Icons.chat_bubble_outline,
                     size: 17, color: C.secondary),
                 label: Text('Ментор',

@@ -62,13 +62,14 @@ class _ReviewRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = entry.value;
     final course =
-        controller.courses.where((c) => c.id == b.courseId).firstOrNull;
+        controller.allCourses.where((c) => c.id == b.courseId).firstOrNull;
     final taskTitle =
         course?.tasks.where((t) => t.id == b.taskId).firstOrNull?.title ??
             b.taskId;
     return GestureDetector(
-      onTap: () {
-        controller.reviewFromBookmark(entry.key);
+      onTap: () async {
+        await controller.reviewFromBookmark(entry.key);
+        if (!context.mounted) return;
         Navigator.of(context).push(pageRoute(const LessonScreen()));
       },
       child: cardBox(
