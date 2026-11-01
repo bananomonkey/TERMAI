@@ -62,8 +62,20 @@ jobs:
         run: flutter pub get
         working-directory: mobile
       - name: Build split APKs
-        run: flutter build apk --release --split-per-abi
+        run: |
+          set -o pipefail
+          flutter build apk --release --split-per-abi 2>&1 | tee build.log
         working-directory: mobile
+      - name: Build failure details
+        if: failure()
+        shell: bash
+        working-directory: mobile
+        run: |
+          if [ -f build.log ]; then
+            tail -n 60 build.log | while IFS= read -r line; do
+              echo "::error title=Android build::$line"
+            done
+          fi
       - name: Collect APKs
         run: |
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk TERMAI-arm64-v8a.apk
