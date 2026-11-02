@@ -18,6 +18,6 @@ FIREBASE_PROJECT_ID = "termai-4fdcc"
 # Bind a free KV namespace for durable per-user/global limits:
 #   npx wrangler kv namespace create PROMO_KV
 # then paste its id here.
-# [[kv_namespaces]]
-# binding = "PROMO_KV"
-# id = "REPLACE_WITH_KV_ID"
+[[kv_namespaces]]
+binding = "PROMO_KV"
+id = "e0fb193ba7e94e57910658dce0995010"
