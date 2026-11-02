@@ -103,9 +103,29 @@ jobs:
         run: |
           ls -lh mobile/build/app/outputs/flutter-apk/*.apk
       - name: Build AAB for Google Play
-        run: flutter build appbundle --release \
-            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL }}
+        run: |
+          set -o pipefail
+          flutter build appbundle --release \
+            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL }} 2>&1 | tee aab.log
         working-directory: mobile
+      - name: AAB failure details
+        if: failure()
+        shell: bash
+        working-directory: mobile
+        run: |
+          if [ -f aab.log ]; then
+            tail -n 120 aab.log | while IFS= read -r line; do
+              echo "::error title=AAB::$line"
+            done
+          fi
+      - name: Upload AAB build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-build-log
+          path: mobile/aab.log
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Rename AAB
         run: cp mobile/build/app/outputs/bundle/release/app-release.aab TERMAI.aab
       - uses: actions/upload-artifact@v4
