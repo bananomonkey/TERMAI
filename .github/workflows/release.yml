@@ -78,10 +78,16 @@ jobs:
         run: |
           echo "::error title=Disk space::$(df -h / | tail -n 1 | tr -s ' ')"
           if [ -f build.log ]; then
-            grep -inE "no space|disk full|error|exception|failed|failure|cannot|not found|unable" build.log \
-              | tail -n 20 | while IFS= read -r line; do
+            if grep -q "FAILURE: Build failed" build.log; then
+              sed -n '/FAILURE: Build failed/,/BUILD FAILED/p' build.log \
+                | head -n 14 | while IFS= read -r line; do
+                  echo "::error title=Gradle::$line"
+                done
+            else
+              tail -n 40 build.log | while IFS= read -r line; do
                 echo "::error title=Android build::$line"
               done
+            fi
           fi
       - name: Collect APKs
         run: |
