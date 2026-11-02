@@ -19,7 +19,6 @@ import 'ui/home.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
-import 'package:nowa_runtime/nowa_runtime.dart';
 
 final AppController controller = AppController();
 
@@ -107,8 +106,6 @@ class BootScreen extends StatefulWidget {
   @override
   State<BootScreen> createState() => _BootScreenState();
 }
-
-@NowaGenerated()
 class _BootScreenState extends State<BootScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
@@ -168,7 +165,7 @@ class _BootScreenState extends State<BootScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FlexSizedBox(
+            SizedBox(
               width: 258.0,
               height: 258.0,
               child: ScaleTransition(
@@ -189,7 +186,7 @@ class _BootScreenState extends State<BootScreen>
             const SizedBox(
               height: 67.0,
             ),
-            FlexSizedBox(
+            SizedBox(
               child: Text(
                 'TERMAI',
                 textAlign: TextAlign.center,

@@ -29,7 +29,6 @@ dependencies:
   open_filex: ^5.0.0
   yaml: ^3.1.4
   flutter_tts: ^4.2.5
-  nowa_runtime: ^0.2.0
   workmanager: ^0.10.10
   device_info_plus: ^13.3.0
   sherpa_onnx: ^2.0.1

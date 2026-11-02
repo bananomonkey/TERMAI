@@ -5,15 +5,12 @@ import 'direction_picker.dart';
 import 'help.dart';
 import 'theme.dart';
 import 'widgets.dart';
-import 'package:nowa_runtime/nowa_runtime.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
-
-@NowaGenerated()
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _page = PageController();
 
