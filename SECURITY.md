@@ -42,3 +42,21 @@ Web client ID (`...apps.googleusercontent.com` в `mobile/lib/sync_config.dart`)
 В `.gitignore` уже исключены `google-services.json`, `key.properties` и
 `*.jks`. Если добавляете новые секреты — используйте GitHub Actions Secrets
 или локальный файл вне репозитория.
+
+
+## Общий доступ TERMAI и ключ Token Harbor
+
+Общий бесплатный ИИ работает через серверный шлюз (Cloudflare Worker) в
+`server/token-harbor-proxy/`. Ключ `TOKEN_HARBOR_API_KEY` хранится только в
+секретах Worker и никогда не попадает в APK, Flutter-код, Firebase Remote
+Config или Firestore.
+
+- Шлюз не является открытым прокси: каждый запрос обязан содержать Firebase
+  ID token, который проверяется через Identity Toolkit.
+- Модель жёстко задаётся на сервере, размер ответа и тело запроса
+  ограничены, ведутся суточные лимиты на пользователя и на всех.
+- Даты акции, модель, версия предупреждения и лимиты меняются в переменных
+  Worker без обновления приложения.
+- Секреты Worker (`TOKEN_HARBOR_API_KEY`, `FIREBASE_WEB_API_KEY`) не
+  коммитятся. Инструкция по настройке — в
+  `server/token-harbor-proxy/README.md`.

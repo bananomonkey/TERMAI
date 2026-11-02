@@ -1,7 +1,7 @@
 name: termai
 description: "TERMAI — тренажёр навыков с ИИ-наставником (языки, Linux, Docker, Git и другие курсы)"
 publish_to: "none"
-version: 1.22.0+48
+version: 1.23.0+49
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -24,7 +24,6 @@ dependencies:
   url_launcher: ^6.3.3
   file_picker: ^13.3.0
   graphview: ^1.5.1
-  llamadart: ^0.17.0
   flutter_secure_storage: ^11.2.0
   open_filex: ^5.0.0
   yaml: ^3.1.4
@@ -36,6 +35,7 @@ dependencies:
   piper_phonemize: ^1.5.9
   audioplayers: ^6.8.1
   archive: ^4.3.0
+  flutter_svg: ^2.0.17
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -70,8 +70,6 @@ flutter:
         - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
 
-# Локальный ИИ: только llama.cpp (GGUF), без LiteRT-LM и Vulkan.
-# Это заметно уменьшает APK и оставляет CPU-инференс на arm64.
     - family: Itim
       fonts:
         - asset: assets/fonts/Itim.ttf
@@ -105,17 +103,6 @@ flutter:
     - family: Intel One Mono
       fonts:
         - asset: assets/fonts/Intel One Mono.ttf
-hooks:
-  user_defines:
-    llamadart:
-      llamadart_native_runtimes: [llama_cpp]
-      llamadart_native_backends:
-        platforms:
-          android-arm64:
-            backends: [cpu]
-            cpu_profile: compact
-          android-x64:
-            backends: [cpu]
 
 flutter_launcher_icons:
   android: true

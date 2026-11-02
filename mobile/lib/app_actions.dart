@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'ai.dart';
 import 'app_action.dart';
-import 'download_manager.dart';
-import 'local_ai.dart';
 import 'models.dart';
 import 'navigation.dart';
 import 'store.dart';
@@ -16,9 +14,7 @@ import 'ui/chat.dart';
 import 'ui/chats.dart';
 import 'ui/help.dart';
 import 'ui/home.dart';
-import 'ui/hugging_face.dart';
 import 'ui/lesson.dart';
-import 'ui/local_ai.dart';
 import 'ui/more.dart';
 import 'ui/progress_map.dart';
 import 'ui/review.dart';
@@ -189,18 +185,10 @@ class AppActions {
         return _openScreen(_str(args, 'screen').ifEmpty(_str(args, 'name')));
       case 'open_mental_map':
         return _openMentalMap(args);
-      case 'open_local_ai':
-        await _openNamed('LocalAiScreen', () => const LocalAiScreen());
-        return '';
-      case 'open_hf_catalog':
-        await _openNamed('HuggingFaceScreen', () => const HuggingFaceScreen());
-        return '';
       case 'list_courses':
         return _listCourses();
       case 'get_learning_progress':
         return _learningProgress();
-      case 'get_local_models':
-        return _localModels();
       case 'get_current_context':
         return _currentContext();
       case 'open_course':
@@ -338,10 +326,6 @@ class AppActions {
       'маршрут': 'progress',
       'статистика': 'stats',
       'статистика обучения': 'stats',
-      'локальный ии': 'local_ai',
-      'локальная модель': 'local_ai',
-      'hugging face': 'hf',
-      'каталог моделей': 'hf',
       'ещё': 'more',
       'еще': 'more',
       'чат': 'chat',
@@ -386,12 +370,6 @@ class AppActions {
         return '';
       case 'progress':
         await _openNamed('ProgressMapScreen', () => const ProgressMapScreen());
-        return '';
-      case 'local_ai':
-        await _openNamed('LocalAiScreen', () => const LocalAiScreen());
-        return '';
-      case 'hf':
-        await _openNamed('HuggingFaceScreen', () => const HuggingFaceScreen());
         return '';
       case 'more':
         final ctx = _ctx;
@@ -517,40 +495,6 @@ class AppActions {
     return '';
   }
 
-  Future<String> _localModels() async {
-    final files = await LocalAiService.instance.installedModels();
-    final models = <Map<String, dynamic>>[];
-    for (final f in files) {
-      int size = 0;
-      try {
-        size = await f.length();
-      } catch (_) {}
-      models.add({
-        'name': f.path.split('/').last,
-        'path': f.path,
-        'size_bytes': size,
-        'active': c.config.localModelPath == f.path,
-        'loaded': LocalAiService.instance.loadedPath == f.path,
-      });
-    }
-    final jobs = DownloadManager.instance.jobs
-        .map((j) => {
-              'file': j.fileName,
-              'status': j.status.name,
-              'received_bytes': j.receivedBytes,
-              'total_bytes': j.totalBytes,
-              if (j.error.isNotEmpty) 'error': j.error,
-            })
-        .toList();
-    _lastData = {
-      'active_path': c.config.localModelPath,
-      'loaded': LocalAiService.instance.ready,
-      'models': models,
-      'downloads': jobs,
-    };
-    return '';
-  }
-
   String _currentContext() {
     _lastData = {
       'screen': ScreenObserver.current,
@@ -560,7 +504,6 @@ class AppActions {
       'task_id': c.currentTask?.id,
       'provider': c.config.provider,
       'model': c.ai?.model ?? '',
-      'local_model_loaded': LocalAiService.instance.ready,
     };
     return '';
   }

@@ -68,11 +68,25 @@ class SecretStore {
   static Future<void> writeAiSecrets({
     required String main,
     required List<Map<String, String>> fallbacks,
+    Map<String, Map<String, String>> profiles = const {},
   }) async {
     final cleanFallbacks = fallbacks
         .where((f) => (f['api_key'] ?? '').trim().isNotEmpty)
         .toList(growable: false);
-    if (main.trim().isEmpty && cleanFallbacks.isEmpty) {
+    final cleanProfiles = <String, Map<String, String>>{};
+    for (final entry in profiles.entries) {
+      final key = (entry.value['api_key'] ?? '').trim();
+      if (key.isEmpty) continue;
+      cleanProfiles[entry.key] = {
+        'provider': entry.key,
+        'model': (entry.value['model'] ?? '').trim(),
+        'base_url': (entry.value['base_url'] ?? '').trim(),
+        'api_key': key,
+      };
+    }
+    if (main.trim().isEmpty &&
+        cleanFallbacks.isEmpty &&
+        cleanProfiles.isEmpty) {
       _memory.remove(_aiKeysKey);
       try {
         await _storage.delete(key: _aiKeysKey);
@@ -82,6 +96,7 @@ class SecretStore {
     final raw = jsonEncode({
       'main': main.trim(),
       'fallbacks': cleanFallbacks,
+      if (cleanProfiles.isNotEmpty) 'profiles': cleanProfiles,
     });
     _memory[_aiKeysKey] = raw;
     try {

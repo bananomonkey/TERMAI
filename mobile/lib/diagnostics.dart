@@ -2,14 +2,9 @@
 //
 // Отчёт не содержит токенов, ключей, email и переписки. Технические детали
 // показываются в раскрывающемся блоке, чтобы не засорять чат.
-import 'dart:io';
-
-import 'package:http/http.dart' as http;
-
 import 'download_manager.dart';
-import 'local_ai.dart';
 import 'notifications.dart';
-import 'secret_store.dart';
+import 'shared_ai.dart';
 import 'store.dart';
 
 enum DiagnosticLevel { ok, warning, error }
@@ -58,7 +53,6 @@ class DiagnosticReport {
 Future<DiagnosticReport> runDiagnostics(AppController c) async {
   final items = <DiagnosticItem>[];
   final provider = c.config.provider;
-  final localPath = c.config.localModelPath;
 
   // Основной ИИ.
   if (c.ai == null || !c.ai!.ready) {
@@ -66,7 +60,7 @@ Future<DiagnosticReport> runDiagnostics(AppController c) async {
       title: 'ИИ-провайдер',
       level: DiagnosticLevel.error,
       message: 'не настроен',
-      details: 'Нет готового endpoint. Добавь API-ключ или локальную модель.',
+      details: 'Нет готового endpoint. Добавь API-ключ в настройках ИИ.',
     ));
   } else {
     final result = await c.testEndpoint(-1);
@@ -83,82 +77,41 @@ Future<DiagnosticReport> runDiagnostics(AppController c) async {
     ));
   }
 
-  // Локальный ИИ.
-  final local = LocalAiService.instance;
-  final installed = await local.installedModels();
-  final file = localPath.isEmpty ? null : File(localPath);
-  final exists = file == null ? false : await file.exists();
-  if (localPath.isEmpty) {
-    items.add(DiagnosticItem(
-      title: 'Локальный ИИ',
-      level: DiagnosticLevel.warning,
-      message: 'не настроен',
-      details: installed.isEmpty
-          ? 'GGUF-файлов нет.'
-          : 'Найдено файлов: ${installed.length}, но активная модель не выбрана.',
-    ));
-  } else if (!exists) {
-    items.add(DiagnosticItem(
-      title: 'Локальный ИИ',
-      level: DiagnosticLevel.error,
-      message: 'файл модели не найден',
-      details: 'Путь: $localPath\nФайл удалён или перемещён.',
-    ));
-  } else {
-    final size = await file.length();
-    items.add(DiagnosticItem(
-      title: 'Локальный ИИ',
-      level: local.ready ? DiagnosticLevel.ok : DiagnosticLevel.warning,
-      message: local.ready ? 'модель загружена' : 'модель не загружена',
-      details: [
-        'Файл: ${file.path.split('/').last}',
-        'Размер: ${_mb(size)}',
-        'Контекст: ${c.config.localContextSize}',
-        'Установлено моделей: ${installed.length}',
-        if (local.error.isNotEmpty) 'Ошибка: ${_redact(local.error)}',
-      ].join('\n'),
-    ));
-  }
-
-  // Hugging Face. Проверяем только метаданные, не веса.
-  try {
-    final token = await SecretStore.readHfToken();
-    final res = await http.get(
-      Uri.parse('https://huggingface.co/api/models?limit=1'),
-      headers: {
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
-    ).timeout(const Duration(seconds: 8));
-    if (res.statusCode == 200) {
-      items.add(DiagnosticItem(
-        title: 'Hugging Face',
-        level: DiagnosticLevel.ok,
-        message: 'доступен',
-        details: 'API метаданных отвечает. Токен: ${SecretStore.mask(token)}.',
-      ));
-    } else if (res.statusCode == 401 || res.statusCode == 403) {
-      items.add(DiagnosticItem(
-        title: 'Hugging Face',
+  // Общий доступ TERMAI.
+  final shared = SharedAiService.instance;
+  if (shared.proxyConfigured) {
+    if (shared.loading) {
+      items.add(const DiagnosticItem(
+        title: 'Общий доступ TERMAI',
         level: DiagnosticLevel.warning,
-        message: 'токен не принят',
-        details: 'HTTP ${res.statusCode}. Проверь HF token для gated-моделей.',
+        message: 'проверяется',
+        details: 'Запрашиваю условия акции с серверного шлюза.',
+      ));
+    } else if (shared.promo == null) {
+      items.add(DiagnosticItem(
+        title: 'Общий доступ TERMAI',
+        level: DiagnosticLevel.warning,
+        message: 'сервер недоступен',
+        details: _redact(shared.error),
       ));
     } else {
+      final active = shared.isUsable(c.config);
       items.add(DiagnosticItem(
-        title: 'Hugging Face',
-        level: DiagnosticLevel.warning,
-        message: 'HTTP ${res.statusCode}',
-        details: 'API доступен, но вернул неожиданный статус.',
+        title: 'Общий доступ TERMAI',
+        level: active ? DiagnosticLevel.ok : DiagnosticLevel.warning,
+        message: active
+            ? 'включён (${shared.model})'
+            : (shared.promo!.active
+                ? 'выключен пользователем'
+                : 'акция завершена'),
+        details: [
+          'Модель: ${shared.model}',
+          'До: ${shared.endsAt ?? '—'}',
+          'Остаток: ${shared.remainingLabel}',
+          'Личный провайдер: ${c.config.provider}',
+        ].join('\n'),
       ));
     }
-  } catch (e) {
-    items.add(DiagnosticItem(
-      title: 'Hugging Face',
-      level: DiagnosticLevel.error,
-      message: 'недоступен',
-      details: _redact(e.toString()),
-    ));
   }
 
   // Загрузки моделей.
@@ -249,8 +202,6 @@ Future<DiagnosticReport> runDiagnostics(AppController c) async {
 
   return DiagnosticReport(items);
 }
-
-String _mb(int n) => '${(n / (1024 * 1024)).toStringAsFixed(1)} МБ';
 
 String _redact(String value) {
   var s = value;

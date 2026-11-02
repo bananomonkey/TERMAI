@@ -81,26 +81,6 @@ const appToolSpecs = <AppToolSpec>[
     },
   ),
   AppToolSpec(
-    name: 'open_local_ai',
-    description: 'Открыть экран локального ИИ и менеджера моделей.',
-    navigation: true,
-    parameters: {
-      'type': 'object',
-      'properties': {},
-      'additionalProperties': false
-    },
-  ),
-  AppToolSpec(
-    name: 'open_hf_catalog',
-    description: 'Открыть каталог GGUF-моделей Hugging Face.',
-    navigation: true,
-    parameters: {
-      'type': 'object',
-      'properties': {},
-      'additionalProperties': false
-    },
-  ),
-  AppToolSpec(
     name: 'open_screen',
     description: 'Открыть экран приложения по имени.',
     navigation: true,
@@ -195,16 +175,6 @@ const appToolSpecs = <AppToolSpec>[
   AppToolSpec(
     name: 'get_learning_progress',
     description: 'Получить XP, уровень, серию и текущую задачу.',
-    parameters: {
-      'type': 'object',
-      'properties': {},
-      'additionalProperties': false
-    },
-  ),
-  AppToolSpec(
-    name: 'get_local_models',
-    description:
-        'Получить установленные локальные модели и состояние загрузок.',
     parameters: {
       'type': 'object',
       'properties': {},
@@ -393,12 +363,9 @@ const knownAppActions = <String>{
   'open_review',
   'open_progress',
   'open_mental_map',
-  'open_local_ai',
-  'open_hf_catalog',
   'open_home',
   'list_courses',
   'get_learning_progress',
-  'get_local_models',
   'get_current_context',
   'write_terminal',
   'solve_task',
@@ -420,11 +387,8 @@ const appActionsPrompt = '''
 Действия и аргументы:
 - open_screen {screen}: home, settings, archive, chats, usage, help, background, fallbacks, review, progress, more, chat, interview, tasks, lesson.
 - open_mental_map {course_id?, topic?}: открыть карту и сфокусироваться на курсе/теме.
-- open_local_ai: открыть локальный ИИ и менеджер моделей.
-- open_hf_catalog: открыть каталог GGUF-моделей Hugging Face.
 - list_courses: получить список курсов, их id и прогресс.
 - get_learning_progress: получить общий прогресс, XP, серию и текущую задачу.
-- get_local_models: получить установленные модели и состояние загрузок.
 - get_current_context: получить экран, курс и задачу, открытые сейчас.
 - open_course {course}: открыть курс по названию или id.
 - open_lesson {course?, task?}: открыть урок; без аргументов — текущую задачу.

@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'app_actions.dart';
 import 'download_manager.dart';
-import 'local_ai.dart';
 import 'navigation.dart';
+import 'shared_ai.dart';
 import 'store.dart';
 import 'theme_refresh.dart';
 import 'update_background.dart';
@@ -19,6 +19,7 @@ import 'ui/home.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';
 import 'ui/onboarding.dart';
+import 'ui/shared_ai_consent.dart';
 import 'package:nowa_runtime/nowa_runtime.dart';
 
 final AppController controller = AppController();
@@ -127,13 +128,24 @@ class _BootScreenState extends State<BootScreen>
     loadCoursesAsset = _loadCoursesAsset;
     await controller.init();
     try {
-      final moved = await LocalAiService.instance.migrateLegacyModels();
-      final oldPath = controller.config.localModelPath;
-      if (moved.containsKey(oldPath)) {
-        controller.config.localModelPath = moved[oldPath]!;
+      await controller.refreshSharedAi();
+    } catch (_) {}
+    if (controller.config.onboarded && mounted) {
+      final service = SharedAiService.instance;
+      final version = controller.config.sharedAiConsentVersion;
+      final needsConsent = service.promoActive &&
+          (version == 0 || (version > 0 && version < service.noticeVersion));
+      if (needsConsent) {
+        final ok = await askSharedAiConsent(
+          context,
+          reConsent: version > 0,
+        );
+        controller.config.sharedAiEnabled = ok;
+        controller.config.sharedAiConsentVersion =
+            ok ? service.noticeVersion : -1;
         await controller.saveConfig(autofill: false);
       }
-    } catch (_) {}
+    }
     try {
       await DownloadManager.instance.init();
     } catch (_) {}

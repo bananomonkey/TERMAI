@@ -1,0 +1,23 @@
+name = "termai-token-harbor-proxy"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Public promo metadata. The API key is NOT here: set it with
+#   npx wrangler secret put TOKEN_HARBOR_API_KEY
+[vars]
+PROMO_ENABLED = "true"
+# Один общий срок: дата деплоя + 7 дней. Поставьте точное UTC-время.
+PROMO_ENDS_AT = "2026-11-09T23:59:59Z"
+PROMO_MODEL = "deepseek-v4.1-flash:free"
+PROMO_NOTICE_VERSION = "1"
+PROMO_PRIVACY_URL = "https://tokenharbor.ai/privacy"
+MAX_REQUESTS_PER_DAY = "40"
+GLOBAL_DAILY_LIMIT = "800"
+FIREBASE_PROJECT_ID = "termai-4fdcc"
+
+# Bind a free KV namespace for durable per-user/global limits:
+#   npx wrangler kv namespace create PROMO_KV
+# then paste its id here.
+# [[kv_namespaces]]
+# binding = "PROMO_KV"
+# id = "REPLACE_WITH_KV_ID"

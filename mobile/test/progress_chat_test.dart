@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termai/ai.dart';
 import 'package:termai/download_manager.dart';
-import 'package:termai/hugging_face.dart';
 import 'package:termai/models.dart';
 import 'package:termai/ui/attachment_view.dart';
 import 'package:termai/ui/theme.dart';
@@ -264,9 +263,35 @@ void main() {
     expect(back.attachments.first.name, 'a.jpg');
   });
 
+  test('per-provider settings survive Config JSON and keep keys local', () {
+    final cfg = Config()
+      ..provider = 'openrouter'
+      ..apiKey = 'sk-or'
+      ..model = 'deepseek/deepseek-chat'
+      ..baseUrl = 'https://openrouter.ai/api/v1'
+      ..providerProfiles = {
+        'openai': AiEndpoint(
+            provider: 'openai', apiKey: 'sk-openai', model: 'gpt-4o-mini'),
+        'openrouter': AiEndpoint(
+            provider: 'openrouter',
+            apiKey: 'sk-or',
+            model: 'deepseek/deepseek-chat',
+            baseUrl: 'https://openrouter.ai/api/v1'),
+      };
+    final back = Config.fromJson(cfg.toJson());
+    expect(back.providerProfiles['openai']!.apiKey, 'sk-openai');
+    expect(back.providerProfiles['openrouter']!.model, 'deepseek/deepseek-chat');
+    expect(back.sharedAiEnabled, isTrue);
+    expect(back.sharedAiConsentVersion, 0);
+  });
+
   test('local config never writes AI keys to disk', () {
     final cfg = Config()
       ..apiKey = 'sk-main'
+      ..providerProfiles = {
+        'openrouter': AiEndpoint(
+            provider: 'openrouter', apiKey: 'sk-or', model: 'openrouter/x'),
+      }
       ..fallbacks = [
         AiEndpoint(provider: 'openai', apiKey: 'sk-fb', model: 'gpt-4o-mini'),
       ];
@@ -274,6 +299,8 @@ void main() {
     expect(local.containsKey('api_key'), isFalse);
     expect(((local['fallbacks'] as List).first as Map).containsKey('api_key'),
         isFalse);
+    final profiles = local['provider_profiles'] as Map;
+    expect((profiles['openrouter'] as Map).containsKey('api_key'), isFalse);
     expect(cfg.toCloudJson(includeKeys: true)['api_key'], 'sk-main');
   });
 
@@ -298,25 +325,6 @@ void main() {
     expect(back.systemId, 7);
     expect(back.status, DownloadStatus.downloading);
     expect(back.progress, 0.4);
-  });
-
-  test('HF LFS size prefers the real blob size and labels are compact', () {
-    final file = HFFile.fromJson({
-      'path': 'model-q4_k_m.gguf',
-      'size': 135,
-      'lfs': {'size': 491400032},
-    });
-    expect(file.size, 491400032);
-    expect(file.quantization, 'Q4_K_M');
-    final a = ChatAttachment(
-      type: 'image',
-      path: '/tmp/very-long-name.jpg',
-      name: 'очень-длинное-имя-файла.jpg',
-      mime: 'image/jpeg',
-      size: 2048,
-    );
-    expect(attachmentTypeLabel(a), 'Фото');
-    expect(attachmentSize(2048), '2 КБ');
   });
 
   test('exam task kind survives JSON round-trip', () {

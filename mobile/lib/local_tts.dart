@@ -113,7 +113,24 @@ class LocalTtsService extends ChangeNotifier {
   bool extractionFailed(String id) => _failedExtract.contains(id);
 
   Future<void> retryExtract(LocalTtsModel model) async {
+    if (_extracting.contains(model.id)) return;
     _failedExtract.remove(model.id);
+    _lastError = '';
+    final archive = await _archiveFile(model);
+    if (await archive.exists()) {
+      _extracting.add(model.id);
+      try {
+        await _extractFromPath(model, archive.path);
+        _installed.add(model.id);
+      } catch (e) {
+        _failedExtract.add(model.id);
+        _lastError = 'Не удалось распаковать ${model.title}: $e';
+      } finally {
+        _extracting.remove(model.id);
+        notifyListeners();
+      }
+      return;
+    }
     await reconcile();
     notifyListeners();
   }
@@ -143,15 +160,8 @@ class LocalTtsService extends ChangeNotifier {
     if (_installed.contains(id)) return true;
     final dir = await modelDir(id);
     if (!await dir.exists()) return false;
-    var hasModel = false, hasTokens = false;
-    await for (final e in dir.list(recursive: true)) {
-      if (e is! File) continue;
-      if (e.path.endsWith('.onnx')) hasModel = true;
-      if (e.path.endsWith('/tokens.txt') || e.path.endsWith('\\tokens.txt')) {
-        hasTokens = true;
-      }
-    }
-    final ok = hasModel && hasTokens;
+    final files = _findTtsFiles(dir);
+    final ok = files != null;
     if (ok) _installed.add(id);
     return ok;
   }
@@ -214,22 +224,38 @@ class LocalTtsService extends ChangeNotifier {
   }
 
   Future<void> _extract(LocalTtsModel model, DownloadJob job) async {
-    final archiveFile = File(job.finalPath);
+    var archiveFile = File(job.finalPath);
     if (!await archiveFile.exists()) {
-      throw Exception('архив не найден');
+      // После перезапуска путь в метаданных иногда расходится с реальным
+      // именем файла. Пробуем штатное место менеджера загрузок.
+      final fallback = await _archiveFile(model);
+      if (await fallback.exists()) archiveFile = fallback;
     }
-    final dir = await modelDir(model.id);
-    if (await dir.exists()) await dir.delete(recursive: true);
-    await dir.create(recursive: true);
-    final ok = await Isolate.run(
-        () => extractLocalTtsArchive(archiveFile.path, dir.path));
-    if (!ok) throw Exception('пустой или повреждённый архив');
+    if (!await archiveFile.exists()) {
+      throw Exception('архив не найден — скачай голос заново');
+    }
+    await _extractFromPath(model, archiveFile.path);
     // Архив больше не нужен; запись DownloadManager тоже, иначе при
     // следующем запуске он будет искать удалённый файл.
     try {
       await _downloads.removeRecord(job.id);
       if (await archiveFile.exists()) await archiveFile.delete();
     } catch (_) {}
+  }
+
+  Future<void> _extractFromPath(LocalTtsModel model, String archivePath) async {
+    final dir = await modelDir(model.id);
+    if (await dir.exists()) await dir.delete(recursive: true);
+    await dir.create(recursive: true);
+    final ok =
+        await Isolate.run(() => extractLocalTtsArchive(archivePath, dir.path));
+    if (!ok) throw Exception('пустой или повреждённый архив');
+    // Проверяем не только факт распаковки, но и наличие файлов, которые
+    // реально нужны sherpa-onnx. Иначе ошибка всплывала позже как
+    // «файлы не найдены» уже во время озвучивания.
+    if (_findTtsFiles(dir) == null) {
+      throw Exception('в архиве нет модели или tokens.txt');
+    }
   }
 
   Future<bool> speak(String text, Config config) async {
@@ -246,11 +272,28 @@ class LocalTtsService extends ChangeNotifier {
     notifyListeners();
     try {
       final dir = await modelDir(model.id);
+      final files = _findTtsFiles(dir);
+      if (files == null) {
+        throw Exception('файлы голоса не найдены — распакуй модель заново');
+      }
+      // В piper_phonemize для Flutter espeak-ng-data поставляется отдельно
+      // и извлекается из assets. Архивный вариант оставляем запасным.
+      var espeakDir = '';
+      try {
+        espeakDir = await piper.extractEspeakNgData();
+      } catch (_) {}
+      if (espeakDir.isEmpty) {
+        final local = Directory('${dir.path}/espeak-ng-data');
+        if (await local.exists()) espeakDir = local.path;
+      }
+      if (espeakDir.isEmpty) {
+        throw Exception('espeak-ng-data не найден');
+      }
       final speed = (0.65 + config.ttsRate * 0.7).clamp(0.6, 1.4);
       final ok = await Isolate.run(() => _generateWav(
-            modelPath: _findOnnx(dir.path),
-            tokensPath: '${dir.path}/tokens.txt',
-            espeakDir: '${dir.path}/espeak-ng-data',
+            modelPath: files.model,
+            tokensPath: files.tokens,
+            espeakDir: espeakDir,
             text: text,
             speed: speed.toDouble(),
             wavPath: wav.path,
@@ -329,13 +372,28 @@ bool extractLocalTtsArchive(String archivePath, String targetDir) {
   }
 }
 
-String _findOnnx(String dir) {
-  final d = Directory(dir);
-  if (!d.existsSync()) return '';
-  for (final e in d.listSync(recursive: true)) {
-    if (e is File && e.path.endsWith('.onnx')) return e.path;
+class _TtsFiles {
+  final String model, tokens;
+  const _TtsFiles(this.model, this.tokens);
+}
+
+/// Ищем файлы рекурсивно: архивы sherpa-onnx могут содержать один или
+/// несколько вложенных каталогов. Раньше путь токенов жёстко предполагал
+/// плоскую структуру, из-за чего озвучивание падало с «файлы не найдены».
+_TtsFiles? _findTtsFiles(Directory dir) {
+  if (!dir.existsSync()) return null;
+  String model = '';
+  String tokens = '';
+  for (final e in dir.listSync(recursive: true)) {
+    if (e is! File) continue;
+    final lower = e.path.toLowerCase();
+    if (lower.endsWith('.onnx') && model.isEmpty) model = e.path;
+    if (lower.endsWith('/tokens.txt') || lower.endsWith('\\tokens.txt')) {
+      tokens = e.path;
+    }
   }
-  return '';
+  if (model.isEmpty || tokens.isEmpty) return null;
+  return _TtsFiles(model, tokens);
 }
 
 /// Выполняется в фоновом isolate: FFI-библиотеки инициализируются там.

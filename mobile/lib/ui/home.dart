@@ -814,7 +814,7 @@ class _EndActions extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        TextButton.icon(
+        OutlinedButton.icon(
           onPressed: () async {
             final topic = await askText(context, 'Новая задача от ИИ',
                 'тема: например «времена в английском» или «проброс портов»');
@@ -825,6 +825,10 @@ class _EndActions extends StatelessWidget {
                   .showSnackBar(SnackBar(content: Text(err)));
             }
           },
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(44),
+            side: BorderSide(color: C.accent.withAlpha(90)),
+          ),
           icon: const Icon(Icons.add, size: 16),
           label:
               const Text('Создать одну задачу', style: TextStyle(fontSize: 12)),

@@ -58,6 +58,10 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Анонимный пользователь нужен общему ИИ для авторизации на шлюзе,
+  /// но он не является входом в Google и не должен включать синхронизацию.
+  User? _syncUser(User? u) => u == null || u.isAnonymous ? null : u;
+
   bool get ready => _ready;
   bool get busy => _busy;
   bool get signedIn => _user != null;
@@ -80,13 +84,19 @@ class SyncService extends ChangeNotifier {
       return;
     }
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      if (Firebase.apps.isEmpty) {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+        } on FirebaseException catch (e) {
+          if (e.code != 'duplicate-app') rethrow;
+        }
+      }
       _ready = true;
-      _user = FirebaseAuth.instance.currentUser;
+      _user = _syncUser(FirebaseAuth.instance.currentUser);
       FirebaseAuth.instance.authStateChanges().listen((u) {
-        _user = u;
+        _user = _syncUser(u);
         notifyListeners();
       });
     } catch (e) {
@@ -123,7 +133,7 @@ class SyncService extends ChangeNotifier {
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       final result =
           await FirebaseAuth.instance.signInWithCredential(credential);
-      _user = result.user;
+      _user = _syncUser(result.user);
       return '';
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return '';

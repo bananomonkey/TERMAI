@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:http/http.dart' as http;
 import 'app_action.dart';
-import 'local_ai.dart';
 import 'models.dart';
+import 'shared_ai.dart';
 import 'usage.dart';
 
 class ProviderPreset {
@@ -64,8 +64,9 @@ const providers = <ProviderPreset>[
       auth: 'apikey'), // в поле ключа — API-ключ Яндекс.Облака
   ProviderPreset('ollama', 'Ollama (локально)', 'http://localhost:11434/v1',
       'llama3.1', ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral']),
-  ProviderPreset('local', 'Локальная модель (на устройстве)', '', 'local', []),
   ProviderPreset('custom', 'Свой (OpenAI-совместимый)', '', '', []),
+  ProviderPreset(
+      'termai', 'TERMAI · общий доступ', '', 'deepseek-v4.1-flash:free', []),
 ];
 
 ProviderPreset findProvider(String id) =>
@@ -100,6 +101,26 @@ String rawError(Object e) {
 /// friendlyAiError — короткое объяснение вместо сырого лога в чате.
 String friendlyAiError(Object e) {
   final raw = rawError(e);
+  final lower = raw.toLowerCase();
+  // Ошибки общего шлюза важнее общего текста про HTTP-код: 401/403/429 здесь
+  // означают не «неверный личный ключ», а состояние акции или лимит.
+  if (lower.contains('promo_ended') || lower.contains('access_ended')) {
+    return 'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.';
+  }
+  if (lower.contains('anonymous_auth') ||
+      lower.contains('operation-not-allowed')) {
+    return 'Общий доступ: не удалось войти в Firebase. Включи анонимный вход в Firebase Authentication.';
+  }
+  if (lower.contains('shared_auth') || lower.contains('unauthorized')) {
+    return 'Общий доступ: сервер не подтвердил вход. Попробуй позже или добавь свой API-ключ.';
+  }
+  if (lower.contains('user_daily_limit') ||
+      lower.contains('global_daily_limit')) {
+    return 'Дневной лимит общего доступа исчерпан. Попробуй завтра или добавь свой API-ключ.';
+  }
+  if (lower.contains('server_misconfigured')) {
+    return 'Общий доступ временно не настроен на сервере. Используй свой API-ключ.';
+  }
   final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
   switch (status) {
     case '400':
@@ -154,32 +175,36 @@ class AIClient {
   /// endpoints — основное подключение + резервные, по порядку перебора.
   final List<AiEndpoint> _endpoints;
   final List<String> _labels;
-  final String localModelPath;
-  final int localContextSize;
+  final Future<String> Function()? _sharedToken;
   AIClient._(
     this._endpoints,
     this._labels, {
-    required this.localModelPath,
-    required this.localContextSize,
-  });
+    Future<String> Function()? sharedToken,
+  }) : _sharedToken = sharedToken;
 
   factory AIClient(Config cfg) {
+    // Во время общей акции все запросы идут через серверный шлюз TERMAI.
+    // Личный ключ пользователя при этом не используется и не перезаписывается.
+    final shared = SharedAiService.instance;
+    if (shared.isUsable(cfg)) {
+      return AIClient._(
+        [
+          AiEndpoint(
+            provider: 'termai',
+            apiKey: 'shared',
+            model: shared.model,
+            baseUrl: shared.chatBase,
+          )
+        ],
+        ['TERMAI · общий доступ'],
+        sharedToken: shared.idToken,
+      );
+    }
     final eps = <AiEndpoint>[];
     final labels = <String>[];
 
     void add(String provider, String apiKey, String model, String baseUrl) {
       final p = findProvider(provider);
-      if (p.id == 'local') {
-        if (cfg.localModelPath.trim().isEmpty) return;
-        eps.add(AiEndpoint(
-          provider: 'local',
-          apiKey: 'local',
-          model: 'local',
-          baseUrl: 'local',
-        ));
-        labels.add(p.title);
-        return;
-      }
       final b = baseUrl.trim().isNotEmpty ? baseUrl.trim() : p.baseUrl;
       var k = apiKey.trim();
       if (k.isEmpty &&
@@ -215,12 +240,7 @@ class AIClient {
         ep.lastError = f.lastError;
       }
     }
-    return AIClient._(
-      eps,
-      labels,
-      localModelPath: cfg.localModelPath,
-      localContextSize: cfg.localContextSize,
-    );
+    return AIClient._(eps, labels);
   }
 
   bool get ready => _endpoints.isNotEmpty;
@@ -239,7 +259,19 @@ class AIClient {
 
   String get model => _endpoints.isEmpty ? '' : _endpoints.first.model;
 
-  Map<String, String> _headers(AiEndpoint ep) {
+  Future<Map<String, String>> _headers(AiEndpoint ep) async {
+    if (ep.provider == 'termai') {
+      final token = await (_sharedToken?.call() ?? Future.value(''));
+      if (token.trim().isEmpty) {
+        throw Exception(
+            'shared_auth: общий доступ не авторизован. Включи анонимный вход Firebase.');
+      }
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${token.trim()}',
+        'X-Termai-Client': 'android',
+      };
+    }
     final auth = findProvider(ep.provider).auth;
     return {
       'Content-Type': 'application/json',
@@ -270,30 +302,15 @@ class AIClient {
     Duration timeout = const Duration(seconds: 180),
     List<Map<String, dynamic>>? tools,
   }) async {
-    if (ep.provider == 'local') {
-      final text = await LocalAiService.instance.chat(
-        messages,
-        modelPath: localModelPath,
-        contextSize: localContextSize,
-        temp: temp,
-        maxTokens: maxTokens ?? 1024,
-      );
-      if (text.trim().isEmpty)
-        throw Exception('локальная модель вернула пустой ответ');
-      final pt = estimateTokens(
-          messages.map((m) => _messageText(m['content'])).join('\n'));
-      final ct = estimateTokens(text);
-      onUsage?.call('local', pt, ct);
-      return {'role': 'assistant', 'content': text};
-    }
     final uri = Uri.parse('${ep.baseUrl}/chat/completions');
     final hasTools = tools != null && tools.isNotEmpty;
     final client = httpClientFactory?.call() ?? http.Client();
+    final headers = await _headers(ep);
     Future<http.Response> post(
             {required bool strict, required bool withTools}) =>
         client
             .post(uri,
-                headers: _headers(ep),
+                headers: headers,
                 body: jsonEncode({
                   'model': ep.model,
                   'messages': messages,
@@ -311,12 +328,13 @@ class AIClient {
     http.Response resp;
     try {
       resp = await post(strict: true, withTools: hasTools);
-      // Не все OpenAI-совместимые провайдеры умеют tools. Если запрос
-      // отвергнут из-за схемы, повторяем без tools — сработает marker-fallback.
-      if (resp.statusCode == 400 && hasTools) {
+      // Не все OpenAI-совместимые провайдеры умеют tools/response_format.
+      // Повторяем только при ошибке схемы, а не при 401/403/429/5xx:
+      // лишний запрос тратит лимит общего доступа и деньги пользователя.
+      if (resp.statusCode == 400 && (hasTools || jsonMode)) {
         resp = await post(strict: false, withTools: false);
-      } else if (resp.statusCode != 200) {
-        resp = await post(strict: false, withTools: hasTools);
+      } else if (resp.statusCode == 404 || resp.statusCode == 422) {
+        resp = await post(strict: false, withTools: false);
       }
     } finally {
       client.close();
@@ -668,6 +686,27 @@ class AIClient {
       {'role': 'system', 'content': system},
       {'role': 'user', 'content': parts},
     ], temp, jsonMode: false);
+    return ((msg['content'] as String?) ?? '').trim();
+  }
+
+  /// generateSvg — просим модель нарисовать иллюстрацию и вернуть только SVG.
+  /// Ответ проверяется и очищается в attachments.dart перед сохранением.
+  Future<String> generateSvg(String description) async {
+    const system = 'Ты — иллюстратор TERMAI. Нарисуй векторную иллюстрацию '
+        'по описанию пользователя. Верни ТОЛЬКО один самостоятельный SVG-файл '
+        'без markdown, без пояснений и без внешних ресурсов. '
+        'Обязательны xmlns="http://www.w3.org/2000/svg" и viewBox="0 0 800 600". '
+        'Используй фигуры, пути, градиенты и текст внутри SVG. '
+        'Запрещены script, foreignObject, image, iframe, object, embed, '
+        'внешние ссылки, data: URL и обработчики on*. '
+        'Иллюстрация должна быть понятной, аккуратной и по теме запроса.';
+    final msg = await _chat([
+      {'role': 'system', 'content': system},
+      {'role': 'user', 'content': 'Описание: $description'},
+    ], 0.75,
+        jsonMode: false,
+        maxTokens: 2600,
+        timeout: const Duration(seconds: 180));
     return ((msg['content'] as String?) ?? '').trim();
   }
 

@@ -1,6 +1,7 @@
 // attachments.dart — выбор фото/документа и копирование в папку приложения.
 // В чат сохраняются метаданные; сам файл не уходит в Firestore.
 import 'dart:io' as io;
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -118,4 +119,84 @@ Future<void> showAttachmentSheet(
           .showSnackBar(SnackBar(content: Text('Не удалось прикрепить: $e')));
     }
   }
+}
+
+/// sanitizeSvg — оставляем только безопасный самостоятельный SVG.
+/// Внешние ссылки, скрипты, обработчики и встроенные изображения запрещены:
+/// иллюстрация не должна уметь ходить в сеть или выполнять код.
+String sanitizeSvg(String raw) {
+  var svg = raw.trim();
+  if (svg.startsWith('```')) {
+    final first = svg.indexOf('\n');
+    if (first >= 0) svg = svg.substring(first + 1);
+  }
+  if (svg.endsWith('```')) svg = svg.substring(0, svg.length - 3).trim();
+  final start = svg.toLowerCase().indexOf('<svg');
+  final end = svg.toLowerCase().lastIndexOf('</svg>');
+  if (start < 0 || end < 0) {
+    throw Exception('модель не вернула SVG');
+  }
+  svg = svg.substring(start, end + 6).trim();
+  if (svg.length > 260000) {
+    throw Exception('SVG слишком большой (больше 260 КБ)');
+  }
+  final lower = svg.toLowerCase();
+  final check = lower
+      .replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
+      .replaceAll("xmlns='http://www.w3.org/2000/svg'", '');
+  final forbidden = <String>[
+    '<script',
+    '<foreignobject',
+    '<iframe',
+    '<object',
+    '<embed',
+    '<image',
+    'javascript:',
+    'data:',
+    'http://',
+    'https://',
+    '//',
+    'onload=',
+    'onclick=',
+    'onerror=',
+    'onmouseover=',
+    'onfocus=',
+    'xlink:href=',
+    'href=',
+  ];
+  for (final bad in forbidden) {
+    if (check.contains(bad)) {
+      throw Exception('в SVG найдено запрещённое содержимое: $bad');
+    }
+  }
+  if (!lower.contains('xmlns="http://www.w3.org/2000/svg"')) {
+    svg = svg.replaceFirst(RegExp(r'<svg', caseSensitive: false),
+        '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  if (!lower.contains('viewbox=')) {
+    svg = svg.replaceFirst(
+        RegExp(r'<svg', caseSensitive: false), '<svg viewBox="0 0 800 600"');
+  }
+  return svg;
+}
+
+/// saveSvgAttachment — сохраняет безопасный SVG в папку вложений и
+/// возвращает метаданные для чата. Файл не уходит в Firestore.
+Future<ChatAttachment> saveSvgAttachment(String raw,
+    {String name = 'illustration.svg'}) async {
+  final svg = sanitizeSvg(raw);
+  final dir = await getApplicationDocumentsDirectory();
+  final folder = io.Directory('${dir.path}/attachments');
+  if (!await folder.exists()) await folder.create(recursive: true);
+  final stamp = DateTime.now().millisecondsSinceEpoch;
+  final safe = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+  final target = io.File('${folder.path}/${stamp}_$safe');
+  await target.writeAsBytes(utf8.encode(svg), flush: true);
+  return ChatAttachment(
+    type: 'svg',
+    path: target.path,
+    name: name,
+    mime: 'image/svg+xml',
+    size: await target.length(),
+  );
 }

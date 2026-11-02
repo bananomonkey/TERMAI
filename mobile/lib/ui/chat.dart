@@ -680,6 +680,8 @@ class _Bubble extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _wrap(msg.text, C.secondary.withAlpha(28), isUser: false),
+                    for (final a in msg.attachments)
+                      if (a.isSvg) SvgAttachmentPreview(attachment: a),
                     _SpeakButton(text: msg.text),
                   ],
                 ),

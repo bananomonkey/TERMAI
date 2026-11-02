@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 
 import '../ai.dart';
 import '../main.dart';
+import '../models.dart';
 import '../notifications.dart';
+import '../shared_ai.dart';
 import '../theme_refresh.dart';
 import '../update_service.dart';
 import 'ai_fallbacks.dart';
@@ -16,7 +18,7 @@ import 'design_system.dart';
 import 'dialogs.dart';
 import 'direction_picker.dart';
 import 'help.dart';
-import 'local_ai.dart';
+import 'shared_ai_consent.dart';
 import 'theme.dart';
 import 'tts_settings.dart';
 import 'widgets.dart';
@@ -105,27 +107,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveAi() async {
-    if (_provider == 'local') {
-      if (controller.config.localModelPath.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Сначала выбери GGUF-модель в «Локальный ИИ»')));
-        return;
-      }
-      controller.config.provider = 'local';
-      controller.config.model = 'local';
-      controller.config.apiKey = '';
-      controller.config.baseUrl = '';
-    } else {
-      controller.config.provider = _provider;
-      controller.config.apiKey = _key.text.trim();
-      controller.config.model = _model.text.trim();
-      controller.config.baseUrl = _base.text.trim();
-    }
+    final profile = AiEndpoint(
+      provider: _provider,
+      apiKey: _key.text.trim(),
+      model: _model.text.trim(),
+      baseUrl: _base.text.trim(),
+    );
+    controller.config.providerProfiles[_provider] = profile;
+    controller.config.provider = _provider;
+    controller.config.apiKey = profile.apiKey;
+    controller.config.model = profile.model;
+    controller.config.baseUrl = profile.baseUrl;
     await controller.saveConfig();
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Настройки ИИ сохранены')));
+  }
+
+  void _rememberProvider() {
+    controller.config.providerProfiles[_provider] = AiEndpoint(
+      provider: _provider,
+      apiKey: _key.text.trim(),
+      model: _model.text.trim(),
+      baseUrl: _base.text.trim(),
+    );
+  }
+
+  Future<void> _toggleShared(bool value) async {
+    final service = SharedAiService.instance;
+    if (value &&
+        controller.config.sharedAiConsentVersion < service.noticeVersion) {
+      final ok = await askSharedAiConsent(
+        context,
+        reConsent: controller.config.sharedAiConsentVersion > 0,
+      );
+      if (!ok) return;
+      controller.config.sharedAiConsentVersion = service.noticeVersion;
+    }
+    controller.config.sharedAiEnabled = value;
+    if (!value) controller.config.sharedAiConsentVersion = -1;
+    await controller.saveConfig(autofill: false);
+    if (mounted) setState(() {});
   }
 
   void _pickTheme(String id) {
@@ -533,112 +555,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         decoration:
                             const InputDecoration(labelText: 'Провайдер'),
                         items: providers
+                            .where((p) => p.id != 'termai')
                             .map((p) => DropdownMenuItem(
                                 value: p.id, child: Text(p.title)))
                             .toList(),
                         onChanged: (id) {
-                          if (id == null) return;
+                          if (id == null || id == _provider) return;
+                          _rememberProvider();
                           final p = findProvider(id);
+                          final saved =
+                              controller.config.providerProfiles[p.id];
                           setState(() {
                             _provider = p.id;
-                            _base.text = p.baseUrl;
-                            _model.text = p.defaultModel;
+                            _key.text = saved?.apiKey ?? '';
+                            _base.text = saved?.baseUrl ?? p.baseUrl;
+                            _model.text = saved?.model ?? p.defaultModel;
                           });
                         },
                       ),
                       const SizedBox(height: 12),
-                      if (_provider == 'local')
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: C.card2.withAlpha(150),
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.field),
-                          ),
-                          child: Text(
-                            controller.config.localModelPath.isEmpty
-                                ? 'Модель ещё не выбрана. Открой «Локальный ИИ» ниже.'
-                                : 'Модель: ${controller.config.localModelPath.split('/').last}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.caption.copyWith(color: C.muted),
-                          ),
-                        )
-                      else ...[
-                        TextField(
-                          controller: _key,
-                          obscureText: !_showKey,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          decoration: InputDecoration(
-                            labelText: 'API-ключ',
-                            hintText: 'sk-…',
-                            suffixIcon: IconButton(
-                              tooltip:
-                                  _showKey ? 'Скрыть ключ' : 'Показать ключ',
-                              icon: Icon(
-                                _showKey
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 20,
-                                color: C.muted,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _showKey = !_showKey),
+                      TextField(
+                        controller: _key,
+                        obscureText: !_showKey,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: InputDecoration(
+                          labelText: 'API-ключ',
+                          hintText: 'sk-…',
+                          suffixIcon: IconButton(
+                            tooltip: _showKey ? 'Скрыть ключ' : 'Показать ключ',
+                            icon: Icon(
+                              _showKey
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                              color: C.muted,
                             ),
+                            onPressed: () =>
+                                setState(() => _showKey = !_showKey),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Theme(
-                          data: Theme.of(context)
-                              .copyWith(dividerColor: Colors.transparent),
-                          child: ExpansionTile(
-                            tilePadding:
-                                const EdgeInsets.symmetric(horizontal: 2),
-                            // Нулевой childrenPadding ставил поле вплотную к
-                            // заголовку: всплывающий label «Модель» уходил
-                            // под header. Верхний inset — часть раскрытия.
-                            childrenPadding:
-                                const EdgeInsets.only(top: AppSpace.x3),
-                            clipBehavior: Clip.none,
-                            iconColor: C.muted,
-                            collapsedIconColor: C.muted,
-                            title: Text(
-                              'Дополнительно',
-                              style: AppText.caption.copyWith(
-                                color: C.muted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            children: [
-                              TextField(
-                                controller: _model,
-                                decoration: const InputDecoration(
-                                    labelText: 'Модель',
-                                    hintText: 'пусто — из пресета'),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _base,
-                                decoration: const InputDecoration(
-                                    labelText: 'Base URL',
-                                    hintText: 'пусто — из пресета'),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      appRow(
-                        icon: Icons.memory,
-                        title: 'Локальный ИИ',
-                        subtitle: controller.config.localModelPath.isEmpty
-                            ? 'GGUF на устройстве, без интернета'
-                            : controller.config.localModelPath.split('/').last,
-                        onTap: () => Navigator.of(context)
-                            .push(pageRoute(const LocalAiScreen())),
                       ),
+                      const SizedBox(height: 6),
+                      Theme(
+                        data: Theme.of(context)
+                            .copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding:
+                              const EdgeInsets.symmetric(horizontal: 2),
+                          // Нулевой childrenPadding ставил поле вплотную к
+                          // заголовку: всплывающий label «Модель» уходил
+                          // под header. Верхний inset — часть раскрытия.
+                          childrenPadding:
+                              const EdgeInsets.only(top: AppSpace.x3),
+                          clipBehavior: Clip.none,
+                          iconColor: C.muted,
+                          collapsedIconColor: C.muted,
+                          title: Text(
+                            'Дополнительно',
+                            style: AppText.caption.copyWith(
+                              color: C.muted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          children: [
+                            TextField(
+                              controller: _model,
+                              decoration: const InputDecoration(
+                                  labelText: 'Модель',
+                                  hintText: 'пусто — из пресета'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _base,
+                              decoration: const InputDecoration(
+                                  labelText: 'Base URL',
+                                  hintText: 'пусто — из пресета'),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       appRow(
                         icon: Icons.swap_horiz_outlined,
                         title: 'Резервные модели',
@@ -661,6 +659,108 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ]),
+              ),
+              const SizedBox(height: 18),
+
+              // ---------- общий доступ ----------
+              _SectionTitle('Общий доступ TERMAI'),
+              _Panel(
+                child: ListenableBuilder(
+                  listenable: SharedAiService.instance,
+                  builder: (context, _) {
+                    final service = SharedAiService.instance;
+                    final promo = service.promo;
+                    if (!service.proxyConfigured) {
+                      return Text(
+                        'В этой сборке сервер общего доступа не указан. '
+                        'Личный ИИ работает как обычно.',
+                        style: AppText.caption.copyWith(color: C.muted),
+                      );
+                    }
+                    if (service.loading && promo == null) {
+                      return Row(children: [
+                        SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: C.accent)),
+                        const SizedBox(width: 10),
+                        Text('Проверяю условия акции…',
+                            style: AppText.caption.copyWith(color: C.muted)),
+                      ]);
+                    }
+                    if (promo == null || !promo.enabled) {
+                      return Text(
+                        service.error.isEmpty
+                            ? 'Общий доступ сейчас выключен на сервере.'
+                            : service.error,
+                        style: AppText.caption.copyWith(color: C.muted),
+                      );
+                    }
+                    final expired = !promo.active;
+                    final consentOk =
+                        controller.config.sharedAiConsentVersion >=
+                            promo.noticeVersion;
+                    final enabled = controller.config.sharedAiEnabled &&
+                        consentOk &&
+                        !expired;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            expired ? 'Акция завершена' : 'Бесплатный общий ИИ',
+                            style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: C.text),
+                          ),
+                          subtitle: Text(
+                            expired
+                                ? 'Запросы снова идут только через твой личный ключ.'
+                                : '${promo.model} · ${service.remainingLabel}\n'
+                                    'Запросы идут через внешний шлюз Token Harbor. '
+                                    'Ключ хранится только на сервере.',
+                            style: TextStyle(
+                                fontSize: 11.5, color: C.muted, height: 1.35),
+                          ),
+                          value: enabled,
+                          activeThumbColor: C.accent,
+                          onChanged: expired ? null : _toggleShared,
+                        ),
+                        if (!expired)
+                          Row(children: [
+                            Icon(
+                              enabled
+                                  ? Icons.check_circle_outline
+                                  : Icons.info_outline,
+                              size: 16,
+                              color: enabled ? C.good : C.warn,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                enabled
+                                    ? 'Общий доступ включён. Личные настройки не изменяются.'
+                                    : 'Общий доступ выключен — используется твой провайдер.',
+                                style: AppText.caption.copyWith(
+                                    color: enabled ? C.good : C.muted),
+                              ),
+                            ),
+                          ]),
+                        if (service.privacyUrl.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            service.privacyUrl,
+                            style: AppText.caption
+                                .copyWith(color: C.accent, fontSize: 10.5),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 18),
 

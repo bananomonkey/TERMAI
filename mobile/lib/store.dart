@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'ai.dart';
 import 'app_action.dart';
+import 'attachments.dart';
 import 'diagnostics.dart';
 import 'directions.dart';
 import 'editor_verify.dart';
@@ -18,6 +19,7 @@ import 'navigation.dart';
 import 'notifications.dart';
 import 'sandbox.dart';
 import 'secret_store.dart';
+import 'shared_ai.dart';
 import 'sync_service.dart';
 import 'theme_refresh.dart';
 import 'tts_service.dart';
@@ -166,6 +168,7 @@ class AppController extends ChangeNotifier {
     C.p = presetById(config.theme);
     C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
     _initAI();
+    SharedAiService.instance.addListener(_onSharedAiChanged);
 
     if (!prog.genCleaned) {
       // одноразовая чистка: задачи ранних версий могли смешивать предметы
@@ -178,12 +181,26 @@ class AppController extends ChangeNotifier {
     resetCourseState();
     ready = true;
     notifyListeners();
+    unawaited(refreshSharedAi());
     unawaited(() async {
       try {
         await _initSync();
       } catch (_) {}
       await autoFillAll();
     }());
+  }
+
+  void _onSharedAiChanged() {
+    _initAI();
+    notifyListeners();
+  }
+
+  /// refreshSharedAi — обновляет публичные условия акции с серверного шлюза.
+  /// Ключ и срок акции меняются на сервере без обновления приложения.
+  Future<void> refreshSharedAi() async {
+    await SharedAiService.instance.refresh();
+    _initAI();
+    notifyListeners();
   }
 
   /// _initSync — тихо поднимает Firebase и подтягивает облачный прогресс,
@@ -546,6 +563,73 @@ class AppController extends ChangeNotifier {
         }
       }
     }
+    final rawProfiles = sec['profiles'];
+    if (rawProfiles is Map) {
+      for (final entry in rawProfiles.entries) {
+        final id = entry.key.toString();
+        if (entry.value is! Map) continue;
+        final saved =
+            AiEndpoint.fromJson(Map<String, dynamic>.from(entry.value as Map));
+        final existing = config.providerProfiles[id];
+        if (existing == null) {
+          config.providerProfiles[id] = saved;
+        } else if (saved.apiKey.isNotEmpty) {
+          existing.apiKey = saved.apiKey;
+        }
+      }
+    }
+    // Локальный GGUF больше не поддерживается. Если он был основным,
+    // возвращаемся к первому живому резервному провайдеру (например,
+    // OpenRouter), а иначе оставляем пустой DeepSeek для ручной настройки.
+    if (config.provider == 'local' || config.provider == 'hf') {
+      final alive = config.fallbacks
+          .where((f) => f.provider != 'local' && f.provider != 'hf')
+          .toList();
+      if (alive.isNotEmpty) {
+        final first = alive.removeAt(0);
+        if (config.apiKey.trim().isEmpty) {
+          config.provider = first.provider;
+          config.apiKey = first.apiKey;
+          config.model = first.model;
+          config.baseUrl = first.baseUrl;
+        }
+        config.fallbacks = alive;
+      } else {
+        config.provider = 'deepseek';
+        config.apiKey = '';
+        config.model = '';
+        config.baseUrl = '';
+        config.fallbacks = [];
+      }
+    }
+    config.fallbacks = config.fallbacks
+        .where((f) => f.provider != 'local' && f.provider != 'hf')
+        .toList();
+    config.providerProfiles.remove('local');
+    config.providerProfiles.remove('hf');
+
+    // Миграция старых настроек: каждый известный провайдер получает свой
+    // профиль. Если OpenRouter раньше был основным или резервным, его ключ,
+    // модель и Base URL восстановятся при переключении.
+    void remember(String provider, String key, String model, String baseUrl) {
+      if (provider.isEmpty) return;
+      final existing = config.providerProfiles[provider];
+      if (existing == null) {
+        config.providerProfiles[provider] = AiEndpoint(
+          provider: provider,
+          apiKey: key,
+          model: model,
+          baseUrl: baseUrl,
+        );
+      } else if (existing.apiKey.isEmpty && key.isNotEmpty) {
+        existing.apiKey = key;
+      }
+    }
+
+    remember(config.provider, config.apiKey, config.model, config.baseUrl);
+    for (final f in config.fallbacks) {
+      remember(f.provider, f.apiKey, f.model, f.baseUrl);
+    }
     await _writeAiSecrets();
     // Убираем старые ключи из уже существующего termai.json.
     final dir = await _dataDir();
@@ -563,6 +647,12 @@ class AppController extends ChangeNotifier {
                   'api_key': f.apiKey,
                 })
             .toList(growable: false),
+        profiles: config.providerProfiles.map((k, v) => MapEntry(k, {
+              'provider': v.provider,
+              'model': v.model,
+              'base_url': v.baseUrl,
+              'api_key': v.apiKey,
+            })),
       );
 
   /// _initAI — собирает клиент из основного и резервных подключений.
@@ -576,6 +666,10 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     };
     client.onEndpointResult = (ep, ok, err, latency) {
+      // В общем режиме шлюз живёт по своим правилам: не переносим его ошибки
+      // на личные настройки пользователя, чтобы после акции ничего не
+      // выглядело «сломанным» без причины.
+      if (SharedAiService.instance.isUsable(config)) return;
       final isPrimary =
           client.endpoints.isNotEmpty && identical(ep, client.endpoints.first);
       var changed = false;
@@ -590,11 +684,9 @@ class AppController extends ChangeNotifier {
         config.primaryLastError = ep.lastError;
       } else {
         for (final f in config.fallbacks) {
-          final sameLocal = ep.provider == 'local' && f.provider == 'local';
-          if (sameLocal ||
-              (f.provider == ep.provider &&
-                  f.model == ep.model &&
-                  f.baseUrl == ep.baseUrl)) {
+          if (f.provider == ep.provider &&
+              f.model == ep.model &&
+              f.baseUrl == ep.baseUrl) {
             changed = f.failStreak != ep.failStreak ||
                 f.penaltyUntil != ep.penaltyUntil ||
                 f.lastError != ep.lastError;
@@ -1733,8 +1825,6 @@ extension AppCourses on AppController {
       'StatsScreen' => 'статистика',
       'TtsSettingsScreen' => 'озвучивание',
       'LocalTtsScreen' => 'локальные голоса',
-      'LocalAiScreen' => 'локальный ИИ',
-      'HuggingFaceScreen' => 'каталог Hugging Face',
       _ => screen,
     };
     final chat = activeChat;
@@ -1751,7 +1841,7 @@ extension AppCourses on AppController {
         'Текущая задача: ${task?.title ?? '—'}. '
         'XP: ${prog.xp}, серия: ${prog.streak}, решено: ${prog.solvedTotal}. '
         'Токены: ${prog.tokensTotal}. '
-        'ИИ: ${config.provider}/${ai?.model ?? 'не настроен'}.';
+        'ИИ: ${ai == null ? 'не настроен' : (SharedAiService.instance.isUsable(config) ? 'TERMAI общий доступ' : config.provider)}/${ai?.model ?? '—'}.';
   }
 
   Future<String> sendChat(String question,
@@ -1790,8 +1880,35 @@ extension AppCourses on AppController {
       return '';
     }
     if (ai == null || !ai!.ready) {
-      this.addChatMessage(
-          'system', 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.');
+      final promo = SharedAiService.instance;
+      final hint = promo.promoActive
+          ? 'Общий доступ ещё не включён: прими условия в настройках ИИ.'
+          : (promo.endsAt != null
+              ? 'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.'
+              : 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.');
+      this.addChatMessage('system', hint);
+      return '';
+    }
+    if (attachments.isEmpty && _looksLikeDrawingRequest(question)) {
+      mentorBusy = true;
+      notifyListeners();
+      try {
+        final svg = await ai!.generateSvg(question);
+        final attachment = await saveSvgAttachment(svg);
+        chat.messages.add(ChatMsg(
+          'mentor',
+          'Вот иллюстрация по твоему описанию. Нажми на неё, чтобы увеличить или сохранить.',
+          attachments: [attachment],
+        ));
+        chatMsgs = chat.messages;
+        chat.updatedAt = DateTime.now().toIso8601String();
+        await saveProgress();
+      } catch (e) {
+        addChatError('Не удалось нарисовать иллюстрацию', e);
+      } finally {
+        mentorBusy = false;
+        notifyListeners();
+      }
       return '';
     }
     mentorBusy = true;
@@ -1997,8 +2114,6 @@ extension AppCourses on AppController {
     'open_interview',
     'open_terminal',
     'open_mental_map',
-    'open_local_ai',
-    'open_hf_catalog',
     'open_progress',
     'open_settings',
     'open_archive',
@@ -2731,6 +2846,14 @@ extension AppCourses on AppController {
 
   void stopInterview() {
     interviewMode = false;
+  }
+
+  bool _looksLikeDrawingRequest(String text) {
+    final q = text.toLowerCase();
+    if (q.contains('не рисуй') || q.contains('не надо рисовать')) return false;
+    return RegExp(
+            r'(нарисуй|нарисовать|изобрази|иллюстрац|картинк|рисунок|\bsvg\b|\bdraw\b|illustrat)')
+        .hasMatch(q);
   }
 
   String _errMsg(Object e) {

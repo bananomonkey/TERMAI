@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
+import '../shared_ai.dart';
 import 'design_system.dart';
 import 'direction_picker.dart';
 import 'help.dart';
@@ -29,6 +30,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool _showKey = false;
 
+  bool _useShared = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _useShared = controller.config.sharedAiEnabled;
+  }
+
   @override
   void dispose() {
     _page.dispose();
@@ -47,6 +56,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
     controller.config.userName = _name.text.trim();
     controller.config.onboarded = true;
+    final shared = SharedAiService.instance;
+    if (_useShared) {
+      controller.config.sharedAiEnabled = true;
+      controller.config.sharedAiConsentVersion =
+          shared.noticeVersion < 1 ? 1 : shared.noticeVersion;
+    } else {
+      controller.config.sharedAiEnabled = false;
+      controller.config.sharedAiConsentVersion = -1;
+    }
     if (_selected.isEmpty) {
       _selected.add('devops');
     }
@@ -431,9 +449,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: C.muted,
             ),
           ),
-          const SizedBox(
-            height: 18.0,
-          ),
+          if (SharedAiService.instance.proxyConfigured) ...[
+            Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: C.card,
+                borderRadius: BorderRadius.circular(14.0),
+                border: Border.all(color: C.accent.withAlpha(55)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Бесплатный общий ИИ',
+                      style: TextStyle(
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w700,
+                          color: C.text),
+                    ),
+                    subtitle: Text(
+                      '${SharedAiService.instance.remainingLabel.isEmpty ? 'До окончания акции' : SharedAiService.instance.remainingLabel}. '
+                      'Запросы идут через внешний шлюз Token Harbor. Ключ хранится только на сервере. '
+                      'После акции — твой личный ключ.',
+                      style: TextStyle(
+                          fontSize: 11.5, height: 1.4, color: C.muted),
+                    ),
+                    value: _useShared,
+                    activeThumbColor: C.accent,
+                    onChanged: (v) => setState(() => _useShared = v),
+                  ),
+                  Text(
+                    'Без согласия запросы через общий шлюз не отправляются.',
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        color: C.warn,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(
+              height: 14.0,
+            ),
+          ],
           TextField(
             controller: _key,
             obscureText: !_showKey,

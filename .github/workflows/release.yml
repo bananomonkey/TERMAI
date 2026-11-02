@@ -71,7 +71,8 @@ jobs:
       - name: Build split APKs
         run: |
           set -o pipefail
-          flutter build apk --release --split-per-abi 2>&1 | tee build.log
+          flutter build apk --release --split-per-abi \
+            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL }} 2>&1 | tee build.log
         working-directory: mobile
       - name: Build failure details
         if: failure()
@@ -98,8 +99,12 @@ jobs:
           cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk TERMAI-x86_64.apk
           # совместимый псевдоним для старых ссылок: большинство телефонов — arm64
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk TERMAI.apk
+      - name: APK sizes
+        run: |
+          ls -lh mobile/build/app/outputs/flutter-apk/*.apk
       - name: Build AAB for Google Play
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release \
+            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL }}
         working-directory: mobile
       - name: Rename AAB
         run: cp mobile/build/app/outputs/bundle/release/app-release.aab TERMAI.aab

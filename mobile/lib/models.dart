@@ -357,6 +357,7 @@ class ChatAttachment {
   });
 
   bool get isImage => type == 'image';
+  bool get isSvg => type == 'svg';
 
   factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
         type: j['type'] as String? ?? 'file',
@@ -602,6 +603,16 @@ class Config {
   /// Резервные ИИ-подключения: перебираются по порядку, если основной откажет.
   List<AiEndpoint> fallbacks;
 
+  /// Отдельные настройки для каждого провайдера. При переключении в
+  /// настройках ключ, модель и Base URL предыдущего провайдера сохраняются.
+  Map<String, AiEndpoint> providerProfiles;
+
+  /// Общий бесплатный доступ TERMAI через серверный шлюз. Ключ шлюза
+  /// никогда не попадает в приложение: здесь только пользовательские
+  /// предпочтения и версия принятого предупреждения.
+  bool sharedAiEnabled;
+  int sharedAiConsentVersion;
+
   /// Фоновое фото главного экрана: путь к файлу (пусто — фон темы).
   String bgPhoto;
 
@@ -625,13 +636,6 @@ class Config {
 
   /// Пользовательские темы, сгенерированные ИИ.
   List<CustomThemeData> customThemes;
-
-  /// Локальная GGUF-модель: путь к файлу на этом устройстве.
-  /// Не синхронизируется в облако — на другом устройстве путь недействителен.
-  String localModelPath;
-
-  /// Размер контекста локальной модели в токенах.
-  int localContextSize;
 
   /// Озвучивание ответов. Системный TTS не требует загрузки модели.
   bool ttsEnabled;
@@ -688,6 +692,9 @@ class Config {
     this.launcherY = -1,
     this.themeAuto = true,
     List<AiEndpoint>? fallbacks,
+    Map<String, AiEndpoint>? providerProfiles,
+    this.sharedAiEnabled = true,
+    this.sharedAiConsentVersion = 0,
     this.bgPhoto = '',
     this.bgBlur = 24,
     this.bgDim = 0.55,
@@ -695,8 +702,6 @@ class Config {
     this.syncKeysToCloud = true,
     this.mascotVisible = true,
     List<CustomThemeData>? customThemes,
-    this.localModelPath = '',
-    this.localContextSize = 4096,
     this.ttsEnabled = false,
     this.ttsAutoChat = true,
     this.ttsAutoCompletion = true,
@@ -722,6 +727,7 @@ class Config {
   })  : motivationQueue = motivationQueue ?? [],
         directions = directions ?? [],
         fallbacks = fallbacks ?? [],
+        providerProfiles = providerProfiles ?? {},
         customThemes = customThemes ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
@@ -750,6 +756,12 @@ class Config {
         fallbacks: ((j['fallbacks'] as List?) ?? [])
             .map((e) => AiEndpoint.fromJson(e as Map<String, dynamic>))
             .toList(),
+        providerProfiles: ((j['provider_profiles'] as Map?) ?? const {}).map(
+            (k, v) => MapEntry(k.toString(),
+                AiEndpoint.fromJson(Map<String, dynamic>.from(v as Map)))),
+        sharedAiEnabled: j['shared_ai_enabled'] as bool? ?? true,
+        sharedAiConsentVersion:
+            (j['shared_ai_consent_version'] as num?)?.toInt() ?? 0,
         bgPhoto: j['bg_photo'] as String? ?? '',
         bgBlur: (j['bg_blur'] as num?)?.toDouble() ?? 24,
         bgDim: (j['bg_dim'] as num?)?.toDouble() ?? 0.55,
@@ -761,10 +773,6 @@ class Config {
         customThemes: ((j['custom_themes'] as List?) ?? [])
             .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
             .toList(),
-        localModelPath: j['local_model_path'] as String? ?? '',
-        localContextSize: ((j['local_context_size'] as num?)?.toInt() ?? 4096)
-            .clamp(512, 32768)
-            .toInt(),
         ttsEnabled: j['tts_enabled'] as bool? ?? false,
         ttsAutoChat: j['tts_auto_chat'] as bool? ?? true,
         ttsAutoCompletion: j['tts_auto_completion'] as bool? ?? true,
@@ -815,14 +823,16 @@ class Config {
         'launcher_y': launcherY,
         'theme_auto': themeAuto,
         'fallbacks': fallbacks.map((e) => e.toJson()).toList(),
+        'provider_profiles':
+            providerProfiles.map((k, v) => MapEntry(k, v.toJson())),
+        'shared_ai_enabled': sharedAiEnabled,
+        'shared_ai_consent_version': sharedAiConsentVersion,
         'bg_photo': bgPhoto,
         'bg_blur': bgBlur,
         'bg_dim': bgDim,
         'button_brightness': buttonBrightness,
         'sync_keys_to_cloud': syncKeysToCloud,
         'mascot_visible': mascotVisible,
-        'local_model_path': localModelPath,
-        'local_context_size': localContextSize,
         'tts_enabled': ttsEnabled,
         'tts_auto_chat': ttsAutoChat,
         'tts_auto_completion': ttsAutoCompletion,
@@ -858,6 +868,9 @@ class Config {
     j['fallbacks'] = fbs
         .map((e) => Map<String, dynamic>.from(e as Map)..remove('api_key'))
         .toList();
+    final profiles = (j['provider_profiles'] as Map?) ?? const {};
+    j['provider_profiles'] = profiles.map((k, v) =>
+        MapEntry(k, Map<String, dynamic>.from(v as Map)..remove('api_key')));
     return j;
   }
 
@@ -867,13 +880,15 @@ class Config {
     final j = Map<String, dynamic>.from(toJson());
     // локальные пути не имеют смысла на другом устройстве
     j.remove('bg_photo');
-    j.remove('local_model_path');
     if (!includeKeys) {
       j.remove('api_key');
       final fbs = (j['fallbacks'] as List?) ?? const [];
       j['fallbacks'] = fbs
           .map((e) => Map<String, dynamic>.from(e as Map)..remove('api_key'))
           .toList();
+      final profiles = (j['provider_profiles'] as Map?) ?? const {};
+      j['provider_profiles'] = profiles.map((k, v) =>
+          MapEntry(k, Map<String, dynamic>.from(v as Map)..remove('api_key')));
     }
     return j;
   }
