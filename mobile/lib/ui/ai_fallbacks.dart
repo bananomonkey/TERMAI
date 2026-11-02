@@ -5,7 +5,11 @@ import '../models.dart';
 import 'app_background.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
+
+@NowaGenerated()
 class AiFallbacksScreen extends StatelessWidget {
+  @NowaGenerated({'loader': 'auto-constructor'})
   const AiFallbacksScreen({super.key});
 
   @override

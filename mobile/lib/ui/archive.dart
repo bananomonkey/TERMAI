@@ -7,7 +7,11 @@ import 'design_system.dart';
 import 'dialogs.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
+
+@NowaGenerated()
 class ArchiveScreen extends StatelessWidget {
+  @NowaGenerated({'loader': 'auto-constructor'})
   const ArchiveScreen({super.key});
 
   Future<void> _rename(BuildContext context, Course c) async {

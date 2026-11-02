@@ -29,6 +29,7 @@ dependencies:
   open_filex: ^5.0.0
   yaml: ^3.1.4
   flutter_tts: ^4.2.5
+  nowa_runtime: ^0.2.0
   workmanager: ^0.10.10
   device_info_plus: ^13.3.0
   sherpa_onnx: ^2.0.1
@@ -39,6 +40,13 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.1
+
+# Nowa runtime depends on flutter_inappwebview_android 1.1.3, whose Gradle
+# script targets AGP 8 and fails on AGP 9. The local copy is patched for the
+# AGP 9 DSL while keeping the public API unchanged.
+dependency_overrides:
+  flutter_inappwebview_android:
+    path: third_party/flutter_inappwebview_android
 
 flutter:
   uses-material-design: true
