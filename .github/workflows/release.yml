@@ -58,6 +58,11 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/emulator /opt/ghc
+          df -h /
       - name: Pub get
         run: flutter pub get
         working-directory: mobile
@@ -71,10 +76,12 @@ jobs:
         shell: bash
         working-directory: mobile
         run: |
+          echo "::error title=Disk space::$(df -h / | tail -n 1 | tr -s ' ')"
           if [ -f build.log ]; then
-            tail -n 60 build.log | while IFS= read -r line; do
-              echo "::error title=Android build::$line"
-            done
+            grep -inE "no space|disk full|error|exception|failed|failure|cannot|not found|unable" build.log \
+              | tail -n 20 | while IFS= read -r line; do
+                echo "::error title=Android build::$line"
+              done
           fi
       - name: Collect APKs
         run: |

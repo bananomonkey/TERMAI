@@ -19,7 +19,10 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.vlad.termai"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // GitHub Actions runner already has NDK 27.3 preinstalled. Flutter's default
+    // NDK 28.2 is not present and downloading/unpacking it runs the runner out
+    // of disk space. Pin to the preinstalled version used by the CI image.
+    ndkVersion = "27.3.13750724"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
