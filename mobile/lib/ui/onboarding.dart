@@ -57,7 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     controller.config.userName = _name.text.trim();
     controller.config.onboarded = true;
     final shared = SharedAiService.instance;
-    if (_useShared) {
+    if (_useShared && controller.sync.signedIn) {
       controller.config.sharedAiEnabled = true;
       controller.config.sharedAiConsentVersion =
           shared.noticeVersion < 1 ? 1 : shared.noticeVersion;
@@ -471,7 +471,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     subtitle: Text(
                       '${SharedAiService.instance.remainingLabel.isEmpty ? 'До окончания акции' : SharedAiService.instance.remainingLabel}. '
-                      'Запросы идут через внешний шлюз Token Harbor. Ключ хранится только на сервере. '
+                      'Работает после входа через Google ниже. Запросы идут через внешний шлюз Token Harbor, ключ хранится только на сервере. '
                       'После акции — твой личный ключ.',
                       style: TextStyle(
                           fontSize: 11.5, height: 1.4, color: C.muted),
@@ -481,7 +481,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     onChanged: (v) => setState(() => _useShared = v),
                   ),
                   Text(
-                    'Без согласия запросы через общий шлюз не отправляются.',
+                    controller.sync.signedIn
+                        ? 'Без согласия запросы через общий шлюз не отправляются.'
+                        : 'Общий доступ включится, как только войдёшь через Google. Без входа используется только твой ключ.',
                     style: TextStyle(
                         fontSize: 10.5,
                         color: C.warn,

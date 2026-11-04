@@ -29,7 +29,9 @@ Android app ──Firebase ID token──▶ Worker ──server-side key──�
   quota. Set `GLOBAL_DAILY_LIMIT` below that for the free tier (the example
   uses 800, which is the hard cap; the KV write quota is the tighter practical
   limit). A paid KV plan is not required for a small audience.
-- Firebase Authentication anonymous sign-in is free at normal hobby scale.
+- Firebase Authentication Google sign-in is free at normal hobby scale. The
+  gateway accepts only Google sign-ins (`firebase.sign_in_provider ===
+  'google.com'`); anonymous sessions are rejected.
 - Token Harbor's `deepseek-v4.1-flash:free` route is the free upstream model.
 - No VPS and no paid API are required. Cloudflare does not require a payment
   card for the Workers/KV free plan.

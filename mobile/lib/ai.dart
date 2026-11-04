@@ -109,10 +109,10 @@ String friendlyAiError(Object e) {
   }
   if (lower.contains('anonymous_auth') ||
       lower.contains('operation-not-allowed')) {
-    return 'Общий доступ: не удалось войти в Firebase. Включи анонимный вход в Firebase Authentication.';
+    return 'Общий доступ: не удалось подтвердить вход. Войди через Google в настройках синхронизации или добавь свой API-ключ.';
   }
   if (lower.contains('shared_auth') || lower.contains('unauthorized')) {
-    return 'Общий доступ: сервер не подтвердил вход. Попробуй позже или добавь свой API-ключ.';
+    return 'Общий доступ: сервер не подтвердил вход. Войди через Google или добавь свой API-ключ.';
   }
   if (lower.contains('user_daily_limit') ||
       lower.contains('global_daily_limit')) {
@@ -264,7 +264,7 @@ class AIClient {
       final token = await (_sharedToken?.call() ?? Future.value(''));
       if (token.trim().isEmpty) {
         throw Exception(
-            'shared_auth: общий доступ не авторизован. Включи анонимный вход Firebase.');
+            'shared_auth: общий доступ доступен после входа через Google.');
       }
       return {
         'Content-Type': 'application/json',

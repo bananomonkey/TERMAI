@@ -108,6 +108,11 @@ async function verifyFirebase(idToken, env) {
   if (typeof payload.exp !== 'number' || payload.exp <= now) return null;
   if (typeof payload.iat !== 'number' || payload.iat > now + 300) return null;
   if (typeof payload.sub !== 'string' || payload.sub.length === 0) return null;
+  const provider = payload.firebase?.sign_in_provider || '';
+  if (provider !== 'google.com') {
+    // Only users signed in with Google may use the shared promo.
+    return null;
+  }
   return payload.sub;
 }
 

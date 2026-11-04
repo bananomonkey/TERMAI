@@ -132,8 +132,10 @@ class _BootScreenState extends State<BootScreen>
     } catch (_) {}
     if (controller.config.onboarded && mounted) {
       final service = SharedAiService.instance;
+      await service.bindAuth();
       final version = controller.config.sharedAiConsentVersion;
-      final needsConsent = service.promoActive &&
+      final needsConsent = service.signedIn &&
+          service.promoActive &&
           (version == 0 || (version > 0 && version < service.noticeVersion));
       if (needsConsent) {
         final ok = await askSharedAiConsent(

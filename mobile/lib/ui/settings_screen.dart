@@ -135,6 +135,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _toggleShared(bool value) async {
     final service = SharedAiService.instance;
+    if (value && !service.signedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Общий доступ включается после входа через Google — войди ниже в разделе синхронизации.'),
+        ));
+      }
+      return;
+    }
     if (value &&
         controller.config.sharedAiConsentVersion < service.noticeVersion) {
       final ok = await askSharedAiConsent(
@@ -701,8 +710,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final consentOk =
                         controller.config.sharedAiConsentVersion >=
                             promo.noticeVersion;
+                    final signedIn = service.signedIn;
                     final enabled = controller.config.sharedAiEnabled &&
                         consentOk &&
+                        signedIn &&
                         !expired;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,7 +740,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           activeThumbColor: C.accent,
                           onChanged: expired ? null : _toggleShared,
                         ),
-                        if (!expired)
+                        if (!expired && !signedIn) ...[
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            Icon(Icons.lock_outline, size: 16, color: C.warn),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Общий доступ работает только после входа через Google. Войди в разделе «Облачная синхронизация» ниже.',
+                                style: AppText.caption.copyWith(color: C.warn),
+                              ),
+                            ),
+                          ]),
+                        ],
+                        if (!expired && signedIn)
                           Row(children: [
                             Icon(
                               enabled

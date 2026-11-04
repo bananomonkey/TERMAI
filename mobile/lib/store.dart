@@ -182,6 +182,7 @@ class AppController extends ChangeNotifier {
     ready = true;
     notifyListeners();
     unawaited(refreshSharedAi());
+    unawaited(SharedAiService.instance.bindAuth());
     unawaited(() async {
       try {
         await _initSync();
@@ -1881,11 +1882,18 @@ extension AppCourses on AppController {
     }
     if (ai == null || !ai!.ready) {
       final promo = SharedAiService.instance;
-      final hint = promo.promoActive
-          ? 'Общий доступ ещё не включён: прими условия в настройках ИИ.'
-          : (promo.endsAt != null
-              ? 'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.'
-              : 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.');
+      final String hint;
+      if (promo.promoActive && !promo.signedIn) {
+        hint =
+            'Общий бесплатный ИИ работает после входа через Google. Войди в настройках или добавь свой API-ключ.';
+      } else if (promo.promoActive) {
+        hint = 'Общий доступ ещё не включён: прими условия в настройках ИИ.';
+      } else if (promo.endsAt != null) {
+        hint =
+            'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.';
+      } else {
+        hint = 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
+      }
       this.addChatMessage('system', hint);
       return '';
     }

@@ -101,13 +101,16 @@ Future<DiagnosticReport> runDiagnostics(AppController c) async {
         level: active ? DiagnosticLevel.ok : DiagnosticLevel.warning,
         message: active
             ? 'включён (${shared.model})'
-            : (shared.promo!.active
-                ? 'выключен пользователем'
-                : 'акция завершена'),
+            : (!shared.signedIn
+                ? 'нужен вход через Google'
+                : (shared.promo!.active
+                    ? 'выключен пользователем'
+                    : 'акция завершена')),
         details: [
           'Модель: ${shared.model}',
           'До: ${shared.endsAt ?? '—'}',
           'Остаток: ${shared.remainingLabel}',
+          'Вход через Google: ${shared.signedIn ? 'да' : 'нет'}',
           'Личный провайдер: ${c.config.provider}',
         ].join('\n'),
       ));

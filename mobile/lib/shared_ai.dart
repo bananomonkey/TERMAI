@@ -70,6 +70,9 @@ class SharedAiService extends ChangeNotifier {
   Future<void>? _refreshing;
   Timer? _expiryTimer;
   Future<String>? _tokenFuture;
+  Future<void>? _binding;
+  StreamSubscription<User?>? _authSub;
+  bool _signedIn = false;
 
   String get proxyRoot {
     var value = _definedProxy.trim();
@@ -106,12 +109,73 @@ class SharedAiService extends ChangeNotifier {
     return 'осталось $hours ч. $minutes мин.';
   }
 
+  /// signedIn — вошёл ли пользователь через Google. Общий доступ выдаётся
+  /// только таким пользователям: анонимный вход больше не используется.
+  bool get signedIn {
+    if (_signedIn) return true;
+    if (_authSub != null) return false;
+    // До подписки на authStateChanges проверяем текущую сессию напрямую.
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      return u != null && !u.isAnonymous;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// bindAuth — подписывается на состояние Firebase Auth, чтобы общий доступ
+  /// сам выключался после выхода из Google-аккаунта.
+  Future<void> bindAuth() {
+    if (_binding != null) return _binding!;
+    final future = _bindAuth();
+    _binding = future;
+    return future.whenComplete(() {
+      if (identical(_binding, future)) _binding = null;
+    });
+  }
+
+  Future<void> _bindAuth() async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        final options = DefaultFirebaseOptions.currentPlatform;
+        if (options.apiKey.isEmpty || options.apiKey.startsWith('REPLACE')) {
+          return;
+        }
+        try {
+          await Firebase.initializeApp(options: options);
+        } on FirebaseException catch (e) {
+          if (e.code != 'duplicate-app') rethrow;
+        }
+      }
+      void apply(User? u) {
+        final signed = u != null && !u.isAnonymous;
+        if (signed == _signedIn) return;
+        _signedIn = signed;
+        notifyListeners();
+      }
+
+      apply(FirebaseAuth.instance.currentUser);
+      await _authSub?.cancel();
+      _authSub = FirebaseAuth.instance.authStateChanges().listen(apply);
+    } catch (_) {
+      // Firebase не настроен — общий доступ просто недоступен.
+    }
+  }
+
   /// isUsable — можно ли прямо сейчас отправлять запросы через общий шлюз.
   bool isUsable(Config config) {
     if (!proxyConfigured || _promo == null) return false;
     if (!config.sharedAiEnabled) return false;
     if (config.sharedAiConsentVersion < _promo!.noticeVersion) return false;
+    if (!signedIn) return false;
     return _promo!.active;
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    _authSub?.cancel();
+    super.dispose();
   }
 
   Future<void> refresh({bool force = false}) {
@@ -219,7 +283,8 @@ class SharedAiService extends ChangeNotifier {
   }
 
   /// idToken — Firebase ID token для авторизации на нашем Worker.
-  /// Анонимный вход не содержит email и не синхронизирует прогресс.
+  /// Общий доступ работает только для пользователей, вошедших через Google;
+  /// анонимные сессии не используются.
   Future<String> idToken() {
     if (_tokenFuture != null) return _tokenFuture!;
     final future = _getIdToken();
@@ -243,23 +308,18 @@ class SharedAiService extends ChangeNotifier {
           if (e.code != 'duplicate-app') rethrow;
         }
       }
-      var user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        final result = await FirebaseAuth.instance.signInAnonymously();
-        user = result.user;
+      await bindAuth();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.isAnonymous) {
+        throw Exception(
+            'shared_auth: общий доступ доступен после входа через Google.');
       }
-      if (user == null)
-        throw Exception('anonymous_auth: пользователь не создан');
       final token = await user.getIdToken();
       if (token == null || token.isEmpty) {
         throw Exception('shared_auth: пустой Firebase ID token');
       }
       return token;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'operation-not-allowed') {
-        throw Exception(
-            'anonymous_auth: включи анонимный вход в Firebase Authentication.');
-      }
       throw Exception('shared_auth: ${e.code} ${e.message ?? ''}');
     } catch (e) {
       throw Exception('shared_auth: $e');
