@@ -1027,7 +1027,16 @@ class _TermSlideState extends State<_TermSlide> {
   String _lastTerm = '';
 
   @override
+  void initState() {
+    super.initState();
+    _input.addListener(_onInputChanged);
+  }
+
+  void _onInputChanged() => _scrollToConsoleEnd();
+
+  @override
   void dispose() {
+    _input.removeListener(_onInputChanged);
     _pageScroll.dispose();
     _consoleScroll.dispose();
     super.dispose();
@@ -1035,8 +1044,11 @@ class _TermSlideState extends State<_TermSlide> {
 
   void _run() {
     final cmd = _input.text;
+    if (cmd.trim().isEmpty || controller.termBusy) return;
+    // runCommand синхронно добавляет строку команды в историю до первого
+    // await. Только после этого очищаем редактируемое поле.
+    unawaited(controller.runCommand(cmd));
     _input.clear();
-    controller.runCommand(cmd);
   }
 
   void _scrollToConsoleEnd() {
@@ -1122,13 +1134,22 @@ class _TermSlideState extends State<_TermSlide> {
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      controller.termText,
-                      style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12.5,
-                          height: 1.45,
-                          color: C.termText),
+                    child: ListenableBuilder(
+                      listenable: _input,
+                      builder: (context, _) {
+                        final draft = _input.text;
+                        final live = draft.isEmpty
+                            ? controller.termText
+                            : '${controller.termText}${controller.prompt}$draft';
+                        return Text(
+                          live,
+                          style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12.5,
+                              height: 1.45,
+                              color: C.termText),
+                        );
+                      },
                     ),
                   ),
                 ),

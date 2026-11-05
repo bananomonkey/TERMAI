@@ -81,7 +81,27 @@ class AppController extends ChangeNotifier {
   Map<String, List<HistEntry>> history = {};
   Map<String, String> stateTask = {};
 
-  String termText = '';
+  /// Вывод терминала хранится отдельно для каждого терминала (курс + задача):
+  /// переключение не теряет историю и не переносит её в соседний терминал.
+  final Map<String, String> _termBuffers = {};
+  final Map<String, List<String>> _cmdHistories = {};
+  final Map<String, int> _cmdHistIndexes = {};
+
+  /// Неотправленный ввод не должен переезжать в другой терминал.
+  final Map<String, String> _termDrafts = {};
+
+  /// termKey — идентификатор текущего терминала.
+  String get termKey => stateKey;
+
+  String get termText => _termBuffers[termKey] ?? '';
+
+  set termText(String value) {
+    if (value.isEmpty) {
+      _termBuffers.remove(termKey);
+    } else {
+      _termBuffers[termKey] = value;
+    }
+  }
 
   /// Общее поле ввода терминала: ИИ может вставить туда команду действием.
   final TextEditingController termInput = TextEditingController();
@@ -90,10 +110,20 @@ class AppController extends ChangeNotifier {
   int lessonSlideRequest = -1;
   int lessonSlideSeq = 0;
 
-  List<String> cmdHist = [];
-  int cmdHistIdx = 0;
-  final List<UndoEntry> undoBuf = [];
-  final List<UndoEntry> redoBuf = [];
+  /// История команд тоже принадлежит конкретному терминалу.
+  List<String> get cmdHist =>
+      _cmdHistories.putIfAbsent(termKey, () => <String>[]);
+
+  int get cmdHistIdx => _cmdHistIndexes[termKey] ?? cmdHist.length;
+
+  set cmdHistIdx(int value) => _cmdHistIndexes[termKey] = value;
+  final Map<String, List<UndoEntry>> _undoBuffers = {};
+  final Map<String, List<UndoEntry>> _redoBuffers = {};
+
+  List<UndoEntry> get undoBuf =>
+      _undoBuffers.putIfAbsent(termKey, () => <UndoEntry>[]);
+  List<UndoEntry> get redoBuf =>
+      _redoBuffers.putIfAbsent(termKey, () => <UndoEntry>[]);
 
   List<ChatMsg> chatMsgs = [];
   bool termBusy = false;
@@ -295,7 +325,9 @@ class AppController extends ChangeNotifier {
     _ensureDirections();
     _migrateDirectionData();
     _applyCourseFilter();
-    await saveConfig(autofill: false);
+    // Это применение уже получено из облака: не перезаписываем документ
+    // сразу же локальной копией (особенно секреты старого устройства).
+    await saveConfig(autofill: false, syncCloud: false);
     await scheduleNotifications();
   }
 
@@ -548,7 +580,13 @@ class AppController extends ChangeNotifier {
   Future<void> _restoreAiSecrets() async {
     final sec = await SecretStore.readAiSecrets();
     final main = (sec['main'] ?? '').toString();
-    if (main.isNotEmpty) config.apiKey = main;
+    final mainProvider = (sec['main_provider'] ?? '').toString();
+    // Старый формат не хранил провайдера. После первой записи он становится
+    // привязанным к провайдеру и больше не может попасть в чужой профиль.
+    if (main.isNotEmpty &&
+        (mainProvider.isEmpty || mainProvider == config.provider)) {
+      config.apiKey = main;
+    }
     final rawFallbacks = sec['fallbacks'];
     if (rawFallbacks is List) {
       for (final f in config.fallbacks) {
@@ -571,6 +609,18 @@ class AppController extends ChangeNotifier {
         if (entry.value is! Map) continue;
         final saved =
             AiEndpoint.fromJson(Map<String, dynamic>.from(entry.value as Map));
+        final duplicatedFallback = config.fallbacks.any((f) =>
+            f.provider == saved.provider &&
+            f.model == saved.model &&
+            f.baseUrl == saved.baseUrl &&
+            f.apiKey.isNotEmpty &&
+            f.apiKey == saved.apiKey);
+        // Версия 1 ошибочно копировала каждый резервный ключ в профиль
+        // провайдера. Не подставляем такую копию в главное поле. Сам ключ
+        // остаётся в резервном подключении и не удаляется.
+        if (duplicatedFallback && id != config.provider) {
+          saved.apiKey = '';
+        }
         final existing = config.providerProfiles[id];
         if (existing == null) {
           config.providerProfiles[id] = saved;
@@ -609,9 +659,9 @@ class AppController extends ChangeNotifier {
     config.providerProfiles.remove('local');
     config.providerProfiles.remove('hf');
 
-    // Миграция старых настроек: каждый известный провайдер получает свой
-    // профиль. Если OpenRouter раньше был основным или резервным, его ключ,
-    // модель и Base URL восстановятся при переключении.
+    // Миграция старых настроек: профиль создаём только для основного
+    // провайдера. Резервные ключи остаются в резервных подключениях и не
+    // копируются в видимое главное поле при переключении провайдера.
     void remember(String provider, String key, String model, String baseUrl) {
       if (provider.isEmpty) return;
       final existing = config.providerProfiles[provider];
@@ -628,9 +678,6 @@ class AppController extends ChangeNotifier {
     }
 
     remember(config.provider, config.apiKey, config.model, config.baseUrl);
-    for (final f in config.fallbacks) {
-      remember(f.provider, f.apiKey, f.model, f.baseUrl);
-    }
     await _writeAiSecrets();
     // Убираем старые ключи из уже существующего termai.json.
     final dir = await _dataDir();
@@ -639,6 +686,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _writeAiSecrets() => SecretStore.writeAiSecrets(
+        mainProvider: config.provider,
         main: config.apiKey,
         fallbacks: config.fallbacks
             .map((f) => {
@@ -648,12 +696,22 @@ class AppController extends ChangeNotifier {
                   'api_key': f.apiKey,
                 })
             .toList(growable: false),
-        profiles: config.providerProfiles.map((k, v) => MapEntry(k, {
-              'provider': v.provider,
-              'model': v.model,
-              'base_url': v.baseUrl,
-              'api_key': v.apiKey,
-            })),
+        profiles:
+            Map.fromEntries(config.providerProfiles.entries.where((entry) {
+          if (entry.key == config.provider) return true;
+          final v = entry.value;
+          return !config.fallbacks.any((f) =>
+              f.provider == v.provider &&
+              f.model == v.model &&
+              f.baseUrl == v.baseUrl &&
+              f.apiKey.isNotEmpty &&
+              f.apiKey == v.apiKey);
+        }).map((entry) => MapEntry(entry.key, {
+                  'provider': entry.value.provider,
+                  'model': entry.value.model,
+                  'base_url': entry.value.baseUrl,
+                  'api_key': entry.value.apiKey,
+                }))),
       );
 
   /// _initAI — собирает клиент из основного и резервных подключений.
@@ -722,7 +780,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveConfig({bool autofill = true}) async {
+  Future<void> saveConfig({bool autofill = true, bool syncCloud = true}) async {
     config.updatedAt = DateTime.now().toIso8601String();
     rebuildCustomThemePresets(config.customThemes);
     _migrateTheme();
@@ -739,9 +797,11 @@ class AppController extends ChangeNotifier {
     _initAI();
     notifyListeners();
     // Автосохранение в облако: имя, тема, уведомления и (по тумблеру) ключи.
-    sync.scheduleConfigPush(jsonEncode(
-      config.toCloudJson(includeKeys: config.syncKeysToCloud),
-    ));
+    if (syncCloud) {
+      sync.scheduleConfigPush(jsonEncode(
+        config.toCloudJson(includeKeys: config.syncKeysToCloud),
+      ));
+    }
     if (autofill) autoFillAll();
   }
 
@@ -1183,6 +1243,12 @@ class AppController extends ChangeNotifier {
     states.clear();
     history.clear();
     stateTask.clear();
+    _termBuffers.clear();
+    _cmdHistories.clear();
+    _cmdHistIndexes.clear();
+    _termDrafts.clear();
+    _undoBuffers.clear();
+    _redoBuffers.clear();
     chatMsgs = [];
     reviewKey = null;
     await saveProgress();
@@ -1209,12 +1275,14 @@ class AppController extends ChangeNotifier {
   /// подтягиваются из облака (например, на новом устройстве).
   Future<String> syncConfig({bool pullFirst = true}) async {
     if (!sync.signedIn) return 'Сначала войди через Google.';
+    Map<String, dynamic>? remoteRaw;
     if (pullFirst) {
       final cloud = await sync.pullConfig();
       if (cloud != null) {
         try {
-          final remoteCfg = Config.fromJson(
-              jsonDecode(cloud['json'] as String) as Map<String, dynamic>);
+          remoteRaw =
+              jsonDecode(cloud['json'] as String) as Map<String, dynamic>;
+          final remoteCfg = Config.fromJson(remoteRaw);
           final remoteAt = _cloudConfigTime(cloud, remoteCfg);
           final localAt = DateTime.tryParse(config.updatedAt);
           final cloudNewer = remoteAt != null &&
@@ -1247,16 +1315,26 @@ class AppController extends ChangeNotifier {
               }
             }
             config.updatedAt = remoteCfg.updatedAt;
-            await saveConfig(autofill: false);
+            await saveConfig(autofill: false, syncCloud: false);
             notifyListeners();
           }
         } catch (_) {}
       }
     }
     config.updatedAt = DateTime.now().toIso8601String();
-    return await sync.pushConfig(jsonEncode(
-      config.toCloudJson(includeKeys: config.syncKeysToCloud),
-    ));
+    final outgoing = config.toCloudJson(includeKeys: config.syncKeysToCloud);
+    // Новая установка по умолчанию не читает облачные ключи. При обычном
+    // входе при этом не стираем ранее сохранённые секреты: они останутся в
+    // облаке до явного выключения тумблера (тот путь вызывает pullFirst=false).
+    if (!config.syncKeysToCloud &&
+        remoteRaw != null &&
+        remoteRaw!['sync_keys_to_cloud'] == true) {
+      for (final field in ['api_key', 'fallbacks', 'provider_profiles']) {
+        if (remoteRaw!.containsKey(field)) outgoing[field] = remoteRaw![field];
+      }
+      outgoing['sync_keys_to_cloud'] = true;
+    }
+    return await sync.pushConfig(jsonEncode(outgoing));
   }
 
   Future<String> signInSync() async {
@@ -1276,7 +1354,7 @@ class AppController extends ChangeNotifier {
     }
     final pushErr = loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
     // Настройки уходят всегда; ключи — только если пользователь не выключил опцию.
-    final cfgErr = await syncConfig(pullFirst: loaded);
+    final cfgErr = await syncConfig(pullFirst: true);
     if (pushErr.isNotEmpty) return pushErr;
     if (cfgErr.isNotEmpty) return cfgErr;
     if (loaded) {
@@ -1303,7 +1381,7 @@ class AppController extends ChangeNotifier {
     }
     final err = loaded ? '' : await sync.push(jsonEncode(prog.toJson()));
     if (err.isNotEmpty) return err;
-    final cfgErr = await syncConfig(pullFirst: loaded);
+    final cfgErr = await syncConfig(pullFirst: true);
     if (cfgErr.isNotEmpty) return cfgErr;
     if (loaded) {
       return 'Загружено из облака: ${prog.solvedTotal} задач';
@@ -1324,7 +1402,13 @@ Future<String> Function() loadCoursesAsset = () async => '[]';
 extension AppCourses on AppController {
   Course get cur => courses[courseIdx];
 
-  String get stateKey => courses.isEmpty ? '__empty__' : cur.id;
+  /// Песочница принадлежит конкретной задаче, а не всему курсу. Раньше
+  /// переход на соседнюю задачу перезаписывал состояние и историю курса.
+  String get stateKey {
+    if (courses.isEmpty) return '__empty__';
+    final task = currentTask;
+    return task == null ? '${cur.id}/__course__' : '${cur.id}/${task.id}';
+  }
 
   void ensureStateForTask(Task t) {
     if (stateTask[stateKey] == t.id) return;
@@ -1358,24 +1442,38 @@ extension AppCourses on AppController {
 
   bool quizDone(Task t) => prog.quizDone[cur.id]?[t.id] ?? false;
 
+  /// _swapTerminalDraft — сохраняет черновик старого терминала и
+  /// восстанавливает черновик нового, не очищая ввод без отправки.
+  void _swapTerminalDraft(String previousKey) {
+    if (previousKey == termKey) return;
+    _termDrafts[previousKey] = termInput.text;
+    final draft = _termDrafts[termKey] ?? '';
+    termInput.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
+  }
+
   void selectTask(int i) {
     final oldTaskId = currentTask?.id ?? '';
+    final oldKey = termKey;
     viewIdx = i;
     if (i >= 0 && i < cur.tasks.length) ensureStateForTask(cur.tasks[i]);
-    if ((currentTask?.id ?? '') != oldTaskId) termInput.clear();
+    if ((currentTask?.id ?? '') != oldTaskId) _swapTerminalDraft(oldKey);
     bindChatForCurrentTask();
     notifyListeners();
   }
 
   void switchCourse(int i) {
     if (i < 0 || i >= courses.length) return;
-    if (i != courseIdx) termInput.clear();
+    final oldKey = termKey;
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
     prog.activeCourseByDirection[config.activeDirection] = cur.id;
     saveProgress();
     resetCourseState();
+    _swapTerminalDraft(oldKey);
     bindChatForCurrentTask();
     refreshTerminal();
     notifyListeners();
@@ -1384,13 +1482,14 @@ extension AppCourses on AppController {
   /// switchCourseSilent — смена курса без строк в терминале (из карты курсов).
   void switchCourseSilent(int i) {
     if (i < 0 || i >= courses.length || i == courseIdx) return;
-    termInput.clear();
+    final oldKey = termKey;
     courseIdx = i;
     viewIdx = 0;
     prog.lastCourse = cur.id;
     prog.activeCourseByDirection[config.activeDirection] = cur.id;
     saveProgress();
     resetCourseState();
+    _swapTerminalDraft(oldKey);
     bindChatForCurrentTask();
     notifyListeners();
   }
@@ -1692,7 +1791,7 @@ extension AppCourses on AppController {
     // архив: чтобы ментор видел, ЧТО и КАК студент делал (история стирается
     // при переходе к следующей задаче — сохраняем снимок заранее)
     lastSolvedTitle = t.title;
-    lastSolvedHist = (history[cur.id] ?? const <HistEntry>[])
+    lastSolvedHist = (history[stateKey] ?? const <HistEntry>[])
         .map((h) =>
             '\$ ' +
             h.cmd +
@@ -1846,7 +1945,8 @@ extension AppCourses on AppController {
   }
 
   Future<String> sendChat(String question,
-      {List<ChatAttachment> attachments = const []}) async {
+      {List<ChatAttachment> attachments = const [],
+      String contextHint = ''}) async {
     if (mentorBusy) return '';
     final chat = activeChat ?? ensureGeneralChat();
     final general = chat.isGeneral;
@@ -1922,6 +2022,12 @@ extension AppCourses on AppController {
     mentorBusy = true;
     notifyListeners();
     try {
+      final helpCtx = contextHint.trim().isEmpty
+          ? ''
+          : 'КОНТЕКСТ ОТКРЫТОГО РАЗДЕЛА СПРАВКИ:\n${contextHint.trim()}\n'
+              'Отвечай именно применительно к этому разделу TERMAI. Если пользователь '
+              'просит дополнить справку, предложи конкретный недостающий текст.\n\n';
+      final aiQuestion = helpCtx + question;
       final solvedCtx = lastSolvedTitle.isNotEmpty
           ? 'ТОЛЬКО ЧТО ВЫПОЛНЕНО СТУДЕНТОМ: задача «' +
               lastSolvedTitle +
@@ -1953,7 +2059,7 @@ extension AppCourses on AppController {
 
         turn = general
             ? await ai!.generalMentorWithTools(
-                solvedCtx + question,
+                solvedCtx + aiQuestion,
                 chatLog: this.chatLogForAI,
                 appContext: appContextForAI,
                 userName: userNameOrFriend,
@@ -1966,7 +2072,7 @@ extension AppCourses on AppController {
                 state,
                 _lastHist(8),
                 this.chatLogForAI,
-                solvedCtx + question,
+                solvedCtx + aiQuestion,
                 interview: chat.taskId == '__interview__',
                 appContext: appContextForAI,
                 tools: appToolsJson(),
@@ -1977,14 +2083,14 @@ extension AppCourses on AppController {
       } else {
         answer = general
             ? await ai!.generalMentor(
-                solvedCtx + question,
+                solvedCtx + aiQuestion,
                 chatLog: this.chatLogForAI,
                 appContext: appContextForAI,
                 userName: userNameOrFriend,
                 attachments: attachments,
               )
             : await ai!.mentor(cur, currentTask, state, _lastHist(8),
-                this.chatLogForAI, solvedCtx + question,
+                this.chatLogForAI, solvedCtx + aiQuestion,
                 interview: chat.taskId == '__interview__',
                 appContext: appContextForAI,
                 attachments: attachments);
@@ -2699,6 +2805,9 @@ extension AppCourses on AppController {
       prog.hiddenCourses.add(c.id);
     }
     _removeFromCourseOrder(c.id);
+    _termBuffers.removeWhere((k, _) => k.startsWith('${c.id}/'));
+    _cmdHistories.removeWhere((k, _) => k.startsWith('${c.id}/'));
+    _cmdHistIndexes.removeWhere((k, _) => k.startsWith('${c.id}/'));
     if (wasCurrent) {
       courseIdx = courseIdx.clamp(0, courses.length - 1);
     } else if (i < courseIdx) {

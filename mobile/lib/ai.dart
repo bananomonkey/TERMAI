@@ -5,6 +5,7 @@ import 'dart:io' as io;
 import 'package:http/http.dart' as http;
 import 'app_action.dart';
 import 'models.dart';
+import 'secret_store.dart';
 import 'shared_ai.dart';
 import 'usage.dart';
 
@@ -95,7 +96,7 @@ String formatHist(List<HistEntry> hist, int maxOut) {
 /// rawError — техническая ошибка для буфера обмена, без префикса Exception.
 String rawError(Object e) {
   var s = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-  return s.trim();
+  return SecretStore.redact(s.trim());
 }
 
 /// friendlyAiError — короткое объяснение вместо сырого лога в чате.
@@ -145,12 +146,29 @@ String friendlyAiError(Object e) {
     return 'Превышено время ожидания ответа. Попробуй ещё раз.';
   }
   if (raw.toLowerCase().contains('все модели недоступны')) {
-    return 'Все подключения к ИИ недоступны. Проверь ключ и сеть.';
+    final detail = raw.replaceFirst(
+        RegExp(r'^Все модели недоступны\.\s*', caseSensitive: false), '');
+    return detail.isEmpty
+        ? 'Все подключения к ИИ недоступны. Проверь ключ и сеть.'
+        : 'Все подключения к ИИ недоступны: ${detail.length > 180 ? '${detail.substring(0, 180)}…' : detail}';
   }
   if (raw.toLowerCase().contains('нет настроенных')) {
     return 'ИИ не настроен. Добавь API-ключ в настройках.';
   }
-  return 'Не удалось получить ответ. Попробуй ещё раз.';
+  if (lower.contains('svg_model_unsupported')) {
+    return 'Текущая модель не смогла создать SVG. Выбери другую модель или попроси более простую иллюстрацию.';
+  }
+  if (lower.contains('svg_truncated')) {
+    return 'Модель начала создавать SVG, но ответ оборвался. Упрости описание или выбери модель с большим лимитом ответа.';
+  }
+  if (lower.contains('svg_invalid') ||
+      lower.contains('модель не вернула svg')) {
+    return 'Модель ответила текстом вместо SVG. Эта модель может не поддерживать генерацию векторных иллюстраций.';
+  }
+  if (lower.contains('запрещённое содержимое')) {
+    return 'SVG отклонён проверкой безопасности: ${raw.length > 160 ? '${raw.substring(0, 160)}…' : raw}';
+  }
+  return 'Не удалось получить ответ: ${raw.length > 180 ? '${raw.substring(0, 180)}…' : raw}';
 }
 
 class ToolCall {
@@ -348,9 +366,10 @@ class AIClient {
     final choices = data['choices'] as List?;
     if (choices == null || choices.isEmpty)
       throw Exception('пустой ответ модели');
-    final msg = ((choices.first as Map<String, dynamic>)['message']
-            as Map<String, dynamic>)
-        .cast<String, dynamic>();
+    final choice = (choices.first as Map).cast<String, dynamic>();
+    final msg =
+        (choice['message'] as Map<String, dynamic>).cast<String, dynamic>();
+    msg['_termai_finish_reason'] = (choice['finish_reason'] ?? '').toString();
 
     // расход токенов: провайдер обычно отдаёт usage, иначе оцениваем по длине
     final usage = data['usage'] as Map?;
@@ -360,7 +379,7 @@ class AIClient {
       pt = estimateTokens(
           messages.map((m) => _messageText(m['content'])).join('\n'));
     }
-    if (ct <= 0) ct = estimateTokens((msg['content'] as String?) ?? '');
+    if (ct <= 0) ct = estimateTokens(_messageText(msg['content']));
     onUsage?.call(ep.model, pt, ct);
     return msg;
   }
@@ -699,15 +718,43 @@ class AIClient {
         'Используй фигуры, пути, градиенты и текст внутри SVG. '
         'Запрещены script, foreignObject, image, iframe, object, embed, '
         'внешние ссылки, data: URL и обработчики on*. '
-        'Иллюстрация должна быть понятной, аккуратной и по теме запроса.';
+        'Иллюстрация должна быть понятной, аккуратной и по теме запроса. '
+        'Делай SVG компактным (не более 12 КБ), не используй растровую генерацию. '
+        'Если не умеешь вернуть валидный SVG-код, ответь ровно SVG_UNSUPPORTED.';
     final msg = await _chat([
       {'role': 'system', 'content': system},
       {'role': 'user', 'content': 'Описание: $description'},
-    ], 0.75,
+    ], 0.55,
         jsonMode: false,
-        maxTokens: 2600,
+        maxTokens: 4096,
         timeout: const Duration(seconds: 180));
-    return ((msg['content'] as String?) ?? '').trim();
+    var content = _messageText(msg['content']).trim();
+    if (content.isEmpty) {
+      content = (msg['reasoning_content'] ?? '').toString().trim();
+    }
+    if (content.isEmpty) {
+      throw Exception('svg_invalid: модель вернула пустой ответ');
+    }
+    if (content.toUpperCase().contains('SVG_UNSUPPORTED') ||
+        RegExp(r'(не могу|не умею|cannot|unable).{0,80}svg',
+                caseSensitive: false, dotAll: true)
+            .hasMatch(content)) {
+      throw Exception('svg_model_unsupported: модель отказалась создавать SVG');
+    }
+    final lower = content.toLowerCase();
+    final start = lower.indexOf('<svg');
+    final end = lower.lastIndexOf('</svg>');
+    if (start >= 0 && end < start) {
+      final reason = (msg['_termai_finish_reason'] ?? '').toString();
+      throw Exception(
+          'svg_truncated: SVG оборван${reason.isEmpty ? '' : ' ($reason)'}');
+    }
+    if (start < 0 || end < 0) {
+      final preview = content.replaceAll(RegExp(r'\s+'), ' ');
+      throw Exception(
+          'svg_invalid: модель не вернула SVG; ответ: ${preview.length > 140 ? '${preview.substring(0, 140)}…' : preview}');
+    }
+    return content.substring(start, end + 6);
   }
 
   // ---------- роль 1: симулятор ----------

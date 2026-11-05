@@ -147,7 +147,9 @@ class AiFallbacksScreen extends StatelessWidget {
     final existing = index == null ? null : cfg.fallbacks[index];
     final providerCtrl =
         TextEditingController(text: existing?.provider ?? 'openai');
-    final keyCtrl = TextEditingController(text: existing?.apiKey ?? '');
+    // Не помещаем сохранённый секрет в редактируемое поле: так резервные
+    // ключи нельзя случайно раскрыть кнопкой глаза или скриншотом.
+    final keyCtrl = TextEditingController();
     final modelCtrl = TextEditingController(text: existing?.model ?? '');
     final baseCtrl = TextEditingController(text: existing?.baseUrl ?? '');
     bool obscure = true;
@@ -199,7 +201,7 @@ class AiFallbacksScreen extends StatelessWidget {
                       if (id == null) {
                         return;
                       }
-                      final p = findProvider(id!);
+                      final p = findProvider(id);
                       setSheet(() {
                         providerCtrl.text = p.id;
                         baseCtrl.text = p.baseUrl;
@@ -216,7 +218,12 @@ class AiFallbacksScreen extends StatelessWidget {
                     autocorrect: false,
                     enableSuggestions: false,
                     decoration: InputDecoration(
-                        labelText: 'API-ключ (sk-…)',
+                        labelText: existing == null
+                            ? 'API-ключ (sk-…)'
+                            : 'Новый API-ключ (необязательно)',
+                        hintText: existing == null
+                            ? null
+                            : 'Текущий ключ сохранён и скрыт',
                         suffixIcon: IconButton(
                           tooltip: obscure ? 'Показать ключ' : 'Скрыть ключ',
                           icon: Icon(
@@ -252,6 +259,8 @@ class AiFallbacksScreen extends StatelessWidget {
                       var key = keyCtrl.text.trim();
                       if (providerCtrl.text == 'local') {
                         key = 'local';
+                      } else if (key.isEmpty && existing != null) {
+                        key = existing.apiKey;
                       } else if (key.isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
                           content: Text(

@@ -21,6 +21,7 @@ class LocalTtsScreen extends StatefulWidget {
 
 class _LocalTtsScreenState extends State<LocalTtsScreen> {
   Set<String> _installed = {};
+  final Set<String> _testing = {};
   // Каталог показываем сразу; статусы установки догружаются в фоне.
   bool _loading = false;
   int? _free;
@@ -70,9 +71,26 @@ class _LocalTtsScreenState extends State<LocalTtsScreen> {
     controller.config.ttsEnabled = true;
     await controller.saveTtsConfig();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Выбран локальный голос «${model.title}»')),
+    await _testVoice(model, selectedNow: true);
+  }
+
+  Future<void> _testVoice(LocalTtsModel model,
+      {bool selectedNow = false}) async {
+    if (_testing.contains(model.id)) return;
+    setState(() => _testing.add(model.id));
+    final ok = await LocalTtsService.instance.speak(
+      'Привет! Голос ${model.title} установлен и готов к работе.',
+      controller.config,
+      modelId: model.id,
     );
+    if (!mounted) return;
+    setState(() => _testing.remove(model.id));
+    final error = LocalTtsService.instance.lastError;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? '${selectedNow ? 'Голос выбран. ' : ''}Тестовая озвучка выполнена.'
+          : 'Голос не прошёл проверку: ${error.isEmpty ? 'движок не создал звук' : error}'),
+    ));
   }
 
   Future<void> _delete(LocalTtsModel model) async {
@@ -290,6 +308,22 @@ class _LocalTtsScreenState extends State<LocalTtsScreen> {
                                 label: Text(failed ? 'Повторить' : 'Скачать'),
                               ),
               ),
+              if (installed) ...[
+                const SizedBox(width: 6),
+                IconButton.outlined(
+                  tooltip: 'Проверить голос',
+                  onPressed: _testing.contains(model.id)
+                      ? null
+                      : () => _testVoice(model),
+                  icon: _testing.contains(model.id)
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.volume_up_outlined, size: 19),
+                ),
+              ],
               if (installed || job != null) ...[
                 const SizedBox(width: 6),
                 TextButton(

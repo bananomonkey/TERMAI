@@ -18,6 +18,8 @@ import 'theme.dart';
 
 class ChatScreen extends StatefulWidget implements PreserveOnTheme {
   final String? autoQuestion;
+  final String? initialDraft;
+  final String contextHint;
   final bool interview;
 
   /// general — отдельный чат Термая, task — чат текущей задачи.
@@ -28,6 +30,8 @@ class ChatScreen extends StatefulWidget implements PreserveOnTheme {
   const ChatScreen({
     super.key,
     this.autoQuestion,
+    this.initialDraft,
+    this.contextHint = '',
     this.interview = false,
     this.scope = ChatScope.general,
     this.resume = false,
@@ -46,6 +50,13 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    final draft = widget.initialDraft ?? '';
+    if (draft.isNotEmpty) {
+      _input.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (widget.interview) {
@@ -93,7 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final files = List<ChatAttachment>.from(_attachments);
     _input.clear();
     setState(() => _attachments.clear());
-    controller.sendChat(q, attachments: files);
+    controller.sendChat(q, attachments: files, contextHint: widget.contextHint);
     _scrollDown();
   }
 

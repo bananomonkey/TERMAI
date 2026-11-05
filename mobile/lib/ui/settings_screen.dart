@@ -860,10 +860,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ]),
                           const SizedBox(height: 10),
-                          // Переключатель отправки ключей в облако.
-                          // По умолчанию включено: ключи и фолбэки уходят в
-                          // Google-облако вместе с прогрессом. Можно выключить,
-                          // тогда ключи останутся только на этом устройстве.
+                          // Отправка секретов — только явный opt-in.
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             title: Text('Синхронизировать ключи ИИ в облако',
@@ -872,14 +869,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     fontWeight: FontWeight.w600,
                                     color: C.text)),
                             subtitle: Text(
-                              'apiKey и резервные модели будут доступны на '
-                              'других устройствах после входа в аккаунт.',
+                              'Выключено по умолчанию. При включении личные '
+                              'ключи и резервные подключения сохраняются в '
+                              'твоём документе Firebase для переноса устройств.',
                               style: TextStyle(
                                   fontSize: 11.5, color: C.muted, height: 1.3),
                             ),
                             value: controller.config.syncKeysToCloud,
                             activeThumbColor: C.accent,
                             onChanged: (v) async {
+                              if (v) {
+                                final ok = await showConfirmDialog(
+                                  context,
+                                  title: 'Синхронизировать API-ключи?',
+                                  message:
+                                      'Личные ключи основного и резервных провайдеров будут отправлены в Firebase твоего аккаунта. Серверный ключ TERMAI туда не попадает. Включить?',
+                                );
+                                if (!ok) return;
+                              }
                               controller.config.syncKeysToCloud = v;
                               await controller.saveConfig(autofill: false);
                               if (v && controller.sync.signedIn) {

@@ -161,9 +161,18 @@ class LocalTtsService extends ChangeNotifier {
     final dir = await modelDir(id);
     if (!await dir.exists()) return false;
     final files = _findTtsFiles(dir);
-    final ok = files != null;
-    if (ok) _installed.add(id);
-    return ok;
+    if (files == null) return false;
+    final marker = File('${dir.path}/.termai-voice-ready-v2');
+    if (!await marker.exists()) {
+      try {
+        await _validateVoice(dir, files);
+      } catch (e) {
+        _lastError = 'Проверка локального голоса не пройдена: $e';
+        return false;
+      }
+    }
+    _installed.add(id);
+    return true;
   }
 
   Future<List<String>> installedIds() async {
@@ -253,13 +262,42 @@ class LocalTtsService extends ChangeNotifier {
     // Проверяем не только факт распаковки, но и наличие файлов, которые
     // реально нужны sherpa-onnx. Иначе ошибка всплывала позже как
     // «файлы не найдены» уже во время озвучивания.
-    if (_findTtsFiles(dir) == null) {
+    final files = _findTtsFiles(dir);
+    if (files == null) {
       throw Exception('в архиве нет модели или tokens.txt');
+    }
+    await _validateVoice(dir, files);
+  }
+
+  Future<void> _validateVoice(Directory dir, _TtsFiles files) async {
+    final espeak = _findEspeakDir(dir);
+    if (espeak == null) {
+      throw Exception('в модели нет полных данных espeak-ng');
+    }
+    final testWav = File('${dir.path}/.termai-install-test.wav');
+    try {
+      final ok = await Isolate.run(() => _generateWav(
+            modelPath: files.model,
+            tokensPath: files.tokens,
+            espeakDir: espeak.path,
+            text: 'Проверка голоса Термай.',
+            speed: 1.0,
+            wavPath: testWav.path,
+          ));
+      if (!ok || !await testWav.exists() || await testWav.length() <= 44) {
+        throw Exception('движок не смог создать тестовый WAV');
+      }
+      await File('${dir.path}/.termai-voice-ready-v2')
+          .writeAsString('ok\n', flush: true);
+    } finally {
+      try {
+        if (await testWav.exists()) await testWav.delete();
+      } catch (_) {}
     }
   }
 
-  Future<bool> speak(String text, Config config) async {
-    final model = localTtsModelById(config.ttsLocalModelId);
+  Future<bool> speak(String text, Config config, {String? modelId}) async {
+    final model = localTtsModelById(modelId ?? config.ttsLocalModelId);
     if (model == null || !await isInstalled(model.id)) return false;
     final token = ++_token;
     _lastError = '';
@@ -276,15 +314,13 @@ class LocalTtsService extends ChangeNotifier {
       if (files == null) {
         throw Exception('файлы голоса не найдены — распакуй модель заново');
       }
-      // В piper_phonemize для Flutter espeak-ng-data поставляется отдельно
-      // и извлекается из assets. Архивный вариант оставляем запасным.
-      var espeakDir = '';
-      try {
-        espeakDir = await piper.extractEspeakNgData();
-      } catch (_) {}
+      // Архив модели уже содержит совместимые данные espeak-ng. Используем
+      // именно их; asset-пакет остаётся запасным вариантом.
+      var espeakDir = _findEspeakDir(dir)?.path ?? '';
       if (espeakDir.isEmpty) {
-        final local = Directory('${dir.path}/espeak-ng-data');
-        if (await local.exists()) espeakDir = local.path;
+        try {
+          espeakDir = await piper.extractEspeakNgData();
+        } catch (_) {}
       }
       if (espeakDir.isEmpty) {
         throw Exception('espeak-ng-data не найден');
@@ -393,7 +429,22 @@ _TtsFiles? _findTtsFiles(Directory dir) {
     }
   }
   if (model.isEmpty || tokens.isEmpty) return null;
+  if (File(model).lengthSync() < 1024 * 1024 || File(tokens).lengthSync() < 8) {
+    return null;
+  }
   return _TtsFiles(model, tokens);
+}
+
+Directory? _findEspeakDir(Directory dir) {
+  if (!dir.existsSync()) return null;
+  for (final e in dir.listSync(recursive: true, followLinks: false)) {
+    if (e is! Directory || !e.path.endsWith('espeak-ng-data')) continue;
+    final required = ['phontab', 'phondata', 'phonindex'];
+    if (required.every((name) => File('${e.path}/$name').existsSync())) {
+      return e;
+    }
+  }
+  return null;
 }
 
 /// Выполняется в фоновом isolate: FFI-библиотеки инициализируются там.

@@ -412,7 +412,8 @@ const appActionsPrompt = '''
 - toggle_theme: переключить светлую/тёмную тему.
 - set_background {blur?, dim?}: размытие 0–40 и затемнение 0–0.9.
 - set_button_brightness {value}: яркость кнопок 0.6–1.4 (1.0 — обычная).
-- set_ai {provider?, model?, api_key?, base_url?}: изменить ИИ-подключение.
+- set_ai {provider?, model?, base_url?}: изменить провайдера/модель. API-ключи
+  Термай не читает и не меняет — пользователь вводит их только вручную.
 - reset_usage: обнулить счётчик токенов.
 - open_more: открыть меню «Ещё».
 

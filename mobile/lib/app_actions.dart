@@ -863,6 +863,9 @@ class AppActions {
     if (provider.isEmpty && model.isEmpty && key.isEmpty && base.isEmpty) {
       return 'не указаны параметры ИИ';
     }
+    if (key.isNotEmpty) {
+      return 'API-ключ можно изменить только вручную в настройках ИИ';
+    }
     if (provider.isNotEmpty) {
       final p = findProvider(provider);
       if (p.id != provider && p.title.toLowerCase() != provider.toLowerCase()) {
@@ -871,7 +874,6 @@ class AppActions {
       c.config.provider = p.id;
     }
     if (model.isNotEmpty) c.config.model = model;
-    if (key.isNotEmpty) c.config.apiKey = key;
     if (base.isNotEmpty) c.config.baseUrl = base;
     await c.saveConfig(autofill: false);
     _toast('Настройки ИИ сохранены');

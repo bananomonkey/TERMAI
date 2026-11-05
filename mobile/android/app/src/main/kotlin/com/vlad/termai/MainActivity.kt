@@ -9,6 +9,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Нативный мост к системному DownloadManager.
@@ -165,14 +166,35 @@ class MainActivity : FlutterActivity() {
                 ?.let { Uri.decode(it) }
                 ?: ""
             if (status == "successful" && finalPath.isNotEmpty()) {
-                val part = File(path)
                 val target = File(finalPath)
-                if (part.exists()) {
+                val sourceUri = localUri?.let { Uri.parse(it) }
+                val part = if (sourceUri?.scheme == "file") {
+                    sourceUri.path?.let { File(it) }
+                } else null
+                if (part?.exists() == true) {
                     if (target.exists()) target.delete()
-                    if (part.renameTo(target)) path = target.absolutePath
-                } else if (target.exists()) {
-                    path = target.absolutePath
+                    if (!part.renameTo(target)) {
+                        part.inputStream().use { input ->
+                            FileOutputStream(target).use { output -> input.copyTo(output) }
+                        }
+                        part.delete()
+                    }
+                } else if (!target.exists()) {
+                    // На части Android DownloadManager возвращает content://,
+                    // а не файловый путь. File(content://...) всегда давал
+                    // «Файл не найден после загрузки». Копируем через resolver.
+                    target.parentFile?.mkdirs()
+                    val input = sourceUri?.let { contentResolver.openInputStream(it) }
+                        ?: dm.openDownloadedFile(id)?.let {
+                            android.os.ParcelFileDescriptor.AutoCloseInputStream(it)
+                        }
+                    if (input != null) {
+                        input.use { source ->
+                            FileOutputStream(target).use { output -> source.copyTo(output) }
+                        }
+                    }
                 }
+                if (target.exists()) path = target.absolutePath
             }
             return mapOf(
                 "status" to status,

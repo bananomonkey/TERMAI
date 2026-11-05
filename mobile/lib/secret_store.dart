@@ -66,6 +66,7 @@ class SecretStore {
   }
 
   static Future<void> writeAiSecrets({
+    required String mainProvider,
     required String main,
     required List<Map<String, String>> fallbacks,
     Map<String, Map<String, String>> profiles = const {},
@@ -94,6 +95,8 @@ class SecretStore {
       return;
     }
     final raw = jsonEncode({
+      'schema': 2,
+      'main_provider': mainProvider.trim(),
       'main': main.trim(),
       'fallbacks': cleanFallbacks,
       if (cleanProfiles.isNotEmpty) 'profiles': cleanProfiles,
@@ -109,5 +112,26 @@ class SecretStore {
     if (value.isEmpty) return 'не задан';
     if (value.length <= 8) return '••••';
     return '${value.substring(0, 3)}••••${value.substring(value.length - 2)}';
+  }
+
+  /// Удаляет распространённые токены из ошибок/диагностики перед показом.
+  /// Само значение секрета этот метод нигде не сохраняет и не логирует.
+  static String redact(String value) {
+    var out = value;
+    out = out.replaceAll(
+      RegExp(
+        r'(sk-[A-Za-z0-9_\-]{6,}|hf_[A-Za-z0-9_\-]{6,}|gsk_[A-Za-z0-9_\-]{6,}|or-v1-[A-Za-z0-9_\-]{6,}|AIza[A-Za-z0-9_\-]{12,})',
+        caseSensitive: false,
+      ),
+      '••••',
+    );
+    out = out.replaceAll(
+        RegExp(r'Bearer\s+[^\s"}]+', caseSensitive: false), 'Bearer ••••');
+    out = out.replaceAllMapped(
+      RegExp(r'((?:api[_-]?key|token|secret)\s*[=:]\s*)[^\s,;}]+',
+          caseSensitive: false),
+      (m) => '${m.group(1)}••••',
+    );
+    return out;
   }
 }

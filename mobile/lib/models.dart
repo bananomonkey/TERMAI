@@ -699,7 +699,7 @@ class Config {
     this.bgBlur = 24,
     this.bgDim = 0.55,
     this.buttonBrightness = 1.0,
-    this.syncKeysToCloud = true,
+    this.syncKeysToCloud = false,
     this.mascotVisible = true,
     List<CustomThemeData>? customThemes,
     this.ttsEnabled = false,
@@ -768,7 +768,9 @@ class Config {
         buttonBrightness: ((j['button_brightness'] as num?)?.toDouble() ?? 1.0)
             .clamp(0.6, 1.4)
             .toDouble(),
-        syncKeysToCloud: j['sync_keys_to_cloud'] as bool? ?? true,
+        // Ключи — opt-in: новая установка не должна молча восстанавливать
+        // секреты из облака до явного разрешения пользователя.
+        syncKeysToCloud: j['sync_keys_to_cloud'] as bool? ?? false,
         mascotVisible: j['mascot_visible'] as bool? ?? true,
         customThemes: ((j['custom_themes'] as List?) ?? [])
             .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
