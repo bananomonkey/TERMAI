@@ -190,6 +190,7 @@ class AiFallbacksScreen extends StatelessWidget {
                     initialValue: findProvider(providerCtrl.text).id,
                     decoration: const InputDecoration(labelText: 'Провайдер'),
                     items: providers
+                        .where((p) => p.id != 'termai')
                         .map((p) => DropdownMenuItem(
                               value: p.id,
                               child: Text(
@@ -259,7 +260,9 @@ class AiFallbacksScreen extends StatelessWidget {
                       var key = keyCtrl.text.trim();
                       if (providerCtrl.text == 'local') {
                         key = 'local';
-                      } else if (key.isEmpty && existing != null) {
+                      } else if (key.isEmpty &&
+                          existing != null &&
+                          providerCtrl.text == existing.provider) {
                         key = existing.apiKey;
                       } else if (key.isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(

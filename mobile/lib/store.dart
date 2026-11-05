@@ -678,6 +678,19 @@ class AppController extends ChangeNotifier {
     }
 
     remember(config.provider, config.apiKey, config.model, config.baseUrl);
+    // Также очищаем уже загруженные из старого termai.json копии. Ключ не
+    // удаляется: исходник остаётся в соответствующем fallback.
+    for (final entry in config.providerProfiles.entries) {
+      if (entry.key == config.provider) continue;
+      final profile = entry.value;
+      final isFallbackCopy = config.fallbacks.any((f) =>
+          f.provider == profile.provider &&
+          f.model == profile.model &&
+          f.baseUrl == profile.baseUrl &&
+          f.apiKey.isNotEmpty &&
+          f.apiKey == profile.apiKey);
+      if (isFallbackCopy) profile.apiKey = '';
+    }
     await _writeAiSecrets();
     // Убираем старые ключи из уже существующего termai.json.
     final dir = await _dataDir();
