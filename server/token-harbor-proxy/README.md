@@ -26,9 +26,9 @@ Android app ──Firebase ID token──▶ Worker ──server-side key──�
 - Cloudflare Workers free plan: 100,000 requests/day.
 - Cloudflare KV free plan: 100,000 reads/day and 1,000 writes/day. Two counter
   writes per request means roughly 500 requests/day on the free KV write
-  quota. Set `GLOBAL_DAILY_LIMIT` below that for the free tier (the example
-  uses 800, which is the hard cap; the KV write quota is the tighter practical
-  limit). A paid KV plan is not required for a small audience.
+  quota. `GLOBAL_DAILY_LIMIT=450` keeps two writes per accepted request below
+  the 1,000-write free quota with some headroom. A paid KV plan is not required
+  for a small audience.
 - Firebase Authentication Google sign-in is free at normal hobby scale. The
   gateway accepts only Google sign-ins (`firebase.sign_in_provider ===
   'google.com'`); anonymous sessions are rejected.

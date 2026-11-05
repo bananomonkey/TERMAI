@@ -12,7 +12,7 @@ PROMO_MODEL = "deepseek-v4.1-flash:free"
 PROMO_NOTICE_VERSION = "1"
 PROMO_PRIVACY_URL = "https://tokenharbor.ai/privacy"
 MAX_REQUESTS_PER_DAY = "40"
-GLOBAL_DAILY_LIMIT = "800"
+GLOBAL_DAILY_LIMIT = "450"
 FIREBASE_PROJECT_ID = "termai-4fdcc"
 
 # Bind a free KV namespace for durable per-user/global limits:
