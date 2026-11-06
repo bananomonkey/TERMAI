@@ -379,6 +379,17 @@ class AppController extends ChangeNotifier {
     final valid = directionCatalog.map((d) => d.id).toSet();
     var selected =
         config.directions.where(valid.contains).toSet().toList(growable: true);
+    // Направления с курсами или прогрессом возвращаются всегда — даже если
+    // старая версия приложения сохранила неполный список (например, остался
+    // только Go и переключиться на DevOps было невозможно).
+    for (final d in directionCatalog) {
+      final hasCourses = allCourses.any((c) => c.direction == d.id);
+      final hasProgress = (prog.completed[d.id]?.isNotEmpty ?? false) ||
+          prog.extraCourses.any((c) => c.direction == d.id);
+      if ((hasCourses || hasProgress) && !selected.contains(d.id)) {
+        selected.add(d.id);
+      }
+    }
     if (selected.isEmpty) {
       // Существующий пользователь: DevOps открываем всегда (там появился
       // Kubernetes), остальные направления — если по ним уже есть прогресс.

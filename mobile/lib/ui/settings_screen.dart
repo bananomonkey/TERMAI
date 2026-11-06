@@ -8,7 +8,6 @@ import '../ai.dart';
 import '../main.dart';
 import '../models.dart';
 import '../notifications.dart';
-import '../shared_ai.dart';
 import '../theme_refresh.dart';
 import '../update_service.dart';
 import 'ai_fallbacks.dart';
@@ -18,7 +17,6 @@ import 'design_system.dart';
 import 'dialogs.dart';
 import 'direction_picker.dart';
 import 'help.dart';
-import 'shared_ai_consent.dart';
 import 'theme.dart';
 import 'tts_settings.dart';
 import 'widgets.dart';
@@ -133,31 +131,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _toggleShared(bool value) async {
-    final service = SharedAiService.instance;
-    if (value && !service.signedIn) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Общий доступ включается после входа через Google — войди ниже в разделе синхронизации.'),
-        ));
-      }
-      return;
-    }
-    if (value &&
-        controller.config.sharedAiConsentVersion < service.noticeVersion) {
-      final ok = await askSharedAiConsent(
-        context,
-        reConsent: controller.config.sharedAiConsentVersion > 0,
-      );
-      if (!ok) return;
-      controller.config.sharedAiConsentVersion = service.noticeVersion;
-    }
-    controller.config.sharedAiEnabled = value;
-    if (!value) controller.config.sharedAiConsentVersion = -1;
-    await controller.saveConfig(autofill: false);
-    if (mounted) setState(() {});
-  }
 
   void _pickTheme(String id) {
     controller.config.theme = id;
@@ -668,119 +641,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ]),
-              ),
-              const SizedBox(height: 18),
-
-              // ---------- общий доступ ----------
-              _SectionTitle('Общий доступ TERMAI'),
-              _Panel(
-                child: ListenableBuilder(
-                  listenable: SharedAiService.instance,
-                  builder: (context, _) {
-                    final service = SharedAiService.instance;
-                    final promo = service.promo;
-                    if (!service.proxyConfigured) {
-                      return const SizedBox.shrink(); // секция скрыта совсем
-                    }
-                    if (service.loading && promo == null) {
-                      return Row(children: [
-                        SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: C.accent)),
-                        const SizedBox(width: 10),
-                        Text('Проверяю условия акции…',
-                            style: AppText.caption.copyWith(color: C.muted)),
-                      ]);
-                    }
-                    if (promo == null || !promo.enabled) {
-                      return Text(
-                        service.error.isEmpty
-                            ? 'Общий доступ сейчас выключен на сервере.'
-                            : service.error,
-                        style: AppText.caption.copyWith(color: C.muted),
-                      );
-                    }
-                    final expired = !promo.active;
-                    final consentOk =
-                        controller.config.sharedAiConsentVersion >=
-                            promo.noticeVersion;
-                    final signedIn = service.signedIn;
-                    final enabled = controller.config.sharedAiEnabled &&
-                        consentOk &&
-                        signedIn &&
-                        !expired;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            expired ? 'Акция завершена' : 'Бесплатный общий ИИ',
-                            style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: C.text),
-                          ),
-                          subtitle: Text(
-                            expired
-                                ? 'Запросы снова идут только через твой личный ключ.'
-                                : '${promo.model} · ${service.remainingLabel}\n'
-                                    'Запросы идут через внешний серверный шлюз — не сообщай конфиденциальную информацию в запросах. '
-                                    'Ключ хранится только на сервере.',
-                            style: TextStyle(
-                                fontSize: 11.5, color: C.muted, height: 1.35),
-                          ),
-                          value: enabled,
-                          activeThumbColor: C.accent,
-                          onChanged: expired ? null : _toggleShared,
-                        ),
-                        if (!expired && !signedIn) ...[
-                          const SizedBox(height: 6),
-                          Row(children: [
-                            Icon(Icons.lock_outline, size: 16, color: C.warn),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Общий доступ работает только после входа через Google. Войди в разделе «Облачная синхронизация» ниже.',
-                                style: AppText.caption.copyWith(color: C.warn),
-                              ),
-                            ),
-                          ]),
-                        ],
-                        if (!expired && signedIn)
-                          Row(children: [
-                            Icon(
-                              enabled
-                                  ? Icons.check_circle_outline
-                                  : Icons.info_outline,
-                              size: 16,
-                              color: enabled ? C.good : C.warn,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                enabled
-                                    ? 'Общий доступ включён. Личные настройки не изменяются.'
-                                    : 'Общий доступ выключен — используется твой провайдер.',
-                                style: AppText.caption.copyWith(
-                                    color: enabled ? C.good : C.muted),
-                              ),
-                            ),
-                          ]),
-                        if (service.privacyUrl.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            service.privacyUrl,
-                            style: AppText.caption
-                                .copyWith(color: C.accent, fontSize: 10.5),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
-                ),
               ),
               const SizedBox(height: 18),
 
