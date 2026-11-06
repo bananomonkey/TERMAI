@@ -15,6 +15,7 @@ import 'ui/app_background.dart';
 import 'ui/home_bottom_bar.dart';
 import 'ui/theme.dart';
 import 'ui/widgets.dart';
+import 'diag.dart';
 import 'ui/home.dart';
 import 'ui/lesson.dart';
 import 'ui/more.dart';

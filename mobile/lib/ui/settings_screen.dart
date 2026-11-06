@@ -680,11 +680,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final service = SharedAiService.instance;
                     final promo = service.promo;
                     if (!service.proxyConfigured) {
-                      return Text(
-                        'В этой сборке сервер общего доступа не указан. '
-                        'Личный ИИ работает как обычно.',
-                        style: AppText.caption.copyWith(color: C.muted),
-                      );
+                      return const SizedBox.shrink(); // секция скрыта совсем
                     }
                     if (service.loading && promo == null) {
                       return Row(children: [

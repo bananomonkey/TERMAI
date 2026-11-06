@@ -1,4 +1,5 @@
 // direction_switcher.dart — компактная строка направлений на главной.
+// Wrap: все направления видны сразу, без горизонтальной прокрутки.
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -40,85 +41,89 @@ class DirectionSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dirs = controller.selectedDirections;
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
-        itemCount: dirs.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: 4),
-        itemBuilder: (context, i) {
-          if (i == dirs.length) {
-            return Tooltip(
-              message: 'Добавить направление',
-              child: InkWell(
-                onTap: () => _add(context),
-                borderRadius: BorderRadius.circular(AppRadius.chip),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                  child: Icon(Icons.add, size: 19, color: C.muted),
-                ),
-              ),
-            );
-          }
-          final d = dirs[i];
-          final active = d.id == controller.config.activeDirection;
-          return Semantics(
-            button: true,
-            selected: active,
-            label: 'Направление ${d.title}',
-            child: Tooltip(
-              message: d.title,
-              child: InkWell(
-                onTap: () => controller.switchDirection(d.id),
-                onLongPress: () => _remove(context, d.id, d.title),
-                borderRadius: BorderRadius.circular(AppRadius.chip),
-                child: AnimatedContainer(
-                  duration: AppDuration.fast,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: active ? C.card : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                    border: Border.all(
-                      color: active
-                          ? C.accent.withAlpha(C.isLight ? 90 : 120)
-                          : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: active ? C.accent : C.muted.withAlpha(100),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 116),
-                        child: Text(
-                          d.shortTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.caption.copyWith(
-                            color: active ? C.text : C.muted,
-                            fontWeight:
-                                active ? FontWeight.w800 : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final d in dirs) _DirectionChip(d: d, onRemove: _remove),
+          Tooltip(
+            message: 'Добавить направление',
+            child: InkWell(
+              onTap: () => _add(context),
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+                child: Icon(Icons.add, size: 19, color: C.muted),
               ),
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _DirectionChip — именованная кнопка направления.
+class _DirectionChip extends StatelessWidget {
+  final dynamic d;
+  final void Function(BuildContext, String, String) onRemove;
+  const _DirectionChip({required this.d, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = d.id == controller.config.activeDirection;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: 'Направление ${d.title}',
+      child: Tooltip(
+        message: d.title,
+        child: InkWell(
+          onTap: () => controller.switchDirection(d.id),
+          onLongPress: () => onRemove(context, d.id, d.title),
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+          child: AnimatedContainer(
+            duration: AppDuration.fast,
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+            decoration: BoxDecoration(
+              color: active ? C.card : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+              border: Border.all(
+                color: active
+                    ? C.accent.withAlpha(C.isLight ? 90 : 120)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: active ? C.accent : C.muted.withAlpha(100),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 116),
+                  child: Text(
+                    d.shortTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(
+                      color: active ? C.text : C.muted,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -23,6 +23,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'firebase_options.dart';
 import 'sync_config.dart';
+import 'diag.dart';
 
 class SyncService extends ChangeNotifier {
   static final SyncService instance = SyncService._();
@@ -109,7 +110,11 @@ class SyncService extends ChangeNotifier {
   Future<String> signIn() async {
     await init();
     if (!_ready) {
+      appendDiag('ВХОД: Firebase не инициализирован. ' + _error);
       return _error.isEmpty ? 'Firebase не инициализирован.' : _error;
+    }
+    if (googleServerClientId.isEmpty) {
+      appendDiag('ВХОД: не указан Web client ID.');
     }
     if (googleServerClientId.isEmpty) {
       return 'Укажи Web client ID в mobile/lib/sync_config.dart '
@@ -137,8 +142,10 @@ class SyncService extends ChangeNotifier {
       return '';
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return '';
+      appendDiag('ВХОД: ' + _friendly(e));
       return _friendly(e);
     } catch (e) {
+      appendDiag('ВХОД: ' + _friendly(e));
       return _friendly(e);
     } finally {
       _busy = false;

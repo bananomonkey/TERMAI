@@ -18,6 +18,7 @@ import 'models.dart';
 import 'navigation.dart';
 import 'notifications.dart';
 import 'sandbox.dart';
+import 'diag.dart';
 import 'secret_store.dart';
 import 'shared_ai.dart';
 import 'sync_service.dart';
@@ -26,9 +27,6 @@ import 'tts_service.dart';
 import 'update_background.dart';
 import 'update_service.dart';
 import 'ui/theme.dart';
-
-/// diagLog — глобальный журнал ошибок для экрана «Диагностика».
-final StringBuffer diagLog = StringBuffer();
 
 class UndoEntry {
   final String key;

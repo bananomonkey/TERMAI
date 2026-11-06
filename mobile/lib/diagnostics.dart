@@ -5,6 +5,7 @@
 import 'download_manager.dart';
 import 'notifications.dart';
 import 'shared_ai.dart';
+import 'diag.dart';
 import 'store.dart';
 
 enum DiagnosticLevel { ok, warning, error }

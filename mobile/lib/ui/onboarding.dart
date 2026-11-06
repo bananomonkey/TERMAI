@@ -449,53 +449,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: C.muted,
             ),
           ),
-          if (SharedAiService.instance.proxyConfigured) ...[
-            Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: C.card,
-                borderRadius: BorderRadius.circular(14.0),
-                border: Border.all(color: C.accent.withAlpha(55)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Бесплатный общий ИИ',
-                      style: TextStyle(
-                          fontSize: 14.0,
-                          fontWeight: FontWeight.w700,
-                          color: C.text),
-                    ),
-                    subtitle: Text(
-                      '${SharedAiService.instance.remainingLabel.isEmpty ? 'До окончания акции' : SharedAiService.instance.remainingLabel}. '
-                      'Работает после входа через Google ниже. Запросы идут через внешний серверный шлюз; конфиденциальную информацию в запросы не отправляй. '
-                      'После акции — твой личный ключ.',
-                      style: TextStyle(
-                          fontSize: 11.5, height: 1.4, color: C.muted),
-                    ),
-                    value: _useShared,
-                    activeThumbColor: C.accent,
-                    onChanged: (v) => setState(() => _useShared = v),
-                  ),
-                  Text(
-                    controller.sync.signedIn
-                        ? 'Без согласия запросы через общий шлюз не отправляются.'
-                        : 'Общий доступ включится, как только войдёшь через Google. Без входа используется только твой ключ.',
-                    style: TextStyle(
-                        fontSize: 10.5,
-                        color: C.warn,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(
-              height: 14.0,
-            ),
-          ],
           TextField(
             controller: _key,
             obscureText: !_showKey,
