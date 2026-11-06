@@ -183,14 +183,17 @@ class MainActivity : FlutterActivity() {
                         }
                     } else if (!target.exists()) {
                         // На части Android DownloadManager возвращает content://,
-                        // а не файловый путь. Копируем через resolver.
-                        val input = sourceUri?.let { contentResolver.openInputStream(it) }
+                        // а не файловый путь. Копируем через resolver, при отказе
+                        // resolver'а — через openDownloadedFile.
+                        val input = runCatching {
+                            sourceUri?.let { contentResolver.openInputStream(it) }
+                        }.getOrNull()
                             ?: dm.openDownloadedFile(id)?.let {
                                 android.os.ParcelFileDescriptor.AutoCloseInputStream(it)
                             }
                         input?.use { source ->
                             FileOutputStream(target).use { output -> source.copyTo(output) }
-                        }
+                        } ?: throw java.io.IOException("не удалось открыть скачанный файл")
                     }
                 } catch (e: Exception) {
                     // Если файл уже на месте и не пустой — считаем загрузку
@@ -200,6 +203,7 @@ class MainActivity : FlutterActivity() {
                         return mapOf(
                             "status" to "failed",
                             "reason" to -2,
+                            "message" to (e.message ?: e.javaClass.simpleName),
                             "path" to target.absolutePath,
                             "received" to received.coerceAtLeast(0L),
                             "total" to total.coerceAtLeast(0L),

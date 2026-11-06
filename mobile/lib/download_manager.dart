@@ -452,7 +452,11 @@ class DownloadManager extends ChangeNotifier {
           job.systemId = null;
         case 'failed':
           job.status = DownloadStatus.failed;
-          job.error = _reasonText((result['reason'] as num?)?.toInt() ?? 0);
+          final nativeMsg = (result['message'] as String?)?.trim() ?? '';
+          final reason = (result['reason'] as num?)?.toInt() ?? 0;
+          job.error = nativeMsg.isEmpty
+              ? _reasonText(reason)
+              : 'Системная загрузка: $nativeMsg (код $reason).';
           job.systemId = null;
         case 'paused':
           job.status = DownloadStatus.failed;

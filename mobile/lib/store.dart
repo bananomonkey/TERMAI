@@ -1355,33 +1355,38 @@ class AppController extends ChangeNotifier {
             config.bgDim = remoteCfg.bgDim;
             config.launcherX = remoteCfg.launcherX;
             config.launcherY = remoteCfg.launcherY;
-            if (config.syncKeysToCloud) {
-              if (config.apiKey.isEmpty) {
-                config.apiKey = remoteCfg.apiKey;
-                config.provider = remoteCfg.provider;
-                config.model = remoteCfg.model;
-                config.baseUrl = remoteCfg.baseUrl;
-              }
-              // Фолбэки мержим по (provider+model+baseUrl): локальные ключи
-              // не пропадают, облачные добавляются, пустые ключи из облака
-              // не затирают локальные.
-              final merged = List<AiEndpoint>.from(config.fallbacks);
-              for (final rf in remoteCfg.fallbacks) {
-                final i = merged.indexWhere((x) =>
-                    x.provider == rf.provider &&
-                    x.model == rf.model &&
-                    x.baseUrl == rf.baseUrl);
-                if (i < 0) {
-                  merged.add(rf);
-                } else if (merged[i].apiKey.isEmpty && rf.apiKey.isNotEmpty) {
-                  merged[i].apiKey = rf.apiKey;
-                }
-              }
-              config.fallbacks = merged;
-            }
             config.updatedAt = remoteCfg.updatedAt;
             await saveConfig(autofill: false, syncCloud: false);
             notifyListeners();
+          }
+          // Ключи мержим независимо от свежести конфига: у свежей установки
+          // updatedAt новый, и раньше облачные ключи не подтягивались никогда.
+          // Мерж только добавляет и заполняет пустые — локальные не затирает.
+          if (config.syncKeysToCloud) {
+            if (config.apiKey.isEmpty) {
+              config.apiKey = remoteCfg.apiKey;
+              config.provider = remoteCfg.provider;
+              config.model = remoteCfg.model;
+              config.baseUrl = remoteCfg.baseUrl;
+            }
+            final merged = List<AiEndpoint>.from(config.fallbacks);
+            for (final rf in remoteCfg.fallbacks) {
+              final i = merged.indexWhere((x) =>
+                  x.provider == rf.provider &&
+                  x.model == rf.model &&
+                  x.baseUrl == rf.baseUrl);
+              if (i < 0) {
+                merged.add(rf);
+              } else if (merged[i].apiKey.isEmpty && rf.apiKey.isNotEmpty) {
+                merged[i].apiKey = rf.apiKey;
+              }
+            }
+            if (merged.length != config.fallbacks.length ||
+                merged.any((f) => f.apiKey.isEmpty)) {
+              config.fallbacks = merged;
+              await saveConfig(autofill: false, syncCloud: false);
+              notifyListeners();
+            }
           }
         } catch (_) {}
       }
