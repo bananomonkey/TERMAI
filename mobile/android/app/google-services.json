@@ -1,0 +1,98 @@
+{
+  "project_info": {
+    "project_number": "545966007024",
+    "project_id": "termai-4fdcc",
+    "storage_bucket": "termai-4fdcc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545966007024:android:a699ab92fb096e0aa59835",
+        "android_client_info": {
+          "package_name": "com.example.mobilegvi6hN"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "545966007024-6qaqq1fajja0te5ctn9i7lif6u4j5uhl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mobilegvi6hN",
+            "certificate_hash": "aa415389f2d8c212a043f94dba225431143e77db"
+          }
+        },
+        {
+          "client_id": "545966007024-qjd8h1m8jh35fv1g4cqavd98ntqciu64.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUjA0FZOGbhYLePfWrVYIUhdbMmZPZUe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "545966007024-qjd8h1m8jh35fv1g4cqavd98ntqciu64.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "545966007024-uu1qt2tte6s50snfgpqq27d7imcam58t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mobilegvi6hN"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545966007024:android:489405b40d3d9a94a59835",
+        "android_client_info": {
+          "package_name": "com.vlad.termai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "545966007024-46mku6l71vl8mmq8bddr2neptvkeva13.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vlad.termai",
+            "certificate_hash": "aa415389f2d8c212a043f94dba225431143e77db"
+          }
+        },
+        {
+          "client_id": "545966007024-qjd8h1m8jh35fv1g4cqavd98ntqciu64.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUjA0FZOGbhYLePfWrVYIUhdbMmZPZUe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "545966007024-qjd8h1m8jh35fv1g4cqavd98ntqciu64.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "545966007024-uu1qt2tte6s50snfgpqq27d7imcam58t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mobilegvi6hN"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
