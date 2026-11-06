@@ -731,7 +731,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             expired
                                 ? 'Запросы снова идут только через твой личный ключ.'
                                 : '${promo.model} · ${service.remainingLabel}\n'
-                                    'Запросы идут через внешний шлюз Token Harbor. '
+                                    'Запросы идут через внешний серверный шлюз — не сообщай конфиденциальную информацию в запросах. '
                                     'Ключ хранится только на сервере.',
                             style: TextStyle(
                                 fontSize: 11.5, color: C.muted, height: 1.35),

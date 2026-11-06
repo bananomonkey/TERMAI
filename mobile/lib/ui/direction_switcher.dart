@@ -34,7 +34,7 @@ class DirectionSwitcher extends StatelessWidget {
     );
     if (!ok || !context.mounted) return;
     final next = controller.config.directions.where((x) => x != id).toSet();
-    await controller.setDirections(next);
+    await controller.setDirections(next, protectStarted: false);
   }
 
   @override

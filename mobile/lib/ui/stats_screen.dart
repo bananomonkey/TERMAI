@@ -699,25 +699,54 @@ class _BarChartPainter extends CustomPainter {
     canvas.drawLine(Offset(0, top), Offset(size.width, top),
         grid..color = gridColor.withAlpha(45));
 
-    final slot = size.width / points.length;
-    final barWidth = math.max(3.0, math.min(18.0, slot * 0.62));
-    final barPaint = Paint()..color = color;
+    final slot = size.width / math.max(1, points.length);
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final dotPaint = Paint()..color = color;
+    final fillPaint = Paint()..color = color.withAlpha(38);
+
+    // координаты точек линейного графика
+    final pts = <Offset>[];
     for (var i = 0; i < points.length; i++) {
-      final p = points[i];
-      final h = p.value <= 0 ? 0.0 : chartHeight * (p.value / niceMax);
-      final left = slot * i + (slot - barWidth) / 2;
-      if (h > 0) {
-        final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(left, baseline - h, barWidth, h),
-          const Radius.circular(4),
-        );
-        canvas.drawRRect(rect, barPaint);
+      final v = points[i].value.toDouble();
+      final y = v <= 0
+          ? baseline
+          : baseline - chartHeight * (v / niceMax);
+      pts.add(Offset(slot * i + slot / 2, y));
+    }
+
+    // мягкая заливка под линией
+    if (pts.isNotEmpty) {
+      final fill = Path()
+        ..moveTo(pts.first.dx, baseline);
+      for (final p in pts) {
+        fill.lineTo(p.dx, p.dy);
+      }
+      fill.lineTo(pts.last.dx, baseline);
+      fill.close();
+      canvas.drawPath(fill, fillPaint);
+    }
+
+    // сама линия
+    for (var i = 0; i + 1 < pts.length; i++) {
+      canvas.drawLine(pts[i], pts[i + 1], linePaint);
+    }
+    // точки
+    for (var i = 0; i < pts.length; i++) {
+      final r = i == pts.length - 1 ? 4.0 : 2.8;
+      canvas.drawCircle(pts[i], r, dotPaint);
+      if (points[i].value > 0 && points[i].value == maxValue.round()) {
+        canvas.drawCircle(pts[i], r + 2.2,
+            Paint()..style = PaintingStyle.stroke ..strokeWidth = 1.6 ..color = C.accent);
       }
       final showLabel = _showLabel(i, points.length);
       if (showLabel) {
         final tp = TextPainter(
           text: TextSpan(
-            text: _periodLabel(p),
+            text: _periodLabel(points[i]),
             style: TextStyle(
               fontSize: 9,
               color: i == points.length - 1 ? textColor : mutedColor,
@@ -727,8 +756,7 @@ class _BarChartPainter extends CustomPainter {
           maxLines: 1,
           ellipsis: '…',
         )..layout(maxWidth: slot * 2.2);
-        tp.paint(
-            canvas, Offset(left + barWidth / 2 - tp.width / 2, baseline + 5));
+        tp.paint(canvas, Offset(pts[i].dx - tp.width / 2, baseline + 5));
       }
     }
     if (points.any((p) => p.value > 0)) {

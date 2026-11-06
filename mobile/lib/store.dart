@@ -309,7 +309,9 @@ class AppController extends ChangeNotifier {
     config.bgDim = remote.bgDim;
     config.launcherX = remote.launcherX;
     config.launcherY = remote.launcherY;
-    // Ключи: только если пользователь разрешил синхронизацию и локально пусто.
+    // Ключи: только если пользователь разрешил синхронизацию. Основной ключ
+    // не затирается; резервные подключения объединяются, чтобы локальный
+    // список не пропадал из интерфейса после входа.
     if (config.syncKeysToCloud) {
       if (config.apiKey.isEmpty) {
         config.apiKey = remote.apiKey;
@@ -317,9 +319,7 @@ class AppController extends ChangeNotifier {
         config.model = remote.model;
         config.baseUrl = remote.baseUrl;
       }
-      if (config.fallbacks.isEmpty && remote.fallbacks.isNotEmpty) {
-        config.fallbacks = remote.fallbacks;
-      }
+      _mergeFallbacks(remote.fallbacks);
     }
     config.updatedAt = remote.updatedAt;
     _ensureDirections();
@@ -500,10 +500,22 @@ class AppController extends ChangeNotifier {
 
   DirectionStats get activeStats => statsForDirection(config.activeDirection);
 
-  Future<void> setDirections(Iterable<String> ids, {String? active}) async {
+  Future<void> setDirections(Iterable<String> ids,
+      {String? active, bool protectStarted = true}) async {
     final valid = directionCatalog.map((d) => d.id).toSet();
     final next = ids.where(valid.contains).toSet().toList();
     if (next.isEmpty) next.add('devops');
+    // Направления, по которым уже есть курсы или прогресс, не теряются при
+    // частичном выборе (например, в онбординге): начатые предметы защищены.
+    if (protectStarted) {
+      for (final d in directionCatalog) {
+        if (next.contains(d.id)) continue;
+        final hasCourses = allCourses.any((c) => c.direction == d.id);
+        final hasProgress = (prog.completed[d.id]?.isNotEmpty ?? false) ||
+            prog.extraCourses.any((c) => c.direction == d.id);
+        if (hasCourses || hasProgress) next.add(d.id);
+      }
+    }
     config.directions = next;
     config.activeDirection =
         active != null && next.contains(active) ? active : next.first;
@@ -1270,6 +1282,24 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// _mergeFallbacks — объединяет облачные резервные подключения с локальными:
+  /// локальные ключи не затираются, новые подключения добавляются.
+  void _mergeFallbacks(List<AiEndpoint> remote) {
+    final merged = List<AiEndpoint>.from(config.fallbacks);
+    for (final rf in remote) {
+      final i = merged.indexWhere((x) =>
+          x.provider == rf.provider &&
+          x.model == rf.model &&
+          x.baseUrl == rf.baseUrl);
+      if (i < 0) {
+        merged.add(rf);
+      } else if (merged[i].apiKey.isEmpty && rf.apiKey.isNotEmpty) {
+        merged[i].apiKey = rf.apiKey;
+      }
+    }
+    config.fallbacks = merged;
+  }
+
   Future<String> importProgress(String json) async {
     try {
       final p = Progress.fromJson(jsonDecode(json) as Map<String, dynamic>);
@@ -1323,9 +1353,22 @@ class AppController extends ChangeNotifier {
                 config.model = remoteCfg.model;
                 config.baseUrl = remoteCfg.baseUrl;
               }
-              if (config.fallbacks.isEmpty && remoteCfg.fallbacks.isNotEmpty) {
-                config.fallbacks = remoteCfg.fallbacks;
+              // Фолбэки мержим по (provider+model+baseUrl): локальные ключи
+              // не пропадают, облачные добавляются, пустые ключи из облака
+              // не затирают локальные.
+              final merged = List<AiEndpoint>.from(config.fallbacks);
+              for (final rf in remoteCfg.fallbacks) {
+                final i = merged.indexWhere((x) =>
+                    x.provider == rf.provider &&
+                    x.model == rf.model &&
+                    x.baseUrl == rf.baseUrl);
+                if (i < 0) {
+                  merged.add(rf);
+                } else if (merged[i].apiKey.isEmpty && rf.apiKey.isNotEmpty) {
+                  merged[i].apiKey = rf.apiKey;
+                }
               }
+              config.fallbacks = merged;
             }
             config.updatedAt = remoteCfg.updatedAt;
             await saveConfig(autofill: false, syncCloud: false);

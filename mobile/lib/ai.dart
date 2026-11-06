@@ -50,13 +50,6 @@ const providers = <ProviderPreset>[
   ProviderPreset('mistral', 'Mistral', 'https://api.mistral.ai/v1',
       'mistral-large-latest', ['mistral-large-latest', 'mistral-small-latest']),
   ProviderPreset(
-      'gigachat',
-      'GigaChat (Сбер)',
-      'https://gigachat.devices.sberbank.ru/api/v1',
-      'GigaChat',
-      ['GigaChat', 'GigaChat-Pro'],
-      auth: 'bearer'), // в поле ключа — Access Token из OAuth GigaChat
-  ProviderPreset(
       'yandex',
       'YandexGPT',
       'https://openai-compat.llm.api.cloud.yandex.net/v1',

@@ -171,27 +171,39 @@ class MainActivity : FlutterActivity() {
                 val part = if (sourceUri?.scheme == "file") {
                     sourceUri.path?.let { File(it) }
                 } else null
-                if (part?.exists() == true) {
-                    if (target.exists()) target.delete()
-                    if (!part.renameTo(target)) {
-                        part.inputStream().use { input ->
-                            FileOutputStream(target).use { output -> input.copyTo(output) }
-                        }
-                        part.delete()
-                    }
-                } else if (!target.exists()) {
-                    // На части Android DownloadManager возвращает content://,
-                    // а не файловый путь. File(content://...) всегда давал
-                    // «Файл не найден после загрузки». Копируем через resolver.
+                try {
                     target.parentFile?.mkdirs()
-                    val input = sourceUri?.let { contentResolver.openInputStream(it) }
-                        ?: dm.openDownloadedFile(id)?.let {
-                            android.os.ParcelFileDescriptor.AutoCloseInputStream(it)
+                    if (part?.exists() == true) {
+                        if (target.exists()) target.delete()
+                        if (!part.renameTo(target)) {
+                            part.inputStream().use { input ->
+                                FileOutputStream(target).use { output -> input.copyTo(output) }
+                            }
+                            part.delete()
                         }
-                    if (input != null) {
-                        input.use { source ->
+                    } else if (!target.exists()) {
+                        // На части Android DownloadManager возвращает content://,
+                        // а не файловый путь. Копируем через resolver.
+                        val input = sourceUri?.let { contentResolver.openInputStream(it) }
+                            ?: dm.openDownloadedFile(id)?.let {
+                                android.os.ParcelFileDescriptor.AutoCloseInputStream(it)
+                            }
+                        input?.use { source ->
                             FileOutputStream(target).use { output -> source.copyTo(output) }
                         }
+                    }
+                } catch (e: Exception) {
+                    // Если файл уже на месте и не пустой — считаем загрузку
+                    // успешной: раньше любое исключение здесь «зависало»
+                    // прогресс на последних процентах.
+                    if (!target.exists() || target.length() == 0L) {
+                        return mapOf(
+                            "status" to "failed",
+                            "reason" to -2,
+                            "path" to target.absolutePath,
+                            "received" to received.coerceAtLeast(0L),
+                            "total" to total.coerceAtLeast(0L),
+                        )
                     }
                 }
                 if (target.exists()) path = target.absolutePath

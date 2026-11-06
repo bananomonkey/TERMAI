@@ -471,7 +471,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     subtitle: Text(
                       '${SharedAiService.instance.remainingLabel.isEmpty ? 'До окончания акции' : SharedAiService.instance.remainingLabel}. '
-                      'Работает после входа через Google ниже. Запросы идут через внешний шлюз Token Harbor, ключ хранится только на сервере. '
+                      'Работает после входа через Google ниже. Запросы идут через внешний серверный шлюз; конфиденциальную информацию в запросы не отправляй. '
                       'После акции — твой личный ключ.',
                       style: TextStyle(
                           fontSize: 11.5, height: 1.4, color: C.muted),

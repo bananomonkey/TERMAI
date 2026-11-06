@@ -1,0 +1,33 @@
+{
+    "version": "3.16.4",
+    "app": {
+        "name": "mobile",
+        "bundleId": "com.example.mobilegvi6hN"
+    },
+    "permissions": [
+        {
+            "key": "android.permission.POST_NOTIFICATIONS"
+        },
+        {
+            "key": "android.permission.RECEIVE_BOOT_COMPLETED"
+        }
+    ],
+    "main": [
+        {
+            "key": "firebase",
+            "statement": "await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);",
+            "imports": [
+                "package:firebase_core/firebase_core.dart",
+                "package:termai/firebase_options.dart"
+            ]
+        }
+    ],
+    "firebase": {
+        "projectId": "termai-4fdcc",
+        "androidAppId": "1:545966007024:android:a699ab92fb096e0aa59835",
+        "iosAppId": "1:545966007024:ios:65def303a7f18587a59835",
+        "webAppId": "1:545966007024:web:e0257610c2d637d8a59835",
+        "clientId": "545966007024-uu1qt2tte6s50snfgpqq27d7imcam58t.apps.googleusercontent.com",
+        "connectedPackageName": "com.example.mobilegvi6hN"
+    }
+}
