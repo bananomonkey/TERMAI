@@ -127,7 +127,28 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
     case 'pwd':
       return LocalResult(true, st.workdir);
     case 'echo':
-      return LocalResult(true, fields.skip(1).join(' '));
+      // Реальный шелл снимает обрамляющие кавычки: это позволяет писать
+      // исходники Go через echo '...' > file.go без экранирования.
+      var text = raw.trim().replaceFirst(RegExp(r'^echo\b'), '').trim();
+      var unwrapped = false;
+      if (text.length >= 2) {
+        final q = text[0];
+        if ((q == '"' || q == "'") && text.endsWith(q)) {
+          text = text.substring(1, text.length - 1);
+          unwrapped = true;
+        }
+      }
+      if (!unwrapped) {
+        text = fields.skip(1).map((f) {
+          if (f.length >= 2 &&
+              ((f.startsWith('"') && f.endsWith('"')) ||
+                  (f.startsWith("'") && f.endsWith("'")))) {
+            return f.substring(1, f.length - 1);
+          }
+          return f;
+        }).join(' ');
+      }
+      return LocalResult(true, text);
     case 'ls':
       final prefix =
           fields.length > 1 ? fields[1].replaceAll(RegExp(r'^/+|/+$'), '') : '';
@@ -157,6 +178,8 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
       return _localDocker(fields.sublist(1), st);
     case 'kubectl':
       return tryKubectl(fields.sublist(1), st);
+    case 'go':
+      return _go(fields.sublist(1), st);
   }
   return null;
 }
@@ -323,6 +346,398 @@ String termPrompt(SandboxState st) {
     cwd = '~${cwd.substring(home.length)}';
   }
   return 'user@termai:$cwd\$ ';
+}
+
+// _go — минимальный эмулятор Go-инструментов поверх файлов песочницы.
+// Поддержан учебный минимум: version/env, mod init, run, build, test, vet, fmt.
+// go run исполняет упрощённую модель: печатает результаты fmt.Print* со
+// строковыми литералами в порядке следования в исходнике.
+LocalResult _go(List<String> args, SandboxState st) {
+  if (args.isEmpty) {
+    return LocalResult(
+        true,
+        'usage: go <command> [arguments]\n\n'
+        'Commands:\n'
+        '  mod init   создать go.mod\n'
+        '  run        скомпилировать и запустить\n'
+        '  build      скомпилировать бинарник\n'
+        '  test       запустить тесты\n'
+        '  version    версия Go');
+  }
+  switch (args[0]) {
+    case 'version':
+      return LocalResult(true, 'go version go1.22.5 linux/amd64');
+    case 'env':
+      return LocalResult(true,
+          'GOARCH="amd64"\nGOOS="linux"\nGOPATH="/workspace/go"\nGOROOT="/usr/local/go"');
+    case 'mod':
+      if (args.length < 3 || args[1] != 'init') {
+        return LocalResult(true, 'usage: go mod init [module-path]');
+      }
+      final name = args[2];
+      st.files['go.mod'] = 'module $name\n\ngo 1.22\n';
+      st.events.add('go mod init $name');
+      return LocalResult(true, 'go: creating new go.mod: module $name');
+    case 'run':
+      if (args.length < 2) {
+        return LocalResult(true, 'go: no go files listed');
+      }
+      return _goRun(args[1] == '.' ? null : args[1], st);
+    case 'build':
+      return _goBuild(args.sublist(1), st);
+    case 'test':
+      return _goTest(st);
+    case 'vet':
+    case 'fmt':
+      return LocalResult(true, '');
+  }
+  return LocalResult(true, 'go ${args[0]}: unknown command');
+}
+
+/// _goSource — находит исходник для run/build: явный файл или main.go при ".".
+({String name, String src})? _goSource(String? arg, SandboxState st) {
+  if (arg != null && arg != '.') {
+    final src = st.files[arg];
+    if (src == null) return null;
+    return (name: arg, src: src);
+  }
+  if (st.files.containsKey('main.go')) {
+    return (name: 'main.go', src: st.files['main.go']!);
+  }
+  for (final e in st.files.entries) {
+    if (e.key.endsWith('.go') && e.value.contains('package main')) {
+      return (name: e.key, src: e.value);
+    }
+  }
+  return null;
+}
+
+LocalResult _goRun(String? arg, SandboxState st) {
+  final src = _goSource(arg, st);
+  if (src == null) {
+    return LocalResult(
+        true, 'go: stat ${arg ?? '.'}: no such file or directory');
+  }
+  if (!src.src.contains('package main')) {
+    return LocalResult(true, 'go: cannot run non-main package');
+  }
+  st.events.add('go run ${arg ?? '.'}');
+  return LocalResult(true, _execGo(src.src));
+}
+
+/// _GoEnv — мини-окружение исполнения: простые переменные, поля структур,
+/// map и срезы, созданные литералами. Достаточно для учебных программ.
+class _GoEnv {
+  final Map<String, String> vals = {};
+  final Map<String, Map<String, String>> maps = {};
+  final Map<String, List<String>> slices = {};
+}
+
+/// _execGo — упрощённое исполнение учебной программы: обходит инструкции
+/// main по порядку, связывает литеральные присваивания и печатает вывод
+/// fmt.Print*. Всё, что не вычисляется (вызовы функций, каналы), пропускается.
+String _execGo(String src) {
+  final env = _GoEnv();
+  final out = StringBuffer();
+  _runStmts(_goStatements(_mainBody(src)), src, env, out, 0);
+  return out.toString().trimRight();
+}
+
+/// _runStmts — исполняет список инструкций: присваивания, вызовы fmt.Print*
+/// и вызовы функций, объявленных в исходнике (глубина до 3).
+void _runStmts(List<String> stmts, String src, _GoEnv env, StringBuffer out,
+    int depth) {
+  for (final stmt in stmts) {
+    final bind = RegExp(r'^([A-Za-z_]\w*)\s*:=\s*(.+)$').firstMatch(stmt);
+    if (bind != null) {
+      _bind(bind.group(1)!, bind.group(2)!, env);
+      continue;
+    }
+    final idxAssign =
+        RegExp(r'^([A-Za-z_]\w*)\[(.+)\]\s*=\s*(.+)$').firstMatch(stmt);
+    if (idxAssign != null) {
+      final m = env.maps[idxAssign.group(1)!];
+      if (m != null) {
+        m[_goEval(idxAssign.group(2)!, env) ?? ''] =
+            _goEval(idxAssign.group(3)!, env) ?? '';
+      }
+      continue;
+    }
+    final call = RegExp(r'fmt\.(Println|Printf|Print)\s*\(').firstMatch(stmt);
+    if (call != null) {
+      _execPrint(stmt, call, env, out);
+      continue;
+    }
+    if (depth < 3) _execFnCall(stmt, src, env, out, depth);
+  }
+}
+
+/// _execFnCall — находит в исходнике объявление вызванной функции/метода
+/// и исполняет её тело тем же интерпретатором.
+void _execFnCall(
+    String stmt, String src, _GoEnv env, StringBuffer out, int depth) {
+  final m = RegExp(r'([A-Za-z_]\w*)\s*\(').firstMatch(stmt);
+  if (m == null) return;
+  final name = m.group(1)!;
+  if (['if', 'for', 'range', 'switch', 'func', 'make', 'len', 'go', 'defer']
+      .contains(name)) {
+    return;
+  }
+  final def =
+      RegExp('func\\s+(?:\\([^)]*\\)\\s+)?$name\\s*\\(').firstMatch(src);
+  if (def == null) return;
+  final open = src.indexOf('{', def.end);
+  if (open < 0) return;
+  var d = 0;
+  for (var j = open; j < src.length; j++) {
+    if (src[j] == '{') d++;
+    if (src[j] == '}') {
+      d--;
+      if (d == 0) {
+        _runStmts(_goStatements(src.substring(open + 1, j)), src, env, out,
+            depth + 1);
+        return;
+      }
+    }
+  }
+}
+
+/// _mainBody — текст тела func main (упрощённо: до последней '}' исходника).
+String _mainBody(String src) {
+  final i = src.indexOf('func main()');
+  if (i < 0) return '';
+  final open = src.indexOf('{', i);
+  if (open < 0) return '';
+  var depth = 0;
+  for (var j = open; j < src.length; j++) {
+    final c = src[j];
+    if (c == '{') depth++;
+    if (c == '}') {
+      depth--;
+      if (depth == 0) return src.substring(open + 1, j);
+    }
+  }
+  return src.substring(open + 1);
+}
+
+/// _goStatements — делит тело на инструкции по ';' верхнего уровня.
+List<String> _goStatements(String body) {
+  final res = <String>[];
+  var depth = 0;
+  var cur = StringBuffer();
+  for (var i = 0; i < body.length; i++) {
+    final c = body[i];
+    if (c == '(' || c == '[' || c == '{') depth++;
+    if (c == ')' || c == ']' || c == '}') depth--;
+    if (c == ';' && depth == 0) {
+      final t = cur.toString().trim();
+      if (t.isNotEmpty) res.add(t);
+      cur = StringBuffer();
+    } else {
+      cur.write(c);
+    }
+  }
+  final t = cur.toString().trim();
+  if (t.isNotEmpty) res.add(t);
+  return res;
+}
+
+/// _bind — связывает имя со значением: литерал, map/срез или
+/// составной литерал структуры (поля сохраняются как name.Field).
+void _bind(String name, String rhs, _GoEnv env) {
+  final t = rhs.trim();
+  if (t.startsWith('"')) {
+    env.vals[name] = _goUnquote(t);
+    return;
+  }
+  if (RegExp(r'^-?\d+(\.\d+)?$').hasMatch(t) || t == 'true' || t == 'false') {
+    env.vals[name] = t;
+    return;
+  }
+  final mapm =
+      RegExp(r'^map\[[^\]]+\][\w\*\.]*\{(.*)\}$').firstMatch(t);
+  if (mapm != null) {
+    final m = <String, String>{};
+    for (final e in _splitGoArgs(mapm.group(1)!)) {
+      final kv = e.split(':');
+      if (kv.length >= 2) {
+        m[_goUnquote(kv[0])] = _goUnquote(kv.sublist(1).join(':'));
+      }
+    }
+    env.maps[name] = m;
+    return;
+  }
+  final slicem =
+      RegExp(r'^\[\][\w\*\.]+\{(.*)\}$').firstMatch(t);
+  if (slicem != null) {
+    env.slices[name] =
+        _splitGoArgs(slicem.group(1)!).map((e) => _goUnquote(e)).toList();
+    return;
+  }
+  final structm = RegExp(r'^[A-Z]\w*\{(.*)\}$').firstMatch(t);
+  if (structm != null) {
+    for (final e in _splitGoArgs(structm.group(1)!)) {
+      final kv = e.split(':');
+      if (kv.length >= 2) {
+        final v = _goEval(kv.sublist(1).join(':'), env);
+        if (v != null) env.vals['$name.${kv[0].trim()}'] = v;
+      }
+    }
+    return;
+  }
+  // Всё остальное (вызовы, каналы) не связываем — вывод по ним пропустится.
+}
+
+/// _execPrint — исполняет один вызов fmt.Print* с вычислением аргументов.
+void _execPrint(
+    String stmt, RegExpMatch call, _GoEnv env, StringBuffer out) {
+  // Закрывающая скобка вызова — по балансу от открывающей.
+  final open = call.end - 1;
+  var depth = 0;
+  var close = -1;
+  for (var j = open; j < stmt.length; j++) {
+    if (stmt[j] == '(') depth++;
+    if (stmt[j] == ')') {
+      depth--;
+      if (depth == 0) {
+        close = j;
+        break;
+      }
+    }
+  }
+  if (close < 0) return;
+  final fn = call.group(1)!;
+  final argv = _splitGoArgs(stmt.substring(open + 1, close));
+  if (fn == 'Printf') {
+    if (argv.isEmpty) return;
+    var fmtStr = _goUnquote(argv[0]);
+    var vi = 0;
+    fmtStr = fmtStr.replaceAllMapped(RegExp(r'%(?:[svdgtqx]|w)'), (_) {
+      if (vi >= argv.length - 1) return '?';
+      return _goEval(argv[++vi], env) ?? '?';
+    });
+    out.write(fmtStr);
+    if (!fmtStr.endsWith('\n')) out.write('\n');
+    return;
+  }
+  final sep = fn == 'Println' ? ' ' : '';
+  final parts = <String>[];
+  for (final a in argv) {
+    final v = _goEval(a, env);
+    if (v != null) parts.add(v);
+  }
+  out.write(parts.join(sep));
+  if (fn == 'Println') out.write('\n');
+}
+
+/// _splitGoArgs — делит список аргументов по запятым верхнего уровня.
+List<String> _splitGoArgs(String s) {
+  final res = <String>[];
+  var depth = 0, inStr = false;
+  var cur = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final c = s[i];
+    if (inStr) {
+      cur.write(c);
+      if (c == r'\' && i + 1 < s.length) {
+        cur.write(s[++i]);
+      } else if (c == '"') {
+        inStr = false;
+      }
+      continue;
+    }
+    if (c == '"') {
+      inStr = true;
+      cur.write(c);
+    } else if (c == '(' || c == '[' || c == '{') {
+      depth++;
+      cur.write(c);
+    } else if (c == ')' || c == ']' || c == '}') {
+      depth--;
+      cur.write(c);
+    } else if (c == ',' && depth == 0) {
+      final t = cur.toString().trim();
+      if (t.isNotEmpty) res.add(t);
+      cur = StringBuffer();
+    } else {
+      cur.write(c);
+    }
+  }
+  final t = cur.toString().trim();
+  if (t.isNotEmpty) res.add(t);
+  return res;
+}
+
+/// _goUnquote — снимает кавычки и раскрывает escapes (\n \t \" \\).
+String _goUnquote(String a) {
+  var t = a.trim();
+  if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
+    t = t.substring(1, t.length - 1);
+  }
+  return t
+      .replaceAll(r'\n', '\n')
+      .replaceAll(r'\t', '\t')
+      .replaceAll(r'\"', '"')
+      .replaceAll(r'\\', r'\');
+}
+
+/// _goEval — простые выражения: литералы, переменные окружения, поля
+/// структур, len(...). null — не вычислимо, аргумент пропускается.
+String? _goEval(String a, _GoEnv env) {
+  final t = a.trim();
+  if (t.startsWith('"')) return _goUnquote(t);
+  if (RegExp(r'^-?\d+(\.\d+)?$').hasMatch(t)) return t;
+  if (t == 'true' || t == 'false') return t;
+  if (env.vals.containsKey(t)) return env.vals[t];
+  final len = RegExp(r'^len\((.*)\)$').firstMatch(t);
+  if (len != null) {
+    final inner = len.group(1)!.trim();
+    if (inner.startsWith('"')) return _goUnquote(inner).length.toString();
+    if (env.maps.containsKey(inner)) return env.maps[inner]!.length.toString();
+    if (env.slices.containsKey(inner)) {
+      return env.slices[inner]!.length.toString();
+    }
+  }
+  return null;
+}
+
+LocalResult _goBuild(List<String> args, SandboxState st) {
+  var outName = '';
+  String? srcArg;
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '-o' && i + 1 < args.length) {
+      outName = args[++i];
+    } else if (!args[i].startsWith('-')) {
+      srcArg = args[i];
+    }
+  }
+  final src = _goSource(srcArg ?? '.', st);
+  if (src == null) {
+    return LocalResult(
+        true, 'go: stat ${srcArg ?? '.'}: no such file or directory');
+  }
+  if (!src.src.contains('package main')) {
+    return LocalResult(true, 'go: cannot build non-main package');
+  }
+  outName = outName.isNotEmpty ? outName : 'app';
+  st.files[outName] = '<go-binary>';
+  st.events.add('go build ${srcArg ?? '.'}');
+  return LocalResult(true, '');
+}
+
+LocalResult _goTest(SandboxState st) {
+  final module = st.files['go.mod']?.split('\n').first ?? 'module app';
+  final modName = module.replaceFirst('module ', '').trim();
+  final tests = st.files.keys.where((k) => k.endsWith('_test.go')).toList();
+  st.events.add('go test');
+  if (tests.isEmpty) {
+    return LocalResult(true, '?   $modName [no test files]');
+  }
+  final failing = tests.any((t) => st.files[t]!.contains('t.Fail()'));
+  if (failing) {
+    return LocalResult(true, '--- FAIL: TestXxx\nFAIL');
+  }
+  return LocalResult(true, 'PASS\nok  \t$modName\t0.42s');
 }
 
 // _git — минимальный оффлайн-git поверх файлов песочницы.

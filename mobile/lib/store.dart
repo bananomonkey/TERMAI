@@ -1599,7 +1599,7 @@ extension AppCourses on AppController {
     }
     if (cmd.toLowerCase() == 'help') {
       termLine(
-          '  Локально и мгновенно: kubectl get/apply/describe/scale/rollout/logs, docker ps/ps -a/images/volume ls/network ls/rm/rmi/stop/start/restart, ls, cat, pwd, echo, cd, clear, help.');
+          '  Локально и мгновенно: kubectl get/apply/describe/scale/rollout/logs, docker ps/ps -a/images/volume ls/network ls/rm/rmi/stop/start/restart, ls, cat, pwd, echo, cd, clear, help, go version/mod init/run/build/test.');
       termLine(
           '  Всё остальное исполняет ИИ-симулятор. Tab-подсказки и ↑/↓ — история.');
       refreshTerminal();

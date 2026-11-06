@@ -8628,15 +8628,15 @@
   {
     "id": "go-basics",
     "title": "Go Basics",
-    "desc": "Синтаксис, структуры, интерфейсы, ошибки, тесты и конкурентность.",
+    "desc": "Практика в терминале: модуль, типы, структуры, интерфейсы, ошибки, тесты, горутины, каналы, context и HTTP-сервер. Подробная справка в каждом уроке.",
     "category": "programming",
     "direction": "go",
-    "mode": "theory",
+    "mode": "terminal",
     "syllabus": [
       "Первая программа",
       "Типы и переменные",
       "Срезы и map",
-      "Структуры",
+      "Структуры и методы",
       "Интерфейсы",
       "Ошибки",
       "Тесты",
@@ -8650,38 +8650,42 @@
       {
         "id": "go-01-hello",
         "title": "Первая программа",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 1,
         "theory": [
-          "Go-программа начинается с `package main` и функции `main`. `fmt.Println` печатает строку.",
-          "Модуль инициализируется `go mod init example.com/app`; зависимости фиксируются в `go.mod`/`go.sum`."
+          "Go-программа — это пакет. Исполняемая программа объявляет `package main` и функцию `func main()`. Именно с main начинается выполнение; `init()` вызывается автоматически и раньше main.",
+          "Модуль — единица кода и зависимостей. `go mod init example.com/hello` создаёт `go.mod`: там имя модуля и версия Go. Зависимости фиксируются в `go.sum` после первого `go mod tidy`.",
+          "`go run main.go` компилирует и сразу запускает — удобно для обучения. `go build` кладёт готовый бинарник рядом: его можно переносить на любой Linux без установки Go — виртуальной машины у Go нет, рантайм вшит внутрь.",
+          "`fmt.Println(\"текст\")` печатает строку и переводит строку, `fmt.Print` — без перевода, `fmt.Printf(\"значение: %d\", 42)` форматирует по глаголам: %d — целое, %s — строка, %v — любое значение, %t — bool, %g — дробное.",
+          "Точка с запятой в Go не ставится — компилятор расставляет их сам по концам строк. Стиль один: `gofmt` форматирует код канонично, споров о скобках в Go не существует."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Создай модуль example.com/hello, напиши main.go, который печатает приветствие, и запусти его.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Начни с `go mod init example.com/hello`.",
+          "Файл создавай построчно: `echo 'package main' > main.go`, дальше каждую строку кода добавляй через `>>`.",
+          "Запуск: `go run main.go`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Модуль создан, main.go написан и выполнен через go run.",
         "expected_output": "",
-        "solution": "Точка входа — main. go mod init создаёт go.mod.",
+        "solution": "```\ngo mod init example.com/hello\necho 'package main' > main.go\necho 'func main() { fmt.Println(\"Привет, TERMAI!\") }' >> main.go\ngo run main.go\n```\nОжидаемо: `Привет, TERMAI!`",
         "quiz": [
           {
-            "question": "С какой функции начинается исполнение?",
+            "question": "С какой функции начинается исполнение программы?",
             "options": [
-              "main",
               "init",
+              "main",
               "start"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
             "question": "Что делает go mod init?",
             "options": [
-              "Создаёт модуль",
               "Компилирует бинарник",
-              "Удаляет кэш"
+              "Создаёт go.mod модуля",
+              "Обновляет зависимости"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8699,43 +8703,57 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go mod init"
+            },
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
-        "id": "go-02-types",
+        "id": "go-02-vars",
         "title": "Типы и переменные",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 1,
         "theory": [
-          "Go статически типизирован. `var x int = 1` или коротко `x := 1`. Нулевые значения: 0, \"\", false, nil.",
-          "Явное приведение типов обязательно: int64(x), string(rune)."
+          "Переменная объявляется тремя способами: `var n int`, `var s = \"текст\"` и коротким `n := 42`. Внутри функций используют почти всегда последний — тип Go выводит из значения.",
+          "Базовые типы: `int` и `int64` для целых, `float64` для дробных, `string`, `bool`. Отдельно есть `byte` (=uint8) и `rune` (=int32, символ Unicode, а не байт!).",
+          "Нулевые значения: Go не оставляет мусора. `int` равен 0, `string` — пустой \"\", `bool` — false, указатель — nil. Объявил `var n int` — уже можно пользоваться.",
+          "Неиспользованная переменная — ошибка компиляции (`declared and not used`), как и неиспользованный импорт. Компилятор следит за чистотой кода вместо линтера.",
+          "`fmt.Printf(\"%T %v\", x, x)` печатает тип и значение — главный способ разузнать, что за тип перед тобой."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Напиши vars.go: объяви целое, дробное, строку и bool — и выведи их одной строкой через fmt.Printf.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Короткое объявление: `n := 42`.",
+          "Глаголы формата: %d — целое, %g — дробное, %s — строка, %t — bool.",
+          "Перенос строки в формате — `\\n`."
         ],
-        "check": "Все ответы верны.",
+        "check": "vars.go объявляет переменные четырёх типов и печатает их через Printf.",
         "expected_output": "",
-        "solution": ":= объявляет переменную с выводом типа. Нулевая строка — пустая.",
+        "solution": "```\necho 'package main' > vars.go\necho 'import \"fmt\"' >> vars.go\necho 'func main() { n := 42; pi := 3.14; s := \"терминал\"; ok := true; fmt.Printf(\"%d %g %s %t\\n\", n, pi, s, ok) }' >> vars.go\ngo run vars.go\n```\nОжидаемо: `42 3.14 терминал true`",
         "quiz": [
           {
-            "question": "Что делает := ?",
+            "question": "Какой тип получает литерал 3.14 по умолчанию?",
             "options": [
-              "Объявляет и выводит тип",
-              "Сравнивает",
-              "Удаляет переменную"
+              "float32",
+              "float64",
+              "decimal"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Нулевое значение string?",
+            "question": "Что произойдёт с неиспользованной переменной?",
             "options": [
-              "\"\"",
-              "nil",
-              "0"
+              "Ничего",
+              "Ошибка компиляции",
+              "Предупреждение линтера"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8753,43 +8771,54 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-03-slices",
         "title": "Срезы и map",
-        "kind": "quiz",
+        "kind": "cmd",
         "difficulty": 2,
         "theory": [
-          "Срез — окно над массивом: len, cap, append. `append` может выделить новый массив.",
-          "Map создаётся `make(map[string]int)`. Чтение отсутствующего ключа даёт нулевое значение; проверяй `v, ok := m[k]`."
+          "Массив в Go имеет фиксированную длину `[3]int` и почти не используется. Рабочая лошадка — срез `[]int`: длина растёт через `append(s, x)`, размер показывает `len(s)`.",
+          "Срез — это окно над массивом: `s[1:3]` не копирует данные. Когда ёмкости (`cap`) не хватает, append выделяет новый массив — поэтому срез ведёт себя как ссылочный тип.",
+          "Перебор: `for i, v := range s { ... }` даёт индекс и значение. Индекс не нужен — `for _, v := range s`. Подчёркивание `_` означает «выбросить значение».",
+          "Map — хеш-таблица: `m := map[string]int{\"go\": 12}`. Чтение отсутствующего ключа даёт нулевое значение (0, а не ошибку), поэтому проверяют `v, ok := m[key]`. `delete(m, key)` удаляет.",
+          "Порядок перебора map специально случайный — язык гарантирует это, чтобы код не зависел от порядка ключей."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Создай map с ключом \"docker\", добавь ключ \"go\" со значением 12 и выведи результат.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Литерал map: `m := map[string]int{\"docker\": 3}`.",
+          "Новый ключ: `m[\"go\"] = 12`.",
+          "Печатай готовые строки: `fmt.Println(\"go:\", 12)`."
         ],
-        "check": "Все ответы верны.",
+        "check": "map создан, ключ добавлен, программа выполнена.",
         "expected_output": "",
-        "solution": "Отсутствующий ключ даёт zero value. append добавляет и может перевыделить массив.",
+        "solution": "```\necho 'package main' > main.go\necho 'import \"fmt\"' >> main.go\necho 'func main() { m := map[string]int{\"docker\": 3}; m[\"go\"] = 12; fmt.Println(\"map наполнен:\", len(m), \"ключа\") }' >> main.go\ngo run main.go\n```\nОжидаемо: `map наполнен: 2 ключа`",
         "quiz": [
           {
-            "question": "Что возвращает отсутствующий ключ map?",
+            "question": "Что вернёт чтение отсутствующего ключа map?",
             "options": [
-              "Нулевое значение типа",
-              "Ошибку",
-              "panic"
+              "Панику",
+              "Нулевое значение",
+              "nil"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что делает append?",
+            "question": "Как удалить ключ из map?",
             "options": [
-              "Добавляет элемент в срез",
-              "Удаляет map",
-              "Создаёт goroutine"
+              "m[key] = nil",
+              "delete(m, key)",
+              "remove(m, key)"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8807,43 +8836,53 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-04-structs",
-        "title": "Структуры",
-        "kind": "quiz",
+        "title": "Структуры и методы",
+        "kind": "cmd",
         "difficulty": 2,
         "theory": [
-          "Структура группирует поля. Метод получает receiver: `func (u User) Name() string`.",
-          "Указатель-получатель нужен, если метод меняет состояние; value receiver работает с копией."
+          "Структура — свой тип из полей: `type Server struct { Name string; Port int }`. Поля с заглавной буквы экспортируются из пакета, со строчной — приватные. Это и есть управление видимостью: ключевых слов public/private в Go нет.",
+          "Создание: `s := Server{Name: \"app\", Port: 8080}` — с именами полей (безопасно) или позиционно `Server{\"app\", 8080}`. Доступ через точку: `s.Port`.",
+          "Метод — функция с получателем: `func (s Server) Addr() string { ... }`. Получатель-значение работает с копией, получатель-указатель `func (s *Server)` меняет оригинал. Правило простое: мутируешь — бери указатель.",
+          "Структуры копируются по значению. Для больших структур или изменения полей используют `&Server{...}` и передают указатель — копируется только 8 байт адреса."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Опиши структуру Server с полями Name и Port, создай экземпляр и выведи значения полей.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Структуру можно объявить и внутри main: `type Server struct { Name string; Port int }`.",
+          "Экземпляр: `s := Server{Name: \"app\", Port: 8080}`.",
+          "Поля через точку: `s.Name`, `s.Port`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Структура описана, экземпляр создан, поля напечатаны.",
         "expected_output": "",
-        "solution": "Pointer receiver меняет оригинал. Struct — набор полей.",
+        "solution": "```\necho 'package main' > main.go\necho 'import \"fmt\"' >> main.go\necho 'func main() { type Server struct { Name string; Port int }; s := Server{Name: \"app\", Port: 8080}; fmt.Println(s.Name, \"на порту\", s.Port) }' >> main.go\ngo run main.go\n```\nОжидаемо: `app на порту 8080`",
         "quiz": [
           {
-            "question": "Когда нужен pointer receiver?",
+            "question": "Какое поле экспортируется из пакета?",
             "options": [
-              "Когда метод меняет структуру",
-              "Всегда",
-              "Никогда"
+              "name",
+              "Name",
+              "оба"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что такое struct?",
+            "question": "Что получает метод с получателем (s *Server)?",
             "options": [
-              "Набор полей",
-              "Цикл",
-              "Пакет"
+              "Копию структуры",
+              "Указатель на оригинал",
+              "Интерфейс"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8861,43 +8900,53 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-05-interfaces",
         "title": "Интерфейсы",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 3,
         "theory": [
-          "Интерфейс задаёт набор методов. Go реализует его неявно: если тип имеет методы, он удовлетворяет интерфейсу.",
-          "Маленькие интерфейсы (`io.Reader`, `error`) композируются лучше больших."
+          "Интерфейс — набор методов: `type Speaker interface { Speak() }`. Тип реализует интерфейс неявно — никакого \"implements\" в Go нет: достаточно иметь методы с нужными сигнатурами. Это утинная типизация, но с проверкой на этапе компиляции.",
+          "Идиома Go — маленькие интерфейсы на 1-2 метода. Самый известный — `fmt.Stringer` с методом `String() string`: его реализует всё, что хочет красиво печататься в fmt.Println.",
+          "Пустой интерфейс `interface{}` (в новых версиях — `any`) принимает любое значение — так устроены fmt.Println и словари без дженериков.",
+          "Проверка типа в рантайме: `v, ok := x.(Speaker)` или через switch: `switch v := x.(type) { case Server: ... }`."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Объяви интерфейс Speaker, реализуй его структурой Robot и вызови метод через переменную интерфейса.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Интерфейс и типы можно держать в одном файле с main.",
+          "Метод структуры: `func (r Robot) Speak() { fmt.Println(\"...\") }`.",
+          "Переменная интерфейса: `var sp Speaker = Robot{}` — затем `sp.Speak()`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Интерфейс объявлен, реализован, метод вызван через переменную интерфейса.",
         "expected_output": "",
-        "solution": "Реализация неявная. Маленькие интерфейсы гибче.",
+        "solution": "```\necho 'package main' > iface.go\necho 'import \"fmt\"' >> iface.go\necho 'type Speaker interface { Speak() }' >> iface.go\necho 'type Robot struct{}' >> iface.go\necho 'func (r Robot) Speak() { fmt.Println(\"beep! я робот\") }' >> iface.go\necho 'func main() { var sp Speaker = Robot{}; sp.Speak() }' >> iface.go\ngo run iface.go\n```\nОжидаемо: `beep! я робот`",
         "quiz": [
           {
-            "question": "Как тип реализует интерфейс?",
+            "question": "Как тип заявляет, что реализует интерфейс?",
             "options": [
-              "Неявно через методы",
-              "Через extends",
-              "Через annotation"
+              "Ключевым словом implements",
+              "Неявно — наличием методов",
+              "Через go mod"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Почему маленькие интерфейсы удобны?",
+            "question": "Какой метод у fmt.Stringer?",
             "options": [
-              "Их проще реализовать и комбинировать",
-              "Они быстрее компилируются",
-              "Они не нужны"
+              "Print()",
+              "String() string",
+              "Format()"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8915,43 +8964,56 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "Speaker"
+            },
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-06-errors",
         "title": "Ошибки",
-        "kind": "quiz",
+        "kind": "cmd",
         "difficulty": 2,
         "theory": [
-          "Ошибка — значение типа error. Возвращай её последним результатом и проверяй `if err != nil`.",
-          "Оборачивай через `fmt.Errorf(\"...: %w\", err)`, чтобы сохранить цепочку; проверяй `errors.Is/As`."
+          "В Go нет исключений: ошибка — обычное значение интерфейса `error` с единственным методом `Error() string`. Функции возвращают её последним значением: `f, err := os.Open(path)`.",
+          "Идиома проверки: `if err != nil { return err }` — разворачивай ошибку наверх или обрабатывай сразу. `panic` — только для неисправимых багов программиста, не для ожидаемых сбоев вроде «файл не найден».",
+          "`fmt.Errorf(\"connect %s: %w\", host, err)` оборачивает ошибку, сохраняя цепочку. Глагол %w — ключ к оборачиванию: без него errors.Is не найдёт исходную ошибку.",
+          "`errors.Is(err, ErrNotFound)` сравнивает по всей цепочке, `errors.As` вытаскивает конкретный тип. Сентинельные ошибки объявляют пакетно: `var ErrNotFound = errors.New(\"not found\")`."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Напиши функцию деления, возвращающую ошибку при делении на ноль, и обработай её в main.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Сигнатура с ошибкой: `func div(a, b int) (int, error)`.",
+          "Ошибку создаёт `fmt.Errorf(\"деление на ноль\")`.",
+          "Проверка: `if err != nil { ...; return }`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Функция возвращает ошибку, main её проверяет и печатает сообщение.",
         "expected_output": "",
-        "solution": "%w сохраняет цепочку. Ошибки проверяют явно.",
+        "solution": "```\necho 'package main' > main.go\necho 'import \"fmt\"' >> main.go\necho 'func div(a, b int) (int, error) { if b == 0 { return 0, fmt.Errorf(\"деление на ноль\") }; return a / b, nil }' >> main.go\necho 'func main() { r, err := div(7, 0); if err != nil { fmt.Println(\"ошибка: деление на ноль — перехвачено\"); return }; fmt.Println(r) }' >> main.go\ngo run main.go\n```\nОжидаемо: `ошибка: деление на ноль — перехвачено`",
         "quiz": [
           {
-            "question": "Что делает %w в fmt.Errorf?",
+            "question": "Как в Go возвращают ошибку из функции?",
             "options": [
-              "Оборачивает ошибку",
-              "Печатает число",
-              "Создаёт goroutine"
+              "Бросают исключение",
+              "Последним значением через error",
+              "Всегда через panic"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Как проверить ошибку?",
+            "question": "Зачем глагол %w в fmt.Errorf?",
             "options": [
-              "if err != nil",
-              "if error",
-              "try/catch"
+              "Форматировать строку",
+              "Обернуть ошибку для errors.Is",
+              "Вывести в stderr"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8969,43 +9031,53 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
-        "id": "go-07-testing",
+        "id": "go-07-tests",
         "title": "Тесты",
-        "kind": "quiz",
+        "kind": "cmd",
         "difficulty": 2,
         "theory": [
-          "Тест — функция `TestXxx(t *testing.T)` в файле `_test.go`. `go test ./...` запускает пакеты.",
-          "Table-driven tests удобны для набора кейсов; `t.Run` даёт имя подтеста."
+          "Тесты лежат рядом с кодом в файлах `*_test.go` того же пакета. Функция теста: `func TestSum(t *testing.T)`. Запуск — `go test` (текущий пакет) или `go test ./...` (всё дерево модуля).",
+          "Провал теста: `t.Errorf(\"sum = %d, want %d\", got, want)` — тест продолжается, `t.Fatalf` прерывает сразу. Assert-библиотеки не нужны — стандартной библиотеки хватает.",
+          "Табличные тесты — главная идиома Go: срез структур с входом и ожиданием плюс один цикл. Один тест проверяет десятки случаев.",
+          "`go test -cover` покажет покрытие, `go test -run TestSum` отфильтрует по имени, `-bench` запустит бенчмарки `func BenchmarkXxx(b *testing.B)`."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Создай модуль example.com/calc, напиши sum.go с функцией Sum и sum_test.go с TestSum. Запусти go test и убедись, что тест прошёл.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Модуль: `go mod init example.com/calc`.",
+          "Тестовый файл обязан заканчиваться на `_test.go`.",
+          "Проверка: `if Sum(2, 2) != 4 { t.Fatal(\"bad\") }`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Модуль создан, Sum и TestSum написаны, go test завершается ok.",
         "expected_output": "",
-        "solution": "Файл должен оканчиваться на _test.go. go test ./... запускает все пакеты.",
+        "solution": "```\ngo mod init example.com/calc\necho 'package main' > sum.go\necho 'func Sum(a, b int) int { return a + b }' >> sum.go\necho 'package main' > sum_test.go\necho 'import \"testing\"' >> sum_test.go\necho 'func TestSum(t *testing.T) { if Sum(2, 2) != 4 { t.Fatal(\"bad\") } }' >> sum_test.go\ngo test\n```\nОжидаемо: `PASS` и `ok  example.com/calc`",
         "quiz": [
           {
-            "question": "Как называется файл теста?",
+            "question": "Где лежат тесты?",
             "options": [
-              "x_test.go",
-              "test.go",
-              "x.test"
+              "В main.go",
+              "В sum_test.go рядом с кодом",
+              "В папке testdata/"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что запускает go test ./...?",
+            "question": "Что прерывает тест немедленно?",
             "options": [
-              "Тесты всех пакетов",
-              "Сервер",
-              "Миграции"
+              "t.Errorf",
+              "t.Fatalf",
+              "t.Log"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -9023,43 +9095,56 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go mod init"
+            },
+            {
+              "event_contains": "go test"
+            }
+          ]
         }
       },
       {
         "id": "go-08-goroutines",
         "title": "Горутины",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 3,
         "theory": [
-          "`go f()` запускает функцию конкурентно. Главная горутина не ждёт остальные; нужен sync.WaitGroup или канал.",
-          "Гонки данных ищутся `go test -race`; общий доступ нужно синхронизировать."
+          "Горутина — легковесный поток: `go doWork()` запускает функцию параллельно. Горутина стартует с парой килобайт стека, их создают сотни тысяч — планировщик Go размазывает их по ядрам ОС сам.",
+          "main не ждёт горутины: программа умирает вместе со всеми горутинами, как только main завершился. Для ожидания используют sync.WaitGroup: `wg.Add(1)` перед запуском, `defer wg.Done()` в горутине, `wg.Wait()` в main.",
+          "Общая память без синхронизации = гонка данных. Правило Go: не общайся разделением памяти — делись памятью через канал. `go run -race main.go` включает детектор гонок.",
+          "Замыкание в цикле: до Go 1.22 переменная цикла была общей для всех итераций — надёжно копируй её в параметр: `go func(i int) { ... }(i)`."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Запусти функцию в горутине, синхронизируй через sync.WaitGroup и дождись завершения.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "WaitGroup: `var wg sync.WaitGroup`.",
+          "Перед запуском: `wg.Add(1)`, внутри горутины: `defer wg.Done()`.",
+          "Ждать: `wg.Wait()`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Горутина запущена через go func, WaitGroup синхронизирует вывод.",
         "expected_output": "",
-        "solution": "go f() запускает конкурентно. -race ищет гонки.",
+        "solution": "```\necho 'package main' > main.go\necho 'import ( \"fmt\"; \"sync\" )' >> main.go\necho 'func main() { var wg sync.WaitGroup; wg.Add(1); go func() { defer wg.Done(); fmt.Println(\"работа из горутины\") }(); wg.Wait() }' >> main.go\ngo run main.go\n```\nОжидаемо: `работа из горутины`",
         "quiz": [
           {
-            "question": "Что делает go f()?",
+            "question": "Что произойдёт с горутинами при выходе из main?",
             "options": [
-              "Запускает f конкурентно",
-              "Ждёт f",
-              "Удаляет f"
+              "Доработают и завершатся",
+              "Программа умрёт вместе с ними",
+              "Перейдут в другой процесс"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Чем ловить data race?",
+            "question": "Сколько примерно занимает новая горутина?",
             "options": [
-              "go test -race",
-              "go fmt",
-              "go mod tidy"
+              "Мегабайты",
+              "Килобайты",
+              "Гигабайт"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -9077,43 +9162,57 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go func"
+            },
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-09-channels",
         "title": "Каналы",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 3,
         "theory": [
-          "Канал передаёт значения между горутинами. Небуферизованный канал блокирует отправителя до получателя.",
-          "Закрывай канал отправитель. `range ch` читает до закрытия."
+          "Канал — типизированная труба для передачи значений между горутинами: `ch := make(chan string)`. Отправка `ch <- \"x\"`, приём `v := <-ch`. Обе операции блокируют, пока вторая сторона не готова — синхронизация получается сама собой.",
+          "Буферизованный канал `make(chan int, 3)` не блокирует отправку, пока буфер не заполнится. `close(ch)` закрывает канал; чтение из закрытого даёт нулевое значение, форма `v, ok := <-ch` покажет ok=false.",
+          "`for v := range ch` читает из канала, пока тот не закрыт — стандартный цикл потребителя.",
+          "`select { case v := <-a: ... case b <- x: ... }` ждёт несколько каналов одновременно — как switch, только для событий.",
+          "Мантра конкурентного Go: не общайся разделением памяти — делись памятью через канал."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Создай канал, отправь сообщение из горутины и прими его в main.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Канал: `ch := make(chan string)`.",
+          "Отправка из горутины: `go func() { ch <- \"ping\" }()`.",
+          "Приём без сохранения: `<-ch`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Канал создан, горутина отправляет, main принимает.",
         "expected_output": "",
-        "solution": "Закрывает отправитель. range читает до закрытия.",
+        "solution": "```\necho 'package main' > main.go\necho 'import \"fmt\"' >> main.go\necho 'func main() { ch := make(chan string); go func() { ch <- \"ping\" }(); <-ch; fmt.Println(\"главная получила ping\") }' >> main.go\ngo run main.go\n```\nОжидаемо: `главная получила ping`",
         "quiz": [
           {
-            "question": "Кто должен закрывать канал?",
+            "question": "Чтение из небуферизованного канала без отправителя…",
             "options": [
-              "Отправитель",
-              "Получатель",
-              "Любой"
+              "Вернёт nil",
+              "Заблокируется навсегда",
+              "Выбросит исключение"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что делает range по каналу?",
+            "question": "Как узнать, что канал закрыт?",
             "options": [
-              "Читает до закрытия",
-              "Удаляет канал",
-              "Создаёт массив"
+              "Никак",
+              "v, ok := <-ch",
+              "ch.Closed()"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -9131,43 +9230,56 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "make(chan"
+            },
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-10-context",
         "title": "Context",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 3,
         "theory": [
-          "Context передаёт отмену, deadline и request-scoped значения. Не храни в нём бизнес-данные.",
-          "`context.WithCancel/Timeout` создаёт дочерний контекст; всегда вызывай cancel."
+          "`context.Context` протаскивается первым аргументом через все слои: `func Do(ctx context.Context) error`. Он несёт дедлайн, сигнал отмены и метаданные запроса.",
+          "Корни: `context.Background()` — в main и на входе сервера, `context.TODO()` — когда контекст ещё не придуман. Производные: `context.WithTimeout(ctx, 2*time.Second)`, `WithCancel`, `WithValue` — только для трейс-идентификаторов, не для бизнес-данных.",
+          "Долгая функция обязана слушать отмену: `select { case <-ctx.Done(): return ctx.Err() default: }` или блокирующее `<-ctx.Done()`. Отмена дедлайна прокатывается по всей цепочке вызовов разом.",
+          "Правила стиля: ctx всегда первый параметр и никогда не хранится в структуре. HTTP-запрос несёт свой контекст: `r.Context()` отменяется, когда клиент отвалился."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Напиши программу, где горутина завершается по сигналу отмены контекста.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Отменяемый контекст: `ctx, cancel := context.WithCancel(context.Background())`.",
+          "Горутина ждёт: `<-ctx.Done()`.",
+          "Отмена: `cancel()`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Контекст создан, горутина слушает Done, отработка отмены видна в выводе.",
         "expected_output": "",
-        "solution": "Context — отмена/deadline. cancel нужно вызывать.",
+        "solution": "```\necho 'package main' > main.go\necho 'import ( \"context\"; \"fmt\" )' >> main.go\necho 'func main() { ctx, cancel := context.WithCancel(context.Background()); go func() { <-ctx.Done(); fmt.Println(\"работа отменена по контексту\") }(); cancel(); fmt.Println(\"main завершён\") }' >> main.go\ngo run main.go\n```\nОжидаемо: `работа отменена по контексту` и `main завершён`",
         "quiz": [
           {
-            "question": "Что передаёт context?",
+            "question": "Где context.Context стоит в сигнатуре функции?",
             "options": [
-              "Отмену и deadline",
-              "Пароли",
-              "HTML"
+              "Последним",
+              "Первым",
+              "Не используется"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что делать с cancel?",
+            "question": "Что возвращает ctx.Done() после отмены?",
             "options": [
-              "Вызывать",
-              "Игнорировать",
-              "Закрывать канал"
+              "nil",
+              "Закрытый канал",
+              "Панику"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -9185,41 +9297,54 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "context"
+            },
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       },
       {
         "id": "go-11-http",
         "title": "HTTP-сервер",
-        "kind": "quiz",
-        "difficulty": 2,
+        "kind": "cmd",
+        "difficulty": 3,
         "theory": [
-          "`http.HandleFunc` регистрирует обработчик, `http.ListenAndServe` запускает сервер. Request/ResponseWriter — основа handler.",
-          "В продакшене задавай таймауты, логируй request id и не игнорируй ошибки."
+          "Стандартной библиотеки хватает без фреймворков: `http.HandleFunc(\"/health\", handler)` регистрирует обработчик `func(w http.ResponseWriter, r *http.Request)`, `http.ListenAndServe(\":8080\", nil)` стартует сервер.",
+          "Ответ пишут в `w`: `w.Header().Set(\"Content-Type\", \"application/json\")`, `w.WriteHeader(http.StatusOK)`, `w.Write([]byte(\"ok\"))`. Быстрая ошибка — `http.Error(w, \"bad\", 400)`.",
+          "Контекст запроса: `r.Context()` отменяется, когда клиент ушёл — долгие операции обязаны его слушать, иначе сервер копит мёртвую работу.",
+          "Продакшен-сервер собирают явно: `srv := &http.Server{Addr: \":8080\", Handler: mux}` и останавливают через `srv.Shutdown(ctx)` — мягко, дождавшись текущих запросов."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Напиши HTTP-сервер с обработчиком /health и собери бинарник командой go build.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Регистрация: `http.HandleFunc(\"/health\", func(w http.ResponseWriter, r *http.Request) { ... })`.",
+          "Ответ: `fmt.Fprintln(w, \"ok\")`.",
+          "Сборка: `go build -o server .`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Обработчик зарегистрирован, бинарник собран.",
         "expected_output": "",
-        "solution": "Handler получает writer и request. Таймауты защищают сервер.",
+        "solution": "```\necho 'package main' > main.go\necho 'import ( \"fmt\"; \"net/http\" )' >> main.go\necho 'func main() { http.HandleFunc(\"/health\", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, \"ok\") }); fmt.Println(\"слушаю :8080\"); http.ListenAndServe(\":8080\", nil) }' >> main.go\ngo run main.go\ngo build -o server .\n```\nОжидаемо: `слушаю :8080`, в каталоге появился бинарник `server`",
         "quiz": [
           {
-            "question": "Что принимает handler?",
+            "question": "Чем пишут тело ответа?",
             "options": [
-              "ResponseWriter и *Request",
-              "Только строку",
-              "Канал"
+              "fmt.Println(w)",
+              "w.Write([]byte(...))",
+              "console.log"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Зачем таймауты?",
+            "question": "Какой метод возвращает контекст запроса?",
             "options": [
-              "Защита от медленных клиентов",
-              "Для цвета",
-              "Для Git"
+              "r.Context()",
+              "r.Body()",
+              "r.URL()"
             ],
             "correct": 0
           }
@@ -9239,43 +9364,57 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "HandleFunc"
+            },
+            {
+              "event_contains": "go build"
+            }
+          ]
         }
       },
       {
         "id": "go-12-json",
         "title": "JSON и API",
-        "kind": "quiz",
+        "kind": "cmd",
         "difficulty": 2,
         "theory": [
-          "`encoding/json` сериализует структуры. Теги `json:\"name\"` задают имена полей; omitempty скрывает пустые.",
-          "Проверяй ошибки Decode/Encode и ограничивай размер тела запроса."
+          "`encoding/json` переводит структуры в JSON и обратно: `json.Marshal(v)` даёт []byte, `json.Unmarshal(data, &v)` раскладывает внутрь структуры. Указатель обязателен — иначе Unmarshal не сможет ничего записать.",
+          "Теги управляют именами полей: `Name string ` + backtick + `json:\"name\"` + backtick + `` — без тега поле попадёт в JSON как \"Name\". Тег `json:\"-\"` исключает поле, `omitempty` пропускает пустые значения.",
+          "Поля со строчной буквы в JSON не попадают никогда — это внутреннее состояние структуры. Экспортируемое = заглавная буква, и только оно сериализуется.",
+          "Чтение тела запроса: `json.NewDecoder(r.Body).Decode(&req)`. Ответ: `json.NewEncoder(w).Encode(resp)`. Собирать байты руками не нужно.",
+          "Для неизвестной заранее структуры декодируют в `map[string]any` — работает как словарь в динамических языках."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Смоделируй ответ API: напечатай JSON с полями name и port — как это делает json.Marshal структуры с тегами.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Кавычки внутри JSON-строки экранируются: `\"{\\\"name\\\": \\\"app\\\"}\"`.",
+          "Именно так выглядит вывод json.Marshal: одна строка с JSON.",
+          "Проверь, что ключи соответствуют тегам `json:\"name\"` и `json:\"port\"`."
         ],
-        "check": "Все ответы верны.",
+        "check": "Программа печатает JSON-объект с полями name и port.",
         "expected_output": "",
-        "solution": "Тег задаёт имя. omitempty пропускает zero value.",
+        "solution": "```\necho 'package main' > main.go\necho 'import \"fmt\"' >> main.go\necho 'func main() { fmt.Println(\"{\\\"name\\\": \\\"app\\\", \\\"port\\\": 8080}\") }' >> main.go\ngo run main.go\n```\nОжидаемо: `{\"name\": \"app\", \"port\": 8080}`",
         "quiz": [
           {
-            "question": "Что задаёт json:\"name\"?",
+            "question": "Без json-тега поле Name попадёт в JSON как…",
             "options": [
-              "Имя поля в JSON",
-              "Тип поля",
-              "Комментарий"
+              "\"name\"",
+              "\"Name\"",
+              "исчезнет"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что делает omitempty?",
+            "question": "Поля со строчной буквы в JSON…",
             "options": [
-              "Пропускает пустое поле",
-              "Удаляет структуру",
-              "Создаёт map"
+              "Попадают",
+              "Не попадают",
+              "Попадают с тегом"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
         "start_state": {
@@ -9293,6 +9432,13 @@
           "k8s": {},
           "k8s_events": [],
           "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "go run"
+            }
+          ]
         }
       }
     ]
