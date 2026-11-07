@@ -40,27 +40,36 @@ class DirectionSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dirs = controller.selectedDirections;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          for (final d in dirs) _DirectionChip(d: d, onRemove: _remove),
-          Tooltip(
-            message: 'Добавить направление',
-            child: InkWell(
-              onTap: () => _add(context),
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-                child: Icon(Icons.add, size: 19, color: C.muted),
+    // Свой слушатель: чипсы обязаны перестраиваться при переключении
+    // направления, даже когда родитель передаёт const-экземпляр — раньше
+    // синяя рамка оставалась на прежнем направлении.
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final dirs = controller.selectedDirections;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final d in dirs) _DirectionChip(d: d, onRemove: _remove),
+              Tooltip(
+                message: 'Добавить направление',
+                child: InkWell(
+                  onTap: () => _add(context),
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+                    child: Icon(Icons.add, size: 19, color: C.muted),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

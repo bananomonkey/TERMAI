@@ -45,7 +45,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _provider = findProvider(controller.config.provider).id;
-    _key = TextEditingController(text: controller.config.apiKey);
+    // Ключ показываем из профиля активного провайдера: у каждого провайдера
+    // свой ключ, и голый config.apiKey может быть пуст.
+    _key = TextEditingController(
+        text: controller.config.providerProfiles[_provider]?.apiKey.isNotEmpty ==
+                true
+            ? controller.config.providerProfiles[_provider]!.apiKey
+            : controller.config.apiKey);
     _model = TextEditingController(text: controller.config.model);
     _base = TextEditingController(text: controller.config.baseUrl);
     _name = TextEditingController(text: controller.config.userName);
@@ -751,7 +757,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content: Text(msg.isEmpty
-                                              ? 'Настройки и ключи сохранены в облако'
+                                              ? 'Синхронизировано'
                                               : msg)));
                                 }
                               } else if (controller.sync.signedIn) {
@@ -762,7 +768,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content: Text(msg.isEmpty
-                                              ? 'Ключи удалены из облака и больше не отправляются'
+                                              ? 'Синхронизировано'
                                               : msg)));
                                 }
                               } else if (context.mounted) {
@@ -891,25 +897,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       value: controller.config.updatesAutoCheck,
                       activeThumbColor: C.accent,
-                      onChanged: (v) => controller.setUpdatesAutoCheck(v),
-                    ),
-                    Divider(color: C.border, height: 1),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Уведомлять о новой версии',
-                          style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: C.text)),
-                      subtitle: Text(
-                        'Один раз на версию, без автоматической установки',
-                        style: TextStyle(fontSize: 11.5, color: C.muted),
-                      ),
-                      value: controller.config.updatesNotifications,
-                      activeThumbColor: C.accent,
-                      onChanged: controller.config.updatesAutoCheck
-                          ? (v) => controller.setUpdatesNotifications(v)
-                          : null,
+                      // Один тумблер управляет и проверкой, и уведомлением.
+                      onChanged: (v) {
+                        controller.setUpdatesAutoCheck(v);
+                        controller.setUpdatesNotifications(v);
+                      },
                     ),
                     Divider(color: C.border, height: 1),
                     _LinkRow(

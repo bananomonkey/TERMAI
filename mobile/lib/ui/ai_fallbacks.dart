@@ -147,9 +147,11 @@ class AiFallbacksScreen extends StatelessWidget {
     final existing = index == null ? null : cfg.fallbacks[index];
     final providerCtrl =
         TextEditingController(text: existing?.provider ?? 'openai');
-    // Не помещаем сохранённый секрет в редактируемое поле: так резервные
-    // ключи нельзя случайно раскрыть кнопкой глаза или скриншотом.
-    final keyCtrl = TextEditingController();
+    // Ключ виден в поле (по умолчанию замаскирован точками) — раньше
+    // пользователь видел только «Текущий ключ сохранён и скрыт» и решал,
+    // что ключ пропал.
+    final keyCtrl =
+        TextEditingController(text: existing?.apiKey ?? '');
     final modelCtrl = TextEditingController(text: existing?.model ?? '');
     final baseCtrl = TextEditingController(text: existing?.baseUrl ?? '');
     bool obscure = true;
@@ -219,12 +221,7 @@ class AiFallbacksScreen extends StatelessWidget {
                     autocorrect: false,
                     enableSuggestions: false,
                     decoration: InputDecoration(
-                        labelText: existing == null
-                            ? 'API-ключ (sk-…)'
-                            : 'Новый API-ключ (необязательно)',
-                        hintText: existing == null
-                            ? null
-                            : 'Текущий ключ сохранён и скрыт',
+                        labelText: 'API-ключ (sk-…)',
                         suffixIcon: IconButton(
                           tooltip: obscure ? 'Показать ключ' : 'Скрыть ключ',
                           icon: Icon(

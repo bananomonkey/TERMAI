@@ -542,6 +542,27 @@ class AiEndpoint {
 
 /// CustomThemeData — пользовательская палитра, сгенерированная ИИ.
 /// Цвета хранятся в hex-строках, чтобы модель не зависела от Flutter.
+class CustomDirectionData {
+  String id;
+  String title;
+  String desc;
+
+  CustomDirectionData({
+    required this.id,
+    required this.title,
+    this.desc = '',
+  });
+
+  factory CustomDirectionData.fromJson(Map<String, dynamic> j) =>
+      CustomDirectionData(
+        id: j['id'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        desc: j['desc'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'desc': desc};
+}
+
 class CustomThemeData {
   String id;
   String title;
@@ -637,6 +658,9 @@ class Config {
   /// Пользовательские темы, сгенерированные ИИ.
   List<CustomThemeData> customThemes;
 
+  /// Пользовательские направления, созданные через «+» в переключателе.
+  List<CustomDirectionData> customDirections;
+
   /// Озвучивание ответов. Системный TTS не требует загрузки модели.
   bool ttsEnabled;
   bool ttsAutoChat;
@@ -702,6 +726,7 @@ class Config {
     this.syncKeysToCloud = false,
     this.mascotVisible = true,
     List<CustomThemeData>? customThemes,
+    List<CustomDirectionData>? customDirections,
     this.ttsEnabled = false,
     this.ttsAutoChat = true,
     this.ttsAutoCompletion = true,
@@ -728,7 +753,8 @@ class Config {
         directions = directions ?? [],
         fallbacks = fallbacks ?? [],
         providerProfiles = providerProfiles ?? {},
-        customThemes = customThemes ?? [];
+        customThemes = customThemes ?? [],
+        customDirections = customDirections ?? [];
 
   factory Config.fromJson(Map<String, dynamic> j) => Config(
         apiKey: j['api_key'] as String? ?? '',
@@ -774,6 +800,9 @@ class Config {
         mascotVisible: j['mascot_visible'] as bool? ?? true,
         customThemes: ((j['custom_themes'] as List?) ?? [])
             .map((e) => CustomThemeData.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        customDirections: ((j['custom_directions'] as List?) ?? [])
+            .map((e) => CustomDirectionData.fromJson(e as Map<String, dynamic>))
             .toList(),
         ttsEnabled: j['tts_enabled'] as bool? ?? false,
         ttsAutoChat: j['tts_auto_chat'] as bool? ?? true,
@@ -852,6 +881,7 @@ class Config {
         'ignored_update': ignoredUpdate,
         'last_update_check_at': lastUpdateCheckAt,
         'custom_themes': customThemes.map((e) => e.toJson()).toList(),
+        'custom_directions': customDirections.map((e) => e.toJson()).toList(),
         if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
         if (primaryFailStreak > 0) 'primary_fail_streak': primaryFailStreak,
         if (primaryLastErrorAt > 0) 'primary_last_error_at': primaryLastErrorAt,

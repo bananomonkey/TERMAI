@@ -33,7 +33,9 @@ LocalResult? tryLocalCommand(String raw, SandboxState st) {
       final prev = redirect.group(2) == '>>' && st.files.containsKey(file)
           ? st.files[file]!
           : '';
-      st.files[file] = prev + inner.out;
+      // Как в реальном шелле: echo завершает строку \n — иначе многострочные
+      // файлы (YAML-манифесты, скрипты) склеиваются в одну строку.
+      st.files[file] = prev + inner.out + '\n';
       return LocalResult(true, '');
     }
     return null;

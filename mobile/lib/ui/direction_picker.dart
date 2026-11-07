@@ -3,18 +3,21 @@
 import 'package:flutter/material.dart';
 
 import '../directions.dart';
+import '../main.dart';
 import 'design_system.dart';
 import 'theme.dart';
 
 class DirectionOptionList extends StatelessWidget {
   final Set<String> selected;
   final ValueChanged<String> onToggle;
+  final ValueChanged<String> onCreate;
   final bool dense;
 
   const DirectionOptionList({
     super.key,
     required this.selected,
     required this.onToggle,
+    required this.onCreate,
     this.dense = false,
   });
 
@@ -23,7 +26,7 @@ class DirectionOptionList extends StatelessWidget {
     final categories = [
       for (final category in directionCategories.keys)
         MapEntry(category, directionsForCategory(category)),
-    ];
+    ].where((e) => e.value.isNotEmpty).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -44,8 +47,87 @@ class DirectionOptionList extends StatelessWidget {
             if (i < entry.value.length - 1)
               Divider(color: C.border.withAlpha(110), height: 1),
           ],
+          Padding(
+            padding: EdgeInsets.fromLTRB(2, dense ? 14 : 18, 2, 6),
+            child: Text('СОЗДАТЬ',
+                style: AppText.section.copyWith(color: C.muted)),
+          ),
+          _CreateDirectionRow(onCreate: onCreate),
         ],
       ],
+    );
+  }
+}
+
+class _CreateDirectionRow extends StatelessWidget {
+  final ValueChanged<String> onCreate;
+  const _CreateDirectionRow({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final ctrl = TextEditingController();
+          final title = await showDialog<String>(
+            context: context,
+            builder: (dlgCtx) => AlertDialog(
+              backgroundColor: C.surface,
+              title: Text('Новое направление',
+                  style: TextStyle(color: C.text, fontSize: 17)),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                    labelText: 'Например: Python, SQL, Rust'),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dlgCtx),
+                    child: Text('Отмена', style: TextStyle(color: C.muted))),
+                FilledButton(
+                    onPressed: () => Navigator.pop(dlgCtx, ctrl.text.trim()),
+                    child: const Text('Создать')),
+              ],
+            ),
+          );
+          if (title != null && title.isNotEmpty) onCreate(title);
+        },
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                margin: const EdgeInsets.only(top: 1),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: C.border, width: 1.4),
+                ),
+                child: Icon(Icons.add, size: 14, color: C.accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Своё направление',
+                        style: AppText.title.copyWith(color: C.text)),
+                    const SizedBox(height: 2),
+                    Text(
+                        'Назови тему — направление появится в переключателе, курс под него соберёт ИИ.',
+                        style: AppText.caption.copyWith(color: C.muted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -195,6 +277,15 @@ Future<Set<String>?> showDirectionPicker(
                                 local.add(id);
                               }
                             }),
+                            onCreate: (title) async {
+                              final err =
+                                  await controller.addCustomDirection(title);
+                              if (err.isEmpty) {
+                                setState(() {
+                                  local.add(controller.config.activeDirection);
+                                });
+                              }
+                            },
                             dense: true,
                           ),
                         ],

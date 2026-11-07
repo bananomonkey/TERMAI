@@ -310,6 +310,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 _selected.add(id);
               }
             }),
+            onCreate: (title) async {
+              final err = await controller.addCustomDirection(title);
+              if (err.isEmpty) {
+                setState(() => _selected.add(controller.config.activeDirection));
+              }
+            },
             dense: true,
           ),
           const SizedBox(

@@ -26,7 +26,39 @@ const directionCategories = <String, String>{
   'languages': 'Языки',
   'programming': 'Программирование',
   'professions': 'Профессии',
+  'custom': 'Мои направления',
 };
+
+/// Кастомные направления пользователя. Реестр мутируемый: при старте
+/// store.dart наполняет его из config.customDirections, а create-диалог
+/// добавляет новые.
+final List<DirectionDef> customDirectionDefs = <DirectionDef>[];
+
+String slugify(String title) {
+  final t = title.trim().toLowerCase();
+  final map = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+  };
+  final b = StringBuffer();
+  for (final ch in t.codeUnits) {
+    final c = String.fromCharCode(ch);
+    if (map.containsKey(c)) {
+      b.write(map[c]);
+    } else if (RegExp(r'[a-z0-9]').hasMatch(c)) {
+      b.write(c);
+    } else {
+      b.write('-');
+    }
+  }
+  var r = b.toString().replaceAll(RegExp(r'-+'), '-');
+  if (r.startsWith('-')) r = r.substring(1);
+  if (r.endsWith('-')) r = r.substring(0, r.length - 1);
+  return r.isEmpty ? 'custom' : r;
+}
 
 const directionCatalog = <DirectionDef>[
   DirectionDef(
@@ -74,8 +106,15 @@ DirectionDef? directionById(String id) {
   for (final d in directionCatalog) {
     if (d.id == id) return d;
   }
+  for (final d in customDirectionDefs) {
+    if (d.id == id) return d;
+  }
   return null;
 }
+
+/// allDirectionDefs — каталог + кастомные, для валидации и выборщиков.
+List<DirectionDef> get allDirectionDefs =>
+    [...directionCatalog, ...customDirectionDefs];
 
 String directionCategoryTitle(String category) =>
     directionCategories[category] ?? category;
@@ -93,7 +132,7 @@ String categoryForDirection(String direction) =>
     directionById(direction)?.category ?? 'professions';
 
 List<DirectionDef> directionsForCategory(String category) =>
-    directionCatalog.where((d) => d.category == category).toList();
+    allDirectionDefs.where((d) => d.category == category).toList();
 
 class DirectionStats {
   final int courses;

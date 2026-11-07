@@ -178,16 +178,19 @@ spec:
     for (final task in k8s.tasks) {
       if (task.verify.isEmpty) continue;
       final st = task.start.clone();
+      final hist = <HistEntry>[];
       final matches = block.allMatches(task.solution);
       expect(matches, isNotEmpty, reason: '${task.id}: нет bash-решения');
       for (final m in matches) {
         for (final line in m.group(1)!.split('\n')) {
           final cmd = line.trim();
           if (cmd.isEmpty || cmd.startsWith('#')) continue;
-          tryLocalCommand(cmd, st);
+          final r = tryLocalCommand(cmd, st);
+          // как в приложении: команда и вывод попадают в transcript проверки
+          hist.add(HistEntry(cmd: cmd, out: r?.out ?? ''));
         }
       }
-      final check = tryVerifyTask(task, st);
+      final check = tryVerifyTask(task, st, history: hist);
       expect(check?.ok, isTrue, reason: '${task.id}: ${check?.message}');
     }
   });

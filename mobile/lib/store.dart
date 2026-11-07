@@ -301,6 +301,7 @@ class AppController extends ChangeNotifier {
       config.directions = remote.directions;
       config.activeDirection = remote.activeDirection;
     }
+    config.customDirections = remote.customDirections;
     config.customThemes = remote.customThemes;
     config.buttonBrightness = remote.buttonBrightness;
     config.bgBlur = remote.bgBlur;
@@ -375,8 +376,59 @@ class AppController extends ChangeNotifier {
 
   /// _ensureDirections — старые пользователи получают пространства по своим
   /// курсам. Новый пользователь выбирает их в онбординге.
+/// addCustomDirection — создаёт пользовательское направление и делает его
+/// активным. Курсы под него собираются ИИ через обычную сборку курса.
+Future<String> addCustomDirection(String title) async {
+  final name = title.trim();
+  if (name.isEmpty) return 'Введи название направления.';
+  final base = 'custom-' + slugify(name);
+  var id = base;
+  var n = 2;
+  while (customDirectionDefs.any((d) => d.id == id)) {
+    id = '$base-$n';
+    n++;
+  }
+  final def = DirectionDef(
+    id: id,
+    category: 'custom',
+    title: name,
+    shortTitle: name.length > 12 ? '${name.substring(0, 12)}…' : name,
+    desc: 'Направление, собранное с ИИ.',
+    courseIds: const [],
+    defaultCourseId: '',
+  );
+  customDirectionDefs.add(def);
+  config.customDirections
+      .add(CustomDirectionData(id: id, title: name, desc: def.desc));
+  await saveConfig(autofill: false);
+  await setDirections([...config.directions, id], active: id);
+  return '';
+}
+
+/// _syncCustomDirections — наполняет мутируемый реестр из конфига.
+void _syncCustomDirections() {
+  customDirectionDefs
+    ..clear()
+    ..addAll([
+      for (final c in config.customDirections)
+        DirectionDef(
+          id: c.id,
+          category: 'custom',
+          title: c.title,
+          shortTitle: c.title.length > 12 ? '${c.title.substring(0, 12)}…' : c.title,
+          desc: c.desc,
+          courseIds: allCourses
+              .where((x) => x.direction == c.id)
+              .map((x) => x.id)
+              .toList(),
+          defaultCourseId: '',
+        ),
+    ]);
+}
+
   void _ensureDirections() {
-    final valid = directionCatalog.map((d) => d.id).toSet();
+    _syncCustomDirections();
+    final valid = allDirectionDefs.map((d) => d.id).toSet();
     var selected =
         config.directions.where(valid.contains).toSet().toList(growable: true);
     // Направления с курсами или прогрессом возвращаются всегда — даже если
@@ -511,7 +563,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> setDirections(Iterable<String> ids,
       {String? active, bool protectStarted = true}) async {
-    final valid = directionCatalog.map((d) => d.id).toSet();
+    final valid = allDirectionDefs.map((d) => d.id).toSet();
     final next = ids.where(valid.contains).toSet().toList();
     if (next.isEmpty) next.add('devops');
     // Направления, по которым уже есть курсы или прогресс, не теряются при
@@ -1355,6 +1407,7 @@ class AppController extends ChangeNotifier {
             config.bgDim = remoteCfg.bgDim;
             config.launcherX = remoteCfg.launcherX;
             config.launcherY = remoteCfg.launcherY;
+            config.customDirections = remoteCfg.customDirections;
             config.updatedAt = remoteCfg.updatedAt;
             await saveConfig(autofill: false, syncCloud: false);
             notifyListeners();
@@ -1393,16 +1446,21 @@ class AppController extends ChangeNotifier {
     }
     config.updatedAt = DateTime.now().toIso8601String();
     final outgoing = config.toCloudJson(includeKeys: config.syncKeysToCloud);
-    // Новая установка по умолчанию не читает облачные ключи. При обычном
-    // входе при этом не стираем ранее сохранённые секреты: они останутся в
-    // облаке до явного выключения тумблера (тот путь вызывает pullFirst=false).
-    if (!config.syncKeysToCloud &&
-        remoteRaw != null &&
-        remoteRaw!['sync_keys_to_cloud'] == true) {
+    // Защита облачных секретов: push перезаписывает документ целиком, и
+    // раньше пустые локальные ключи стирали облачные (GLM и прочие пропадали
+    // навсегда). Теперь пустое поле не затирает непустое облачное.
+    if (remoteRaw != null) {
       for (final field in ['api_key', 'fallbacks', 'provider_profiles']) {
-        if (remoteRaw!.containsKey(field)) outgoing[field] = remoteRaw![field];
+        if (!remoteRaw!.containsKey(field) || remoteRaw![field] == null) {
+          continue;
+        }
+        final localEmpty = field == 'api_key'
+            ? (outgoing['api_key'] as String? ?? '').isEmpty
+            : (outgoing[field] as List? ?? const []).isEmpty;
+        if (localEmpty && !config.syncKeysToCloud) {
+          outgoing[field] = remoteRaw![field];
+        }
       }
-      outgoing['sync_keys_to_cloud'] = true;
     }
     return await sync.pushConfig(jsonEncode(outgoing));
   }
@@ -1430,9 +1488,7 @@ class AppController extends ChangeNotifier {
     if (loaded) {
       return 'Загружено из облака: ${prog.solvedTotal} задач';
     }
-    return config.syncKeysToCloud
-        ? 'Вход выполнен — прогресс и ключи сохранены в облако'
-        : 'Вход выполнен — прогресс сохранён, ключи не отправлялись';
+    return 'Синхронизировано';
   }
 
   Future<String> syncNow() async {
@@ -1456,9 +1512,7 @@ class AppController extends ChangeNotifier {
     if (loaded) {
       return 'Загружено из облака: ${prog.solvedTotal} задач';
     }
-    return config.syncKeysToCloud
-        ? 'Прогресс и ключи сохранены в облако'
-        : 'Прогресс сохранён; ключи не отправлялись';
+    return 'Синхронизировано';
   }
 
   Future<void> signOutSync() => sync.signOut();

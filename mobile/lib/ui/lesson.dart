@@ -328,6 +328,11 @@ class _LessonScreenState extends State<LessonScreen>
                         children: [
                           _HelpSlide(
                               t: t,
+                              courseTasks: controller.cur.tasks,
+                              onJump: (i) {
+                                controller.selectTask(i);
+                                setState(() => _search = '');
+                              },
                               search: _search,
                               onSearch: (v) => setState(() => _search = v)),
                           _LiveSlide(
@@ -424,43 +429,118 @@ class _SlideTab extends StatelessWidget {
 
 class _HelpSlide extends StatelessWidget {
   final Task t;
+  final List<Task> courseTasks;
+  final void Function(int taskIndex) onJump;
   final String search;
   final ValueChanged<String> onSearch;
-  const _HelpSlide(
-      {required this.t, required this.search, required this.onSearch});
+  const _HelpSlide({
+    required this.t,
+    required this.courseTasks,
+    required this.onJump,
+    required this.search,
+    required this.onSearch,
+  });
 
   @override
   Widget build(BuildContext context) {
     final q = search.trim().toLowerCase();
-    final paras = q.isEmpty
-        ? t.theory
-        : t.theory.where((p) => p.toLowerCase().contains(q)).toList();
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Stack(
       children: [
-        TextField(
-          onChanged: onSearch,
-          decoration: InputDecoration(
-            hintText: 'Поиск справочных материалов…',
-            prefixIcon: Icon(Icons.search, color: C.muted),
+        ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              onChanged: onSearch,
+              decoration: InputDecoration(
+                hintText: 'Поиск по справке всего курса…',
+                prefixIcon: Icon(Icons.search, color: C.muted),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (q.isEmpty)
+              ...t.theory.map((p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: MarkdownBody(
+                        data: p, selectable: true, styleSheet: mdStyle()),
+                  ))
+            else ...[
+              // Поиск идёт по справке ВСЕГО курса: попадания из других задач
+              // кликабельны и переносят в соответствующую задачу.
+              ..._courseHits(q).map((hit) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: InkWell(
+                      onTap: hit.key == _currentIdx ? null : () => onJump(hit.key),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: hit.key == _currentIdx
+                              ? C.card
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: C.border.withAlpha(90)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hit.key == _currentIdx
+                                  ? 'Текущая задача'
+                                  : courseTasks[hit.key].title,
+                              style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: C.accent),
+                            ),
+                            const SizedBox(height: 6),
+                            MarkdownBody(
+                                data: hit.value,
+                                selectable: true,
+                                styleSheet: mdStyle()),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )),
+              if (_courseHits(q).isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                      child: Text('Ничего не найдено.',
+                          style: TextStyle(color: C.muted))),
+                ),
+            ],
+          ],
+        ),
+        // TERMAI в левом нижнем углу справки: спроси ментора, он дополнит.
+        Positioned(
+          left: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'help-mentor',
+            backgroundColor: C.accent,
+            foregroundColor: C.bg,
+            onPressed: () => Navigator.of(context)
+                .push(pageRoute(const ChatScreen(scope: ChatScope.task))),
+            icon: Icon(Icons.support_agent, size: 20),
+            label: Text('TERMAI',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           ),
         ),
-        const SizedBox(height: 14),
-        if (paras.isEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-                child: Text('Ничего не найдено.',
-                    style: TextStyle(color: C.muted))),
-          )
-        else
-          ...paras.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: MarkdownBody(
-                    data: p, selectable: true, styleSheet: mdStyle()),
-              )),
       ],
     );
+  }
+
+  int get _currentIdx => courseTasks.indexWhere((x) => x.id == t.id);
+
+  List<MapEntry<int, String>> _courseHits(String q) {
+    final hits = <MapEntry<int, String>>[];
+    for (var i = 0; i < courseTasks.length; i++) {
+      for (final p in courseTasks[i].theory) {
+        if (p.toLowerCase().contains(q)) hits.add(MapEntry(i, p));
+      }
+    }
+    return hits;
   }
 }
 

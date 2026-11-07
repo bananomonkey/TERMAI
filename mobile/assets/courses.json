@@ -5735,6 +5735,7 @@
       "ImagePullBackOff",
       "Rollout status",
       "Итоговый проект",
+      "Диагностика: под в CrashLoopBackOff",
       "Экзамен: Kubernetes"
     ],
     "tasks": [
@@ -7884,29 +7885,172 @@
         }
       },
       {
-        "id": "k8s-34-exam",
+        "id": "k8s-34-diag",
+        "title": "Диагностика: под в CrashLoopBackOff",
+        "kind": "cmd",
+        "difficulty": 3,
+        "theory": [
+          "Жизненный цикл пода виден в статусе: `Pending` — под ещё не запущен (нет ресурсов или образ качается), `ImagePullBackOff` — kubelet не смог скачать образ (опечатка в теге, приватный registry), `CrashLoopBackOff` — контейнер стартует и сразу падает, kubelet перезапускает его с нарастающей паузой, `Running` — работает (но не факт, что готов).",
+          "Порядок диагностики — всегда один и тот же: `kubectl get pods` — что происходит? `kubectl describe pod ИМЯ` — Events внизу говорят, что именно сломалось (.failed scheduling, Back-off, Failed). `kubectl logs ИМЯ` — что говорит само приложение: упавшее исключение живёт здесь.",
+          "`describe` показывает и конфигурацию: образ, переменные окружения, probes, ресурсы. 90% причин CrashLoopBackOff видны в Events + logs: ошибка в коде, неверный конфиг, недоступная зависимость, неверный образ.",
+          "Если деплоймент стал хуже после обновления — `kubectl rollout undo deployment/ИМЯ` откатывает на предыдущую ревизию. `rollout status` показывает прогресс выката.",
+          "Исправление в k8s — не «перезапустить вручную», а поправить манифест и применить его: `kubectl apply -f файл.yaml`. Управляемый объект всегда приводится к желаемому состоянию из YAML — это и есть декларативность.",
+          "Готовность и живость: `readinessProbe` решает, пускать ли трафик на под, `livenessProbe` перезапускает зависший контейнер. Без readiness «запущенный, но не готовый» под получает трафик и роняет запросы."
+        ],
+        "goal": "Под api в CrashLoopBackOff. Диагностируй (logs + describe), исправь образ в манифесте на repo/api:v2, примени и убедись, что под в Running.",
+        "hints": [
+          "Начни с `kubectl get pods` — увидишь статус.",
+          "`kubectl logs api-7d9f6-x1` покажет панику приложения, `kubectl describe pod api-7d9f6-x1` — Events.",
+          "Исправь образ в api.yaml (echo с перезаписью через `>`) и примени: `kubectl apply -f api.yaml`, затем `kubectl get pods`."
+        ],
+        "check": "Диагностика выполнена, исправленный манифест применён, новый под в Running.",
+        "expected_output": "",
+        "solution": "```bash\nkubectl get pods\nkubectl logs api-7d9f6-x1\nkubectl describe pod api-7d9f6-x1\necho 'apiVersion: v1' > pod-api.yaml\necho 'kind: Pod' >> pod-api.yaml\necho 'metadata:' >> pod-api.yaml\necho '  name: api-fixed' >> pod-api.yaml\necho 'spec:' >> pod-api.yaml\necho '  containers:' >> pod-api.yaml\necho '  - name: api' >> pod-api.yaml\necho '    image: repo/api:v2' >> pod-api.yaml\nkubectl apply -f pod-api.yaml\nkubectl get pods\n```\nОжидаемо: новый под `api-fixed` в статусе `Running`.",
+        "quiz": [
+          {
+            "question": "Что означает статус CrashLoopBackOff?",
+            "options": [
+              "Образ не скачался",
+              "Контейнер стартует и сразу падает, kubelet перезапускает",
+              "Под ждёт ресурсов"
+            ],
+            "correct": 1
+          },
+          {
+            "question": "Где искать причину падения контейнера?",
+            "options": [
+              "kubectl logs и describe (Events)",
+              "В etcd",
+              "В README проекта"
+            ],
+            "correct": 0
+          }
+        ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {
+            "api.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\nspec:\n  replicas: 1\n  template:\n    spec:\n      containers:\n      - name: api\n        image: repo/api:v2-broken\n"
+          },
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {
+            "namespace/default/default": {
+              "kind": "Namespace",
+              "name": "default",
+              "namespace": "default",
+              "raw": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: default",
+              "spec": {},
+              "replicas": 0,
+              "ready": 0,
+              "status": "Active"
+            },
+            "deployment/default/api": {
+              "kind": "Deployment",
+              "name": "api",
+              "namespace": "default",
+              "raw": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api",
+              "spec": {
+                "replicas": 1
+              },
+              "replicas": 1,
+              "ready": 0,
+              "status": "Ready",
+              "logs": "",
+              "revision": 1,
+              "image": "repo/api:v2-broken"
+            },
+            "pod/default/api-7d9f6-x1": {
+              "kind": "Pod",
+              "name": "api-7d9f6-x1",
+              "namespace": "default",
+              "raw": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: api-7d9f6-x1",
+              "spec": {},
+              "replicas": 0,
+              "ready": 0,
+              "status": "CrashLoopBackOff",
+              "logs": "panic: config load failed: dial tcp 127.0.0.1:8080: connection refused",
+              "revision": 0,
+              "image": "repo/api:v2-broken"
+            }
+          },
+          "k8s_events": [
+            "Warning BackOff pod/api-7d9f6-x1: Back-off restarting failed container",
+            "Warning Failed pod/api-7d9f6-x1: Error: config load failed"
+          ],
+          "last_output": ""
+        },
+        "verify": {
+          "checks": [
+            {
+              "event_contains": "kubectl get pods"
+            },
+            {
+              "event_contains": "logs"
+            },
+            {
+              "event_contains": "describe"
+            },
+            {
+              "event_contains": "apply -f"
+            },
+            {
+              "kind": "Pod",
+              "name": "api-fixed",
+              "namespace": "default",
+              "field": "status",
+              "equals": "Running"
+            }
+          ]
+        }
+      },
+      {
+        "id": "k8s-35-exam",
         "title": "Экзамен: Kubernetes",
         "kind": "exam",
         "difficulty": 3,
         "theory": [
-          "Итоговый экзамен проверяет не команды по отдельности, а понимание связей: workload → Service → Ingress, config → Pod, PV → PVC → mount, диагностика."
+          "Архитектура: `kube-apiserver` — единственные входные ворота кластера, всё состояние хранится в `etcd`. `scheduler` назначает поды на ноды, `kubelet` на ноде приводит поды к желаемому состоянию, `controller-manager` следит за репликами и узлами. Любой клиент — kubectl, контроллеры, операторы — говорит только с apiserver.",
+          "Pod — минимальная единица: один или несколько контейнеров с общими сетью и томами. Контейнеры внутри пода общаются через localhost. Поды смертны: их IP и имена не гарантированы — поэтому поверх подов всегда ставят абстракции.",
+          "Deployment управляет ReplicaSet'ами: объявляешь `replicas: 3` — контроллер держит 3 пода, выкатка новой версии делает роллаут через новые ReplicaSet, `rollout undo` откатывает. Управляемое состояние — в манифесте, а не в голове.",
+          "Service — стабильный виртуальный IP и DNS-имя перед меняющимися подами. Связь с подами — по selector'у и labels: selector должен совпадать с labels подов, иначе Service не видит ни одного эндпоинта. `ClusterIP` — внутри кластера, `NodePort` — порт на ноде, `LoadBalancer` — внешний балансировщик облака.",
+          "Ingress — HTTP-маршрутизация снаружи: правила host/path → Service. Для работы нужен ingress-контроллер (nginx, traefik). TLS-терминация настраивается там же через Secret с сертификатом.",
+          "ConfigMap — неконфиденциальные настройки (переменные, файлы), Secret — секреты (пароли, токены, base64 на бумаге, но шифруется RBAC'ом и по возможности etcd-шифрованием). Изменение ConfigMap поды видят через volume почти сразу, через env — только после рестарта.",
+          "StatefulSet — для stateful-нагрузок: стабильные имена (web-0, web-1), стабильные PVC на реплику, упорядоченный выкат. Deployment — для stateless. Перепутать — типовая ошибка: БД на Deployment потеряет данные при пересоздании.",
+          "Ресурсы и планирование: `requests` — гарантия, по ней scheduler выбирает ноду; `limits` — потолок, при превышении CPU троттлится, при превышении памяти под убивается (OOMKilled). Хочешь понять Pending — смотри, хватает ли requests на нодах.",
+          "Health: `readinessProbe` — готов принимать трафик, `livenessProbe` — перезапуск при зависании, `startupProbe` — окно для медленного старта. Без probes Service шлёт трафик на ещё не готовые поды.",
+          "Диагностика по порядку: `get pods` → `describe` (Events) → `logs` → `get events`. Pending — ресурсы/сcheduling; ImagePullBackOff — образ; CrashLoopBackOff — приложение. `kubectl get endpoints svc-name` показывает, кого Service реально видит."
         ],
+        "goal": "Итоговый экзамен: 8 вопросов по всем темам курса. Сначала пройди практику диагностики — вопросы опираются на неё.",
+        "hints": [
+          "Перечитай справку — каждый вопрос из неё.",
+          "Думай связями: workload → Service → Ingress, манифест → желаемое состояние."
+        ],
+        "check": "Все ответы верны.",
+        "expected_output": "",
+        "solution": "Selector совпадает с labels; Pending диагностируют по events и ресурсам; StatefulSet даёт стабильные имена и PVC; состояние — в etcd; превышение памяти — OOMKilled; трафик пускает readinessProbe; откат — rollout undo; Service закрывает меняющиеся IP подов.",
         "quiz": [
           {
             "question": "Почему Service не видит Pod?",
             "options": [
-              "Не совпал selector/labels",
+              "Не совпал selector с labels пода",
               "Нет Dockerfile",
-              "Не хватает Git"
+              "Не хватает Git-тега"
             ],
             "correct": 0
           },
           {
-            "question": "Что делать при Pending?",
+            "question": "Что делать при статусе Pending?",
             "options": [
-              "Смотреть describe/events и ресурсы",
+              "Смотреть describe/events и проверить ресурсы (requests)",
               "Удалить namespace",
-              "Перезапустить браузер"
+              "Перезапустить kubectl"
             ],
             "correct": 0
           },
@@ -7914,8 +8058,8 @@
             "question": "Чем StatefulSet отличается от Deployment?",
             "options": [
               "Стабильные имена и PVC на реплику",
-              "Не умеет Pod",
-              "Только для frontend"
+              "Не умеет поды",
+              "Только для stateless"
             ],
             "correct": 0
           },
@@ -7927,13 +8071,44 @@
               "Ingress"
             ],
             "correct": 0
+          },
+          {
+            "question": "Что произойдёт при превышении memory limit?",
+            "options": [
+              "Под убьётся (OOMKilled)",
+              "Ничего",
+              "Под перейдёт в Pending"
+            ],
+            "correct": 0
+          },
+          {
+            "question": "Какая probe решает, пускать ли трафик на под?",
+            "options": [
+              "readinessProbe",
+              "livenessProbe",
+              "startupProbe"
+            ],
+            "correct": 0
+          },
+          {
+            "question": "Как откатить неудачный выкат деплоймента?",
+            "options": [
+              "kubectl rollout undo",
+              "kubectl delete node",
+              "Пересоздать кластер"
+            ],
+            "correct": 0
+          },
+          {
+            "question": "Зачем Service, если у пода есть IP?",
+            "options": [
+              "IP подов меняются, Service даёт стабильный VIP и DNS",
+              "Service быстрее пода",
+              "Service шифрует трафик"
+            ],
+            "correct": 0
           }
         ],
-        "goal": "Пройди итоговый экзамен по Kubernetes.",
-        "hints": [],
-        "check": "Все ответы верны.",
-        "expected_output": "",
-        "solution": "Selector должен совпадать с labels. Pending диагностируют по events. StatefulSet даёт стабильные имена и storage. Состояние хранится в etcd.",
         "start_state": {
           "workdir": "/workspace",
           "files": {},
