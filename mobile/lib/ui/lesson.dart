@@ -447,7 +447,8 @@ class _HelpSlide extends StatelessWidget {
     return Stack(
       children: [
         ListView(
-          padding: const EdgeInsets.all(16),
+          // Нижний отступ — чтобы контент не уходил под кнопку TERMAI.
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
             TextField(
               onChanged: onSearch,

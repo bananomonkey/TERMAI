@@ -340,10 +340,19 @@ class LocalTtsService extends ChangeNotifier {
       _player = player;
       await player.setReleaseMode(ReleaseMode.stop);
       await player.play(DeviceFileSource(wav.path));
-      await player.onPlayerComplete.first.timeout(
-        const Duration(minutes: 2),
-        onTimeout: () {},
-      );
+      // Ждём завершения проигрывания с страховкой по времени. Future.timeout
+      // здесь нельзя: его onTimeout обязан вернуть AudioEvent, и колбек
+      // '() {}' падал типовой ошибкой после успешного проигрывания.
+      final done = Completer<void>();
+      final sub = player.onPlayerComplete.listen((_) {
+        if (!done.isCompleted) done.complete();
+      });
+      final guard = Timer(const Duration(minutes: 2), () {
+        if (!done.isCompleted) done.complete();
+      });
+      await done.future;
+      guard.cancel();
+      await sub.cancel();
       return true;
     } catch (e) {
       _lastError = 'Локальный голос не сработал: $e';

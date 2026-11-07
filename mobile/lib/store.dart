@@ -498,7 +498,7 @@ void _syncCustomDirections() {
 
   /// _applyCourseFilter — видимый список активного направления: без
   /// удалённых и архивных курсов, в пользовательском или дорожном порядке.
-  void _applyCourseFilter() {
+  Future<void> _applyCourseFilter() async {
     final dir = config.activeDirection;
     for (final c in allCourses) {
       if (c.direction.isEmpty) c.direction = directionForCourse(c);
@@ -510,6 +510,24 @@ void _syncCustomDirections() {
             !prog.hiddenCourses.contains(c.id) &&
             !prog.archived.contains(c.id))
         .toList();
+    if (courses.isEmpty) {
+      // Авто-ремонт: у направления есть курсы, но все попали в скрытые/архив
+      // (испорченные данные старых версий) — направление выглядело пустым
+      // навсегда. Возвращаем их видимыми.
+      final candidates = allCourses.where((c) => c.direction == dir).toList();
+      if (candidates.isNotEmpty &&
+          candidates
+              .every((c) =>
+                  prog.hiddenCourses.contains(c.id) ||
+                  prog.archived.contains(c.id))) {
+        prog.hiddenCourses
+            .removeWhere((id) => candidates.any((c) => c.id == id));
+        prog.archived
+            .removeWhere((id) => candidates.any((c) => c.id == id));
+        courses = List.of(candidates);
+        await saveProgress();
+      }
+    }
     final order = prog.courseOrderByDirection[dir] ?? const <String>[];
     final roadmap = directionById(dir)?.courseIds ?? const <String>[];
     courses.sort((a, b) {

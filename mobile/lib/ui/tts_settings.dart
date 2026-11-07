@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../local_tts.dart';
 import '../main.dart';
+import '../models.dart';
 import '../tts_service.dart';
 import 'app_background.dart';
 import 'design_system.dart';
@@ -24,6 +25,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
   List<TtsVoiceOption> _voices = const [];
   bool _loading = true;
   bool _russianAvailable = false;
+  List<String> _localIds = const [];
 
   @override
   void initState() {
@@ -37,11 +39,17 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
     final engines = await TtsService.instance.engines();
     final voices = await TtsService.instance.russianVoices();
     final ru = await TtsService.instance.isRussianAvailable();
+    List<String> localIds = const [];
+    try {
+      await LocalTtsService.instance.init();
+      localIds = await LocalTtsService.instance.installedIds();
+    } catch (_) {}
     if (!mounted) return;
     setState(() {
       _engines = engines;
       _voices = voices;
       _russianAvailable = ru;
+      _localIds = localIds;
       _loading = false;
     });
   }
@@ -142,7 +150,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                         const SizedBox(height: 8),
                         _label('Движок'),
                         DropdownButtonFormField<String>(
-                          initialValue: _engineValue(c.ttsEngine),
+                          initialValue: _engineValue(c.ttsUseLocal ? 'local' : c.ttsEngine),
                           isExpanded: true,
                           decoration: const InputDecoration(
                               hintText: 'Системный по умолчанию'),
@@ -150,6 +158,13 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                             const DropdownMenuItem(
                                 value: '',
                                 child: Text('Системный по умолчанию')),
+                            if (_localIds.isNotEmpty)
+                              DropdownMenuItem(
+                                  value: 'local',
+                                  child: Text(
+                                      'Локальный TERMAI (Piper · оффлайн)',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis)),
                             for (final e in _engines)
                               DropdownMenuItem(
                                   value: e.name,
@@ -158,7 +173,17 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                                       overflow: TextOverflow.ellipsis)),
                           ],
                           onChanged: (v) async {
-                            c.ttsEngine = v ?? '';
+                            if (v == 'local') {
+                              // Piper: включаем установленный локальный голос.
+                              c.ttsUseLocal = true;
+                              c.ttsLocalModelId = c.ttsLocalModelId.isEmpty
+                                  ? _localIds.first
+                                  : c.ttsLocalModelId;
+                              c.ttsEngine = '';
+                            } else {
+                              c.ttsUseLocal = false;
+                              c.ttsEngine = v ?? '';
+                            }
                             await _save();
                           },
                         ),
@@ -383,7 +408,11 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
     );
   }
 
-  String _engineValue(String v) => _engines.any((e) => e.name == v) ? v : '';
+  String _engineValue(String v) {
+    final c = controller.config;
+    if (c.ttsUseLocal && c.ttsLocalModelId.isNotEmpty) return 'local';
+    return _engines.any((e) => e.name == v) ? v : '';
+  }
 
   String _voiceValue(String v) => _voices.any((e) => e.name == v) ? v : '';
 

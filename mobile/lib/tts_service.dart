@@ -160,6 +160,14 @@ class TtsService extends ChangeNotifier {
     _lastError = '';
     _activeText = cleaned;
     try {
+      // Глушим оба движка до старта: если системный голос был в середине
+      // фразы, а включался Piper (или наоборот) — звучали одновременно.
+      try {
+        (await _ensure()).stop();
+      } catch (_) {}
+      try {
+        await LocalTtsService.instance.stop();
+      } catch (_) {}
       // Локальный Piper используется, только если модель явно выбрана и
       // уже установлена. Иначе — системный голос Android.
       if (config.ttsUseLocal && config.ttsLocalModelId.isNotEmpty) {
