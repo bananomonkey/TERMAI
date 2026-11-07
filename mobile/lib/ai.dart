@@ -335,14 +335,18 @@ class AIClient {
     return msg;
   }
 
-  int _penaltyMs(Object e, int failStreak) {
+  int _penaltyMs(Object e, int failStreak, {bool isFree = false}) {
     final raw = e.toString();
     final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
     final streak = failStreak.clamp(1, 6);
     if (status == '401' || status == '403' || status == '404') {
       return 30 * 60 * 1000;
     }
-    if (status == '429') return streak * 2 * 60 * 1000;
+    if (status == '429') {
+      // Лимит параллелизма бесплатного пула: слот освобождается за секунды,
+      // поэтому остывание короткое — ключ быстро возвращается в оборот.
+      return isFree ? 20 * 1000 : streak * 2 * 60 * 1000;
+    }
     if (status != null && status.startsWith('5')) {
       return streak * 5 * 60 * 1000;
     }
@@ -401,7 +405,8 @@ class AIClient {
         ep.failStreak += 1;
         ep.lastErrorAt = ms;
         ep.lastError = _short(e);
-        ep.penaltyUntil = ms + _penaltyMs(e, ep.failStreak);
+        ep.penaltyUntil =
+            ms + _penaltyMs(e, ep.failStreak, isFree: ep.isFree);
         onEndpointResult?.call(ep, false, ep.lastError, sw.elapsedMilliseconds);
         errors.add('${_labels[i]}: ${_short(e)}');
       }

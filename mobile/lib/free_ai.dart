@@ -1,12 +1,15 @@
 // free_ai.dart — бесплатный доступ TERMAI через пул ключей z.ai (free-тариф).
 //
 // Ключи НЕ лежат в репозитории (код открыт): они передаются в сборку через
-// --dart-define=TERMAI_ZAI_KEYS=key1,key2,key3 из секретов GitHub Actions.
-// Round-robin: каждый вызов начинает перебор со следующего ключа, поэтому
-// нагрузка пользователей распределяется по ключам статистически равномерно.
-// При 429 штатный перебор endpoints в AIClient автоматически переходит на
-// следующий ключ (penalty-механизм), так что лимит одного ключа не роняет
-// запрос.
+// --dart-define=TERMAI_ZAI_KEYS=key1,key2,key3,key4 из секретов GitHub Actions.
+//
+// Балансировка объединяет два уровня. ЛИМИТЫ ПАРАЛЛЕЛИЗМА у z.ai действуют
+// НА КАЖДУЮ МОДЕЛЬ ОТДЕЛЬНО в рамках ключа, поэтому полезная ёмкость пула —
+// это матрица «ключ × модель». Round-robin по этой матрице распределяет
+// нагрузку пользователей: 4 ключа × (GLM-4.5-Flash: 2 слота +
+// GLM-4.7-Flash: 1 слот) ≈ 12 одновременных запросов без 429.
+// При 429 endpoints помечаются isFree и «остывают» на секунды, а не минуты —
+// штатный перебор в AIClient сразу пробует следующий ключ/модель.
 import 'models.dart';
 
 class FreeAiPool {
@@ -16,9 +19,10 @@ class FreeAiPool {
 
   static const String baseUrl = 'https://api.z.ai/api/paas/v4';
 
-  /// Бесплатные модели z.ai: 4.5-flash — основной free-тариф,
-  /// glm-4-flash — запасной (старее, но тоже бесплатный).
-  static const List<String> models = ['glm-4.5-flash', 'glm-4-flash'];
+  /// Бесплатные текстовые модели z.ai с лимитами параллелизма:
+  /// glm-4.5-flash — 2 параллельных запроса на ключ,
+  /// glm-4.7-flash — 1 запрос на ключ. Слоты считаются на модель отдельно.
+  static const List<String> models = ['glm-4.5-flash', 'glm-4.7-flash'];
 
   static final List<String> keys = String.fromEnvironment('TERMAI_ZAI_KEYS')
       .split(',')
@@ -30,23 +34,27 @@ class FreeAiPool {
 
   bool get configured => keys.isNotEmpty;
 
-  /// rotate — endpoints по всем ключам и моделям, начиная с ротационного
-  /// курсора: первый запрос уходит на ключ N, следующий на N+1 и т.д.
+  /// rotate — endpoints по всей матрице «ключ × модель». Порядок идёт
+  /// сначала ПО КЛЮЧАМ внутри модели: одинаковые модели разных ключей
+  /// встречаются реже — параллельные запросы с разных устройств почти
+  /// всегда попадают в разные ключи, а уже потом в разные модели.
   List<AiEndpoint> rotate() {
     if (keys.isEmpty) return const [];
     final n = keys.length;
     final out = <AiEndpoint>[];
-    for (var i = 0; i < n; i++) {
-      final key = keys[(_cursor + i) % n];
-      for (final model in models) {
+    for (final model in models) {
+      for (var i = 0; i < n; i++) {
         out.add(AiEndpoint(
           provider: 'zai',
-          apiKey: key,
+          apiKey: keys[(_cursor + i) % n],
           model: model,
           baseUrl: baseUrl,
+          isFree: true,
         ));
       }
     }
+    // Следующий вызов начинает с другого ключа: у 4 пользователей запросы
+    // уходят на 4 разных ключа, у большего числа — в разные модели.
     _cursor = (_cursor + 1) % n;
     return out;
   }

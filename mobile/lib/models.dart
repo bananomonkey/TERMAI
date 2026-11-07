@@ -527,6 +527,10 @@ class AiEndpoint {
   int lastOkAt;
   String lastError;
 
+  /// Бесплатный endpoint из пула сборки: при 429 «остывает» на секунды,
+  /// а не минуты — лимит параллелизма не должен выбивать ключ надолго.
+  bool isFree;
+
   AiEndpoint({
     this.provider = 'deepseek',
     this.apiKey = '',
@@ -537,6 +541,7 @@ class AiEndpoint {
     this.penaltyUntil = 0,
     this.lastOkAt = 0,
     this.lastError = '',
+    this.isFree = false,
   });
 
   bool get ready => apiKey.trim().isNotEmpty;
