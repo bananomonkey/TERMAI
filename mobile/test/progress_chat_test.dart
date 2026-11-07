@@ -71,8 +71,14 @@ void main() {
     expect(courses.any((c) => c.isTheory), isTrue);
     final english = courses.firstWhere((c) => c.id == 'english-a1');
     expect(english.tasks.length, greaterThanOrEqualTo(12));
-    expect(english.tasks.every((t) => t.isQuiz), isTrue);
-    expect(english.tasks.every((t) => t.quiz.length >= 2), isTrue);
+    // теория + письмо: у каждой темы тест с >= 2 вопросами, письменные
+    // задачи — редакторные без машинных проверок (оценивает ИИ)
+    final theoryTasks = english.tasks.where((t) => t.isQuiz).toList();
+    final writingTasks = english.tasks.where((t) => t.hasEditor).toList();
+    expect(theoryTasks.length, greaterThanOrEqualTo(12));
+    expect(theoryTasks.every((t) => t.quiz.length >= 2), isTrue);
+    expect(writingTasks.length, greaterThanOrEqualTo(12));
+    expect(writingTasks.every((t) => t.verify.isEmpty), isTrue);
     final k8s = courses.firstWhere((c) => c.id == 'kubernetes');
     expect(k8s.tasks.length, greaterThanOrEqualTo(32));
     expect(k8s.tasks.where((t) => t.verify.isNotEmpty).length,
@@ -281,8 +287,6 @@ void main() {
     final back = Config.fromJson(cfg.toJson());
     expect(back.providerProfiles['openai']!.apiKey, 'sk-openai');
     expect(back.providerProfiles['openrouter']!.model, 'deepseek/deepseek-chat');
-    expect(back.sharedAiEnabled, isTrue);
-    expect(back.sharedAiConsentVersion, 0);
   });
 
   test('local config never writes AI keys to disk', () {

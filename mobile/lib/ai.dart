@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'app_action.dart';
 import 'models.dart';
 import 'secret_store.dart';
-import 'shared_ai.dart';
+import 'free_ai.dart';
 import 'usage.dart';
 
 class ProviderPreset {
@@ -59,8 +59,8 @@ const providers = <ProviderPreset>[
   ProviderPreset('ollama', 'Ollama (локально)', 'http://localhost:11434/v1',
       'llama3.1', ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral']),
   ProviderPreset('custom', 'Свой (OpenAI-совместимый)', '', '', []),
-  ProviderPreset(
-      'termai', 'TERMAI · общий доступ', '', 'deepseek-v4.1-flash:free', []),
+  ProviderPreset('zai', 'z.ai (GLM)', 'https://api.z.ai/api/paas/v4',
+      'glm-4.6', ['glm-4.6', 'glm-4.5', 'glm-4.5-air', 'glm-4.5-flash']),
 ];
 
 ProviderPreset findProvider(String id) =>
@@ -96,25 +96,6 @@ String rawError(Object e) {
 String friendlyAiError(Object e) {
   final raw = rawError(e);
   final lower = raw.toLowerCase();
-  // Ошибки общего шлюза важнее общего текста про HTTP-код: 401/403/429 здесь
-  // означают не «неверный личный ключ», а состояние акции или лимит.
-  if (lower.contains('promo_ended') || lower.contains('access_ended')) {
-    return 'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.';
-  }
-  if (lower.contains('anonymous_auth') ||
-      lower.contains('operation-not-allowed')) {
-    return 'Общий доступ: не удалось подтвердить вход. Войди через Google в настройках синхронизации или добавь свой API-ключ.';
-  }
-  if (lower.contains('shared_auth') || lower.contains('unauthorized')) {
-    return 'Общий доступ: сервер не подтвердил вход. Войди через Google или добавь свой API-ключ.';
-  }
-  if (lower.contains('user_daily_limit') ||
-      lower.contains('global_daily_limit')) {
-    return 'Дневной лимит общего доступа исчерпан. Попробуй завтра или добавь свой API-ключ.';
-  }
-  if (lower.contains('server_misconfigured')) {
-    return 'Общий доступ временно не настроен на сервере. Используй свой API-ключ.';
-  }
   final status = RegExp(r'\b([45]\d\d)\b').firstMatch(raw)?.group(1);
   switch (status) {
     case '400':
@@ -186,31 +167,9 @@ class AIClient {
   /// endpoints — основное подключение + резервные, по порядку перебора.
   final List<AiEndpoint> _endpoints;
   final List<String> _labels;
-  final Future<String> Function()? _sharedToken;
-  AIClient._(
-    this._endpoints,
-    this._labels, {
-    Future<String> Function()? sharedToken,
-  }) : _sharedToken = sharedToken;
+  AIClient._(this._endpoints, this._labels);
 
   factory AIClient(Config cfg) {
-    // Во время общей акции все запросы идут через серверный шлюз TERMAI.
-    // Личный ключ пользователя при этом не используется и не перезаписывается.
-    final shared = SharedAiService.instance;
-    if (shared.isUsable(cfg)) {
-      return AIClient._(
-        [
-          AiEndpoint(
-            provider: 'termai',
-            apiKey: 'shared',
-            model: shared.model,
-            baseUrl: shared.chatBase,
-          )
-        ],
-        ['TERMAI · общий доступ'],
-        sharedToken: shared.idToken,
-      );
-    }
     final eps = <AiEndpoint>[];
     final labels = <String>[];
 
@@ -251,6 +210,17 @@ class AIClient {
         ep.lastError = f.lastError;
       }
     }
+    // Бесплатный доступ: если у пользователя нет ни своего ключа, ни
+    // резервных с ключами — запросы идут через пул бесплатных ключей z.ai.
+    // Round-robin распределяет нагрузку между ключами сборки.
+    final hasOwnKey = cfg.apiKey.trim().isNotEmpty ||
+        cfg.fallbacks.any((f) => f.apiKey.trim().isNotEmpty);
+    if (!hasOwnKey) {
+      for (final ep in FreeAiPool.instance.rotate()) {
+        eps.add(ep);
+        labels.add('TERMAI · бесплатный доступ');
+      }
+    }
     return AIClient._(eps, labels);
   }
 
@@ -271,18 +241,6 @@ class AIClient {
   String get model => _endpoints.isEmpty ? '' : _endpoints.first.model;
 
   Future<Map<String, String>> _headers(AiEndpoint ep) async {
-    if (ep.provider == 'termai') {
-      final token = await (_sharedToken?.call() ?? Future.value(''));
-      if (token.trim().isEmpty) {
-        throw Exception(
-            'shared_auth: общий доступ доступен после входа через Google.');
-      }
-      return {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${token.trim()}',
-        'X-Termai-Client': 'android',
-      };
-    }
     final auth = findProvider(ep.provider).auth;
     return {
       'Content-Type': 'application/json',
@@ -812,6 +770,24 @@ class AIClient {
         j['solved'] as bool? ?? false, j['comment'] as String? ?? '', diff);
   }
 
+  /// verifyWriting — проверка письменной работы (английский и другие
+  /// языковые задачи): грамматика по критерию задачи, без терминала.
+  Future<CheckResult> verifyWriting(Course c, Task task, String text) async {
+    const sys = 'Ты — преподаватель английского (уровни A1–A2) в приложении TERMAI. Проверяешь письменную работу студента по критерию задачи.\n'
+        'Оцени: 1) выполнена ли цель (нужные конструкции, объём, тема); 2) грамматика; 3) орфография.\n'
+        'Мелкие стилистические несовершенства НЕ считай ошибкой — это учебная работа A1–A2.\n'
+        'Если цель достигнута и грубых ошибок нет — solved=true, а в comment перечисли исправления мелких ошибок (по-русски, кратко, с примерами «ошибка → как правильно»).\n'
+        'Если цель не достигнута — solved=false и скажи, чего именно не хватает и что переписать.\n'
+        'Оцени сложность 1-5. Ответ — только JSON: {"solved": true|false, "comment": "...", "difficulty": 2}';
+    final user = 'Курс: ${c.title}\nЗадача: ${task.title}\nЦель: ${task.goal}\nКритерий: ${task.check}\n\n'
+        'Работа студента:\n$text';
+    final j = await chatJSON(sys, user, 0.2);
+    var diff = (j['difficulty'] as num?)?.toInt() ?? task.difficulty;
+    if (diff < 1 || diff > 5) diff = task.difficulty;
+    return CheckResult(
+        j['solved'] as bool? ?? false, j['comment'] as String? ?? '', diff);
+  }
+
   // ---------- роль 3: ментор ----------
 
   static const _sysMentorTerminal =
@@ -877,6 +853,36 @@ class AIClient {
       'Если в контексте есть имя пользователя — обращайся по имени. '
       'Не выдумывай факты и не давай опасных инструкций. '
       'Используй markdown умеренно.';
+
+  /// noteAction — ИИ-помощь в блокноте. Действия: check_en (проверить
+  /// английский), translate (перевод), improve (улучшить текст),
+  /// continue_text (продолжить). Возвращает готовый текст для диалога.
+  Future<String> noteAction(
+      String action, String title, String text) async {
+    final sys = switch (action) {
+      'check_en' =>
+        'Ты — преподаватель английского уровня A1–B2 в приложении TERMAI. '
+            'Проверь английский текст пользователя: 1) исправленный вариант целиком; '
+            '2) список ошибок с краткими объяснениями по-русски (если ошибок нет — напиши это); '
+            '3) один совет, как улучшить стиль. Отвечай по-русски, исправленный текст — по-английски. Без markdown-заголовков.',
+      'translate' =>
+        'Ты — переводчик в приложении TERMAI. Если текст на русском — переведи на английский, '
+            'если на английском — на русский. Сначала перевод целиком, затем 2–3 примечания '
+            'о выбранных формулировках. Без markdown-заголовков.',
+      'improve' =>
+        'Ты — редактор в приложении TERMAI. Улучши текст пользователя: ясность, структура, '
+            'краткость. Сначала улучшенный вариант, затем короткий список изменений. '
+            'Язык текста сохраняй. Без markdown-заголовков.',
+      _ =>
+        'Ты — соавтор в приложении TERMAI. Продолжи текст пользователя в его стиле и теме: '
+            'добавь 1–2 осмысленных абзаца или пункты. Язык текста сохраняй. '
+            'Верни ТОЛЬКО продолжение, без повтора исходного текста. Без markdown-заголовков.',
+    };
+    final b = StringBuffer();
+    if (title.trim().isNotEmpty) b.write('Заголовок заметки: ${title.trim()}\n\n');
+    b.write('Текст заметки:\n$text');
+    return chatText(sys, b.toString(), 0.5);
+  }
 
   /// generalMentor — ответ в общем чате без привязки к задаче.
   Future<String> generalMentor(

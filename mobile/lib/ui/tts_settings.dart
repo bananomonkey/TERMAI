@@ -310,6 +310,16 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                           onChanged: (v) => setState(() => c.ttsPitch = v),
                           onChangeEnd: (_) => _save(),
                         ),
+                        _label('Громкость · ${(c.ttsVolume * 100).round()}%'),
+                        Slider(
+                          value: c.ttsVolume,
+                          min: 0.0,
+                          max: 1.0,
+                          divisions: 20,
+                          label: '${(c.ttsVolume * 100).round()}%',
+                          onChanged: (v) => setState(() => c.ttsVolume = v),
+                          onChangeEnd: (_) => _save(),
+                        ),
                         const SizedBox(height: 8),
                         Row(children: [
                           Expanded(

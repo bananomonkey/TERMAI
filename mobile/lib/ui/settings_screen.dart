@@ -745,7 +745,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   context,
                                   title: 'Синхронизировать API-ключи?',
                                   message:
-                                      'Личные ключи основного и резервных провайдеров будут отправлены в Firebase твоего аккаунта. Серверный ключ TERMAI туда не попадает. Включить?',
+                                      'Личные ключи основного и резервных провайдеров будут отправлены в Firebase твоего аккаунта. Включить?',
+                                  confirmLabel: 'Включить',
+                                  destructive: false,
                                 );
                                 if (!ok) return;
                               }

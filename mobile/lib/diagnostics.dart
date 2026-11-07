@@ -4,7 +4,7 @@
 // показываются в раскрывающемся блоке, чтобы не засорять чат.
 import 'download_manager.dart';
 import 'notifications.dart';
-import 'shared_ai.dart';
+import 'free_ai.dart';
 import 'diag.dart';
 import 'store.dart';
 
@@ -78,45 +78,21 @@ Future<DiagnosticReport> runDiagnostics(AppController c) async {
     ));
   }
 
-  // Общий доступ TERMAI.
-  final shared = SharedAiService.instance;
-  if (shared.proxyConfigured) {
-    if (shared.loading) {
-      items.add(const DiagnosticItem(
-        title: 'Общий доступ TERMAI',
-        level: DiagnosticLevel.warning,
-        message: 'проверяется',
-        details: 'Запрашиваю условия акции с серверного шлюза.',
-      ));
-    } else if (shared.promo == null) {
-      items.add(DiagnosticItem(
-        title: 'Общий доступ TERMAI',
-        level: DiagnosticLevel.warning,
-        message: 'сервер недоступен',
-        details: _redact(shared.error),
-      ));
-    } else {
-      final active = shared.isUsable(c.config);
-      items.add(DiagnosticItem(
-        title: 'Общий доступ TERMAI',
-        level: active ? DiagnosticLevel.ok : DiagnosticLevel.warning,
-        message: active
-            ? 'включён (${shared.model})'
-            : (!shared.signedIn
-                ? 'нужен вход через Google'
-                : (shared.promo!.active
-                    ? 'выключен пользователем'
-                    : 'акция завершена')),
-        details: [
-          'Модель: ${shared.model}',
-          'До: ${shared.endsAt ?? '—'}',
-          'Остаток: ${shared.remainingLabel}',
-          'Вход через Google: ${shared.signedIn ? 'да' : 'нет'}',
-          'Личный провайдер: ${c.config.provider}',
-        ].join('\n'),
-      ));
-    }
-  }
+  // Бесплатный доступ (пул ключей z.ai из сборки).
+  items.add(DiagnosticItem(
+    title: 'Бесплатный доступ z.ai',
+    level: FreeAiPool.instance.configured
+        ? DiagnosticLevel.ok
+        : DiagnosticLevel.warning,
+    message: FreeAiPool.instance.configured
+        ? '${FreeAiPool.instance.rotate().length} подключений, ${FreeAiPool.models.first}'
+        : 'пул не задан в сборке',
+    details: [
+      'Ключей в пуле: ${FreeAiPool.keys.length}',
+      'Модели: ${FreeAiPool.models.join(', ')}',
+      'Используется, если свой ключ не настроен.',
+    ].join('\n'),
+  ));
 
   // Загрузки моделей.
   final jobs = DownloadManager.instance.jobs;

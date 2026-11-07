@@ -143,7 +143,7 @@ class TtsService extends ChangeNotifier {
       }
       await tts.setSpeechRate(c.ttsRate.clamp(0.2, 1.0));
       await tts.setPitch(c.ttsPitch.clamp(0.5, 1.5));
-      await tts.setVolume(1.0);
+      await tts.setVolume(c.ttsVolume.clamp(0.0, 1.0));
     } catch (e) {
       _lastError = 'Не удалось применить голос: $e';
     }

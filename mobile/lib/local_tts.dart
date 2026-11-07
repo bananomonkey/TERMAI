@@ -339,6 +339,7 @@ class LocalTtsService extends ChangeNotifier {
       final player = AudioPlayer();
       _player = player;
       await player.setReleaseMode(ReleaseMode.stop);
+      await player.setVolume(config.ttsVolume.clamp(0.0, 1.0));
       await player.play(DeviceFileSource(wav.path));
       // Ждём завершения проигрывания с страховкой по времени. Future.timeout
       // здесь нельзя: его onTimeout обязан вернуть AudioEvent, и колбек

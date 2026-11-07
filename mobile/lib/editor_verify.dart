@@ -21,6 +21,11 @@ EditorCheck verifyEditorTask(Task task, String text) {
   if (source.isEmpty) {
     return const EditorCheck(false, 'Поле редактора пустое.');
   }
+  if (raw is List && checks.isEmpty) {
+    // Письменная работа: машинных проверок нет, работу оценивает ИИ
+    // после «Отправить». Нейтральный статус, чтобы бейдж не был красным.
+    return const EditorCheck(true, 'Работу проверит ИИ после «Отправить».');
+  }
   final needsYaml = task.editorLanguage == 'yaml' ||
       checks.any((c) =>
           c.containsKey('yaml_path') ||

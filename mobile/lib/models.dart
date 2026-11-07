@@ -415,6 +415,34 @@ enum ChatScope { general, task, interview }
 /// MentorChat — отдельная беседа с ментором.
 /// taskId == '__interview__' — беседа в режиме собеседования.
 /// Пустые courseId и taskId — общий чат Термая.
+/// Note — заметка в блокноте. Текст произвольный; ИИ-помощь (проверка
+/// английского, перевод, улучшение) живёт в ai.noteAction.
+class Note {
+  String id, title, text;
+  String updatedAt;
+
+  Note({
+    required this.id,
+    this.title = '',
+    this.text = '',
+    String? updatedAt,
+  }) : updatedAt = updatedAt ?? '';
+
+  factory Note.fromJson(Map<String, dynamic> j) => Note(
+        id: j['id'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        text: j['text'] as String? ?? '',
+        updatedAt: j['updated_at'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'text': text,
+        'updated_at': updatedAt,
+      };
+}
+
 class MentorChat {
   String id, courseId, taskId, taskTitle, title, createdAt, updatedAt;
   List<ChatMsg> messages;
@@ -631,8 +659,6 @@ class Config {
   /// Общий бесплатный доступ TERMAI через серверный шлюз. Ключ шлюза
   /// никогда не попадает в приложение: здесь только пользовательские
   /// предпочтения и версия принятого предупреждения.
-  bool sharedAiEnabled;
-  int sharedAiConsentVersion;
 
   /// Фоновое фото главного экрана: путь к файлу (пусто — фон темы).
   String bgPhoto;
@@ -671,6 +697,7 @@ class Config {
   String ttsVariant;
   double ttsRate;
   double ttsPitch;
+  double ttsVolume;
 
   /// Локальный нейросетевой голос (Piper/sherpa-onnx). Скачивается только
   /// по явному действию пользователя.
@@ -717,8 +744,6 @@ class Config {
     this.themeAuto = true,
     List<AiEndpoint>? fallbacks,
     Map<String, AiEndpoint>? providerProfiles,
-    this.sharedAiEnabled = true,
-    this.sharedAiConsentVersion = 0,
     this.bgPhoto = '',
     this.bgBlur = 24,
     this.bgDim = 0.55,
@@ -736,6 +761,7 @@ class Config {
     this.ttsVariant = 'ru-RU',
     this.ttsRate = 0.5,
     this.ttsPitch = 1.0,
+    this.ttsVolume = 1.0,
     this.ttsUseLocal = false,
     this.ttsLocalModelId = '',
     this.updatesAutoCheck = true,
@@ -785,9 +811,6 @@ class Config {
         providerProfiles: ((j['provider_profiles'] as Map?) ?? const {}).map(
             (k, v) => MapEntry(k.toString(),
                 AiEndpoint.fromJson(Map<String, dynamic>.from(v as Map)))),
-        sharedAiEnabled: j['shared_ai_enabled'] as bool? ?? true,
-        sharedAiConsentVersion:
-            (j['shared_ai_consent_version'] as num?)?.toInt() ?? 0,
         bgPhoto: j['bg_photo'] as String? ?? '',
         bgBlur: (j['bg_blur'] as num?)?.toDouble() ?? 24,
         bgDim: (j['bg_dim'] as num?)?.toDouble() ?? 0.55,
@@ -813,6 +836,9 @@ class Config {
         ttsVariant: j['tts_variant'] as String? ?? 'ru-RU',
         ttsRate: ((j['tts_rate'] as num?)?.toDouble() ?? 0.5)
             .clamp(0.2, 1.0)
+            .toDouble(),
+        ttsVolume: ((j['tts_volume'] as num?)?.toDouble() ?? 1.0)
+            .clamp(0.0, 1.0)
             .toDouble(),
         ttsPitch: ((j['tts_pitch'] as num?)?.toDouble() ?? 1.0)
             .clamp(0.5, 1.5)
@@ -856,8 +882,6 @@ class Config {
         'fallbacks': fallbacks.map((e) => e.toJson()).toList(),
         'provider_profiles':
             providerProfiles.map((k, v) => MapEntry(k, v.toJson())),
-        'shared_ai_enabled': sharedAiEnabled,
-        'shared_ai_consent_version': sharedAiConsentVersion,
         'bg_photo': bgPhoto,
         'bg_blur': bgBlur,
         'bg_dim': bgDim,
@@ -872,6 +896,7 @@ class Config {
         'tts_locale': ttsLocale,
         'tts_variant': ttsVariant,
         'tts_rate': ttsRate,
+        'tts_volume': ttsVolume,
         'tts_pitch': ttsPitch,
         'tts_use_local': ttsUseLocal,
         'tts_local_model_id': ttsLocalModelId,
@@ -938,6 +963,7 @@ class Progress {
   Map<String, String> achieved = {};
   Map<String, Bookmark> bookmarks = {};
   List<MentorChat> mentorChats = [];
+  List<Note> notes = [];
   String activeChatId = '';
   bool genCleaned = false;
   Map<String, String> courseTitles = {};
@@ -1065,6 +1091,9 @@ class Progress {
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
     p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
         MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
+    p.notes = ((j['notes'] as List?) ?? [])
+        .map((e) => Note.fromJson(e as Map<String, dynamic>))
+        .toList();
     p.mentorChats = ((j['mentor_chats'] as List?) ?? [])
         .map((c) => MentorChat.fromJson(c as Map<String, dynamic>))
         .toList();
@@ -1120,6 +1149,7 @@ class Progress {
         'achievements': achieved,
         'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
         'mentor_chats': mentorChats.map((c) => c.toJson()).toList(),
+        'notes': notes.map((n) => n.toJson()).toList(),
         'active_chat': activeChatId,
         'gen_cleaned': genCleaned,
         'course_titles': courseTitles,

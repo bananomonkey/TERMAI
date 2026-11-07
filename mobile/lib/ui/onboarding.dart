@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
-import '../shared_ai.dart';
 import 'design_system.dart';
 import 'direction_picker.dart';
 import 'help.dart';
@@ -30,12 +29,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool _showKey = false;
 
-  bool _useShared = true;
-
   @override
   void initState() {
     super.initState();
-    _useShared = controller.config.sharedAiEnabled;
   }
 
   @override
@@ -56,15 +52,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
     controller.config.userName = _name.text.trim();
     controller.config.onboarded = true;
-    final shared = SharedAiService.instance;
-    if (_useShared && controller.sync.signedIn) {
-      controller.config.sharedAiEnabled = true;
-      controller.config.sharedAiConsentVersion =
-          shared.noticeVersion < 1 ? 1 : shared.noticeVersion;
-    } else {
-      controller.config.sharedAiEnabled = false;
-      controller.config.sharedAiConsentVersion = -1;
-    }
     if (_selected.isEmpty) {
       _selected.add('devops');
     }

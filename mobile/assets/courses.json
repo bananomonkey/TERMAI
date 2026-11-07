@@ -8131,21 +8131,33 @@
   {
     "id": "english-a1",
     "title": "Английский: первые шаги",
-    "desc": "A1: to be, Present Simple, Continuous, Past Simple, вопросы, артикли и бытовая лексика.",
+    "desc": "A1: to be, Present/Past Simple, Continuous, вопросы, отрицания, артикли, предлоги, there is/are, can и повседневная лексика. Каждая тема: подробная справка, тест и письменная работа с проверкой ИИ.",
     "mode": "theory",
     "syllabus": [
       "To be: am / is / are",
+      "Письмо: знакомство с to be",
       "Present Simple: привычки и факты",
+      "Письмо: мой обычный день",
       "Артикли a / an и множественное число",
-      "Present Continuous",
-      "Past Simple",
-      "Вопросы",
-      "Отрицания",
-      "Притяжательные",
+      "Письмо: моя комната",
+      "Present Continuous: прямо сейчас",
+      "Письмо: прямо сейчас",
+      "Past Simple: вчера и давно",
+      "Письмо: вчерашний день",
+      "Вопросы: do, does, is, are, wh-",
+      "Письмо: вопросы другу",
+      "Отрицания: don't, doesn't, isn't, aren't, didn't",
+      "Письмо: чего я не делаю",
+      "Притяжательные: my, his, her и 's",
+      "Письмо: моя семья и вещи",
       "Предлоги места и времени",
+      "Письмо: где что находится",
       "There is / There are",
+      "Письмо: мой район",
       "Can и умения",
-      "Повседневная лексика"
+      "Письмо: что я умею",
+      "Повседневная лексика: день, еда, покупки",
+      "Письмо: мои покупки и еда"
     ],
     "tasks": [
       {
@@ -8154,20 +8166,30 @@
         "kind": "quiz",
         "difficulty": 1,
         "theory": [
-          "**To be** переводится как «быть», но в русском мы его часто опускаем: «Я студент» — *I am a student*.",
-          "Формы зависят от подлежащего:\n- `I` → `am`\n- `he / she / it` → `is`\n- `you / we / they` → `are`",
-          "Сокращения: *I'm, he's, she's, it's, you're, we're, they're*.",
-          "Вопрос: *Are you ready?* — форма `to be` выходит вперёд. Отрицание: *I am not ready* / *I'm not ready*."
+          "**To be** — «быть / находиться». В русском мы его часто опускаем: «Я студент» — *I **am** a student*. По-английски без него никак: в каждом утверждении должен быть глагол.",
+          "Форма зависит от подлежащего:\n- `I` → **am**\n- `he / she / it` → **is**\n- `you / we / they` → **are**",
+          "Сокращения в живой речи: *I'm, he's, she's, it's, you're, we're, they're*. Оба варианта верны, сокращённый звучит естественнее.",
+          "Отрицание — частица **not** после формы: *I am **not** ready*, *She **isn't** a doctor*, *They **aren't** at home*.",
+          "Вопрос — форма to be выходит вперёд: **Are** you ready? **Is** he a doctor? Короткий ответ: *Yes, I am. / No, she isn't.*"
         ],
+        "goal": "Собери правило am / is / are: утверждение, отрицание и вопрос.",
+        "hints": [
+          "Смотри на подлежащее: I → am, he/she/it → is, you/we/they → are.",
+          "В отрицании not идёт сразу после am/is/are.",
+          "В вопросе am/is/are ставится перед подлежащим."
+        ],
+        "check": "Уверенно выбираешь форму to be и строишь отрицания и вопросы.",
+        "expected_output": "",
+        "solution": "**Коротко:** I am, he/she/it is, you/we/they are. Отрицание — am/is/are + not. Вопрос — форма перед подлежащим: *Is she a doctor?*",
         "quiz": [
           {
             "question": "Выбери правильную форму: She ___ a doctor.",
             "options": [
-              "is",
               "are",
+              "is",
               "am"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
             "question": "Как сказать «Они не дома»?",
@@ -8177,17 +8199,17 @@
               "They not at home."
             ],
             "correct": 0
+          },
+          {
+            "question": "Вопрос с to be строится так:",
+            "options": [
+              "Do she is a doctor?",
+              "Is she a doctor?",
+              "She is a doctor?"
+            ],
+            "correct": 1
           }
         ],
-        "goal": "Собери правило am / is / are и потренируйся на примерах.",
-        "hints": [
-          "Смотри на подлежащее: I → am, he/she/it → is, you/we/they → are.",
-          "В отрицании к to be добавляется not: is not = isn't, are not = aren't."
-        ],
-        "check": "Уверенно выбираешь am / is / are и строишь отрицания.",
-        "expected_output": "",
-        "solution": "**Коротко:** `I am`, `he/she/it is`, `you/we/they are`. Отрицание — `am/is/are + not`, вопрос — форма `to be` перед подлежащим: *Is she a doctor?*",
-        "peeked": false,
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8199,49 +8221,104 @@
             "host",
             "none"
           ],
-          "events": []
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-to-be-write",
+        "title": "Письмо: знакомство с to be",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Пишем о себе по образцу: *My name is Anna. I am a student. I am tired but happy. My brother is a doctor. We are good friends.*",
+          "Полезные фразы: *I am from Russia* (я из России), *I am 20 years old* (мне 20 лет), *My favourite thing is music* (моя любимая вещь — музыка).",
+          "Проверь перед отправкой: каждое предложение содержит am / is / are, нет пропущенного глагола."
+        ],
+        "goal": "Напиши 3–5 предложений о себе, используя am / is / are: имя, чем занимаешься, кто твои близкие, настроение.",
+        "hints": [
+          "Начни с My name is…",
+          "Про возраст: I am … years old.",
+          "Про других людей: My friend is…, We are…"
+        ],
+        "check": "5 предложений с правильными формами am/is/are; нет пропущенного глагола to be; текст связный и соответствует уровню A1.",
+        "expected_output": "",
+        "solution": "My name is Dmitry. I am a student. I am from Russia. My sister is a teacher. We are very close.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
         }
       },
       {
         "id": "en-present-simple",
         "title": "Present Simple: привычки и факты",
         "kind": "quiz",
-        "difficulty": 2,
+        "difficulty": 1,
         "theory": [
-          "**Present Simple** — для привычек, фактов и расписаний: *I work every day.*",
-          "Утверждение: подлежащее + глагол. Для `he / she / it` добавляем **-s**: *He works.*",
-          "Отрицание и вопрос строятся через **do / does**: *I don't work.* / *Does he work?*",
-          "Маркеры времени: *every day, usually, often, sometimes, never*."
+          "**Present Simple** — о том, что бывает обычно, всегда, каждый день: *I work*, *She lives in Moscow*, *Water boils at 100 degrees*.",
+          "В 3-м лице единственного числа (he / she / it) к глаголу добавляется **-s**: *he works*, *she plays*. После -o, -s, -sh, -ch, -x добавляется **-es**: *he goes, she watches*.",
+          "Отрицание и вопрос требуют помощника **do / does** (does — для he/she/it): *I **don't** smoke*, *She **doesn't** eat meat*, **Do** you speak English? **Does** he drive?",
+          "После does глагол теряет -s: *Does she **work**?* (не works) — s уже есть у does.",
+          "Слова-маркеры: *always, usually, often, sometimes, never, every day*. Они помогают опознать Present Simple в тексте."
         ],
+        "goal": "Собери правило Present Simple: -s в 3-м лице, do/does в отрицаниях и вопросах.",
+        "hints": [
+          "he/she/it → глагол + s (goes, watches)",
+          "don't / doesn't + глагол без изменений",
+          "Вопрос: Do/Does + подлежащее + глагол?"
+        ],
+        "check": "Правильно ставишь -s в 3-м лице и строишь отрицания/вопросы с do/does.",
+        "expected_output": "",
+        "solution": "**Правило:** he/she/it + глагол-s. Отрицание: don't/doesn't + глагол. Вопрос: Do/Does…?",
         "quiz": [
           {
-            "question": "Выбери правильную форму: He ___ to school every day.",
+            "question": "She ___ coffee every morning.",
             "options": [
-              "goes",
-              "go",
-              "going"
+              "drink",
+              "drinks",
+              "drinking"
+            ],
+            "correct": 1
+          },
+          {
+            "question": "Отрицание: He ___ play tennis.",
+            "options": [
+              "doesn't",
+              "don't",
+              "isn't"
             ],
             "correct": 0
           },
           {
-            "question": "Как построить вопрос «Ты говоришь по-английски?»",
+            "question": "Какой вопрос правильный?",
             "options": [
-              "Do you speak English?",
-              "You speak English?",
-              "Are you speak English?"
+              "Does she works here?",
+              "Do she work here?",
+              "Does she work here?"
             ],
-            "correct": 0
+            "correct": 2
           }
         ],
-        "goal": "Научись говорить о привычках и фактах в Present Simple.",
-        "hints": [
-          "Для he/she/it не забывай -s: work → works, go → goes.",
-          "Вопрос начинается с Do или Does, после них — начальная форма глагола."
-        ],
-        "check": "Правильно добавляешь -s и строишь вопросы с do/does.",
-        "expected_output": "",
-        "solution": "**Схема:** `I/you/we/they + verb`, `he/she/it + verb-s`. Вопрос: `Do/Does + subject + verb?` Отрицание: `don't/doesn't + verb`.",
-        "peeked": false,
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8253,49 +8330,104 @@
             "host",
             "none"
           ],
-          "events": []
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-present-simple-write",
+        "title": "Письмо: мой обычный день",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Образец: *I wake up at 7 am. I drink tea and read news. I work from home. My brother lives with me. We watch films in the evening.*",
+          "Полезные слова: *wake up* (просыпаться), *have breakfast/lunch/dinner*, *go to work*, *study*, *play*, *relax*.",
+          "Не забудь -s, если говоришь о he/she/it: *My mother **cooks** dinner.*"
+        ],
+        "goal": "Напиши 5 предложений о своём обычном дне в Present Simple.",
+        "hints": [
+          "Начни с I wake up at…",
+          "Добавь действия: I have breakfast, I go to…",
+          "Одно предложение про he/she: My friend works…"
+        ],
+        "check": "5 предложений в Present Simple; в 3-м лице есть -s; нет ошибок в don't/doesn't; текст связный на уровне A1.",
+        "expected_output": "",
+        "solution": "I wake up at 8 am. I have breakfast and go to work. I study English in the evening. My sister lives in another city. She calls me every day.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
         }
       },
       {
         "id": "en-articles-plural",
         "title": "Артикли a / an и множественное число",
         "kind": "quiz",
-        "difficulty": 2,
+        "difficulty": 1,
         "theory": [
-          "**a / an** — «один из многих», когда упоминаем предмет впервые: *a book*, *an apple*. `an` ставим перед гласным звуком.",
-          "**the** — конкретный предмет, уже известный собеседнику: *the book on the table*.",
-          "Множественное число: обычно +`s` (*books*), после `-s/-sh/-ch/-x` +`es` (*boxes*).",
-          "Исключения нужно запомнить: *man → men, woman → women, child → children*."
+          "**A / an** — «один из многих, какой-то» (перед исчисляемым существительным в единственном числе). **An** — если слово начинается с гласного звука: *a book*, *an apple*, *an hour* (h не произносится!).",
+          "**The** — «конкретный, этот самый»: *I have a car. **The** car is red.* Первое упоминание — a/an, второе — the.",
+          "Множественное число: обычно **+s** (*books, cars*); после -s/-sh/-ch/-x/-o → **+es** (*buses, watches*); согласная+y → **-y+ies** (*city → cities*); особые формы: *man → men, woman → women, child → children, foot → feet, tooth → teeth*.",
+          "Во множественном числе a/an исчезает: *a book → books*. Конкретное множество — the: *the books on the table*.",
+          "Артикль не нужен перед именами, городами и странами: *Anna, Moscow, Russia*. Но: *the USA, the UK*."
         ],
+        "goal": "Разберись, когда a/an, когда the, и как образуется множественное число.",
+        "hints": [
+          "an — перед гласным ЗВУКОМ (an hour)",
+          "Особые формы: men, women, children, feet, teeth",
+          "Имена и страны — без артикля (но the USA)"
+        ],
+        "check": "Правильно выбираешь a/an/the и ставишь существительные во множественное число.",
+        "expected_output": "",
+        "solution": "Это a book → the book (конкретная) → books (множественное). An apple, an hour. Men, women, children — исключения.",
         "quiz": [
           {
-            "question": "Выбери правильный артикль: I have ___ apple.",
+            "question": "___ apple a day.",
             "options": [
-              "an",
-              "a",
-              "the"
+              "A",
+              "An",
+              "The (первое упоминание)"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Какое множественное число у слова child?",
+            "question": "Множественное от city:",
             "options": [
-              "children",
-              "childs",
-              "childes"
+              "citys",
+              "cities",
+              "cityes"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "Что не так: I read a books.",
+            "options": [
+              "Нужен are",
+              "a не ставится перед множественным",
+              "Всё верно"
+            ],
+            "correct": 1
           }
         ],
-        "goal": "Разберись, когда ставить a, an или the, и образуй множественное число.",
-        "hints": [
-          "Смотри на первый звук слова: an apple, an hour, но a university.",
-          "Для большинства слов хватает -s; исключения учи наизусть."
-        ],
-        "check": "Правильно выбираешь артикль и образуешь множественное число.",
-        "expected_output": "",
-        "solution": "**Артикли:** `a/an` — впервые или один из многих, `the` — конкретный. **Множественное:** +s, после шипящих +es, исключения: men, women, children.",
-        "peeked": false,
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8307,46 +8439,146 @@
             "host",
             "none"
           ],
-          "events": []
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-articles-plural-write",
+        "title": "Письмо: моя комната",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Образец: *My room is small. There is a desk and a chair. I have an old laptop. There are three books on the desk. The walls are white.*",
+          "Полезные слова: *desk* (стол), *chair* (стул), *window* (окно), *lamp* (лампа), *shelf* (полка, мн.ч. shelves).",
+          "Помни: a/an — только один предмет; два и больше — множественное без артикля."
+        ],
+        "goal": "Опиши свою комнату: 5 предложений с a/an и множественным числом.",
+        "hints": [
+          "Начни с My room is…",
+          "Один предмет: There is a…",
+          "Несколько: There are two/three…"
+        ],
+        "check": "5 предложений; a/an использованы верно; множественное число без ошибок (включая хотя бы одну форму с -es/-ies или исключение); уровень A1.",
+        "expected_output": "",
+        "solution": "My room is not big. There is a desk near the window. I have an old lamp and two shelves. There are five books on the shelves. The walls are grey.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
         }
       },
       {
         "id": "en-present-continuous",
-        "title": "Present Continuous",
+        "title": "Present Continuous: прямо сейчас",
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "Present Continuous = am/is/are + глагол с -ing. Действие происходит сейчас или в этот период.",
-          "Маркеры: now, at the moment, currently. Сравни: I work — вообще; I am working — сейчас."
+          "**Present Continuous** — действие происходит сейчас, в момент речи: *I **am reading** now*, *She **is cooking***. Структура: am/is/are + глагол-ing.",
+          "-ing присоединяется просто: *work → working, read → reading*. Если слово кончается на -e, она выпадает: *write → writing, make → making*. Короткий закрытый слог удваивает согласную: *sit → sitting, run → running*.",
+          "Отрицание: not после am/is/are: *I'm **not** sleeping*. Вопрос: am/is/are вперёд: **Are** you listening?",
+          "Continuous НЕ используется с глаголами состояния: *like, love, want, know, need, understand*. Правильно: *I **want** tea* (не I am wanting).",
+          "Отличие от Present Simple: *I **read** books every day* (привычка) — *I **am reading** a book now* (прямо сейчас)."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Собери структуру am/is/are + V-ing и узнай глаголы-исключения.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "-e выпадает: make → making",
+          "Короткий слог удваивает: sit → sitting",
+          "like/love/want/know/need — только Present Simple"
         ],
-        "check": "Все ответы верны.",
+        "check": "Правильно строишь Present Continuous и не путаешь его с Present Simple.",
         "expected_output": "",
-        "solution": "She is reading now. Present Continuous описывает действие в момент речи.",
+        "solution": "**Формула:** am/is/are + V-ing. write → writing, sit → sitting. Состояния (want, know, like) — в Present Simple.",
         "quiz": [
           {
-            "question": "Выбери правильное: She ___ reading now.",
+            "question": "Look! It ___ (rain).",
             "options": [
-              "is",
-              "are",
-              "am"
+              "rains",
+              "is raining",
+              "rain"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что означает I am working?",
+            "question": "Какой глагол НЕ используется в Continuous?",
             "options": [
-              "Я работаю сейчас",
-              "Я работал вчера",
-              "Я буду работать"
+              "work",
+              "know",
+              "listen"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "write →Continuous:",
+            "options": [
+              "writeing",
+              "writting",
+              "writing"
+            ],
+            "correct": 2
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-present-continuous-write",
+        "title": "Письмо: прямо сейчас",
+        "kind": "code",
+        "difficulty": 2,
+        "theory": [
+          "Образец: *I am sitting at my desk. My cat is sleeping on the sofa. My brother is playing football outside. It is raining a little. I am not listening to music.*",
+          "Опиши, что ты делаешь, что делают люди вокруг, какая погода — всё «прямо сейчас».",
+          "Проверь: в каждом предложении есть am/is/are + глагол-ing."
+        ],
+        "goal": "Напиши 5 предложений о том, что происходит прямо сейчас, в Present Continuous.",
+        "hints": [
+          "Начни с I am …ing now.",
+          "Кто-то рядом: My friend is…",
+          "Одно отрицание: I am not…"
+        ],
+        "check": "5 предложений в Present Continuous; правильно образованы -ing формы (включая make→writing-тип или удвоение); нет глаголов состояния в Continuous; уровень A1.",
+        "expected_output": "",
+        "solution": "I am writing this text now. My friend is sitting next to me. The dog is sleeping under the table. It is snowing outside. I am not drinking coffee.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8366,24 +8598,28 @@
       },
       {
         "id": "en-past-simple",
-        "title": "Past Simple",
+        "title": "Past Simple: вчера и давно",
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "Past Simple говорит о завершённом действии в прошлом. У правильных глаголов -ed, у неправильных своя форма.",
-          "Маркеры: yesterday, last week, in 2020. Вопрос: Did you work? Отрицание: I did not work."
+          "**Past Simple** — законченное действие в прошлом: *I **worked** yesterday*, *We **went** to the cinema last week*. Маркеры: *yesterday, last week, two days ago, in 2020*.",
+          "Правильные глаголы: **+ed**: *work → worked, play → played*. -e выпадает: *live → lived*. Согласная+y → -ied: *study → studied*. Короткий закрытый слог удваивает: *stop → stopped*.",
+          "Неправильные глаголы меняются целиком — их учат списком: *go → went, have → had, see → saw, do → did, take → took, buy → bought, write → wrote*.",
+          "Отрицание и вопрос — через **did** + начальная форма: *I **didn't work** yesterday* (не didn't worked!), **Did** you **see** it? Это главная ловушка Past Simple.",
+          "**was / were** — прошедшее от to be: *I was, he was, we were, they were*. Отрицание: *wasn't / weren't*."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Освой -ed и главные неправильные глаголы, правило did + начальная форма.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "study → studied, stop → stopped",
+          "go→went, have→had, see→saw, do→did",
+          "После didn't и Did — начальная форма без -ed"
         ],
-        "check": "Все ответы верны.",
+        "check": "Правильно ставишь правильные и неправильные глаголы в прошлое; did не «съедает» -ed.",
         "expected_output": "",
-        "solution": "Go → went. Вопрос строится через did + инфинитив.",
+        "solution": "**Правильные:** +ed (worked, studied, stopped). **Неправильные:** went, had, saw, did, took. Отрицание/вопрос: did + начальная форма.",
         "quiz": [
           {
-            "question": "Какая форма у go в Past Simple?",
+            "question": "I ___ to the shop yesterday.",
             "options": [
               "goed",
               "went",
@@ -8392,15 +8628,66 @@
             "correct": 1
           },
           {
-            "question": "Как построить вопрос?",
+            "question": "Отрицание: She ___ call me.",
             "options": [
-              "Did you work?",
-              "Do you worked?",
-              "You did work?"
+              "didn't called",
+              "didn't call",
+              "doesn't called"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "They ___ at home last night.",
+            "options": [
+              "was",
+              "were",
+              "are"
+            ],
+            "correct": 1
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-past-simple-write",
+        "title": "Письмо: вчерашний день",
+        "kind": "code",
+        "difficulty": 2,
+        "theory": [
+          "Образец: *Yesterday I worked a lot. I had lunch at 1 pm. In the evening I watched a film. I didn't go to the gym. My friend called me and we talked for an hour.*",
+          "Используй минимум два неправильных глагола: *went, had, saw, did, took, wrote, bought, met*.",
+          "Одно предложение сделай отрицательным: *I didn't…*"
+        ],
+        "goal": "Расскажи о вчерашнем дне: 5 предложений в Past Simple (минимум одно отрицание).",
+        "hints": [
+          "Начни с Yesterday I…",
+          "Добавь went/had/saw/did",
+          "Отрицание: I didn't…"
+        ],
+        "check": "5 предложений в Past Simple; есть минимум 2 неправильных глагола в правильной форме; 1 отрицание с didn't + начальная форма; нет -ed после did; уровень A1.",
+        "expected_output": "",
+        "solution": "Yesterday I woke up late. I had breakfast and went for a walk. I bought a new book. I didn't work in the evening. My friend saw me in the park and we talked.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8420,41 +8707,96 @@
       },
       {
         "id": "en-questions",
-        "title": "Вопросы",
+        "title": "Вопросы: do, does, is, are, wh-",
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "Общий вопрос начинается с вспомогательного глагола: Do/Does/Did/Is/Are/Can. Специальный — с who/what/where/when/why/how.",
-          "Порядок: вопрос + вспомогательный + подлежащее + смысловой глагол."
+          "Да/нет-вопросы начинаются с вспомогательного глагола: **Do** you like it? **Does** he work here? **Are** you ok? **Is** she ready? **Did** they come?",
+          "**Wh-вопросы** — вопросительное слово идёт ПЕРВЫМ, потом вспомогательный глагол: *What **do** you do? Where **does** she live? Why **are** you late? When **did** you arrive?*",
+          "Слова: **What** (что/какой), **Where** (где), **When** (когда), **Why** (почему), **Who** (кто), **How** (как), **How much/many** (сколько).",
+          "Вопрос к подлежащему — без do: ***Who** lives here?* (не Who does live) — подлежащее и есть «кто».",
+          "Интонация и порядок: Wh-слово → do/does/is/are/did → подлежащее → глагол. Ошибка новичка: *Where you live?* — забыт do: *Where **do** you live?*"
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Собери порядок слов в общих и wh-вопросах.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "Wh-слово → do/does/is/are → подлежащее → глагол",
+          "After does/did — начальная форма",
+          "Who как подлежащее — без do"
         ],
-        "check": "Все ответы верны.",
+        "check": "Строишь общие и wh-вопросы без пропущенного вспомогательного глагола.",
         "expected_output": "",
-        "solution": "Does he play tennis? После does смысловой глагол без -s. Where спрашивает о месте.",
+        "solution": "Do you…? Does she…? What do you…? Where does he…? Who lives here? — порядок: Wh + вспомогательный + подлежащее + глагол.",
         "quiz": [
           {
-            "question": "Выбери вопрос к He plays tennis.",
+            "question": "___ do you live?",
             "options": [
-              "Does he play tennis?",
-              "He does play tennis?",
-              "Do he plays tennis?"
-            ],
-            "correct": 0
-          },
-          {
-            "question": "Какое слово начинает вопрос о месте?",
-            "options": [
+              "What",
               "Where",
-              "When",
               "Who"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "Как правильно?",
+            "options": [
+              "Where you work?",
+              "Where do you work?",
+              "Where does you work?"
+            ],
+            "correct": 1
+          },
+          {
+            "question": "Вопрос к подлежащему «Кто здесь живёт?»:",
+            "options": [
+              "Who does live here?",
+              "Who lives here?",
+              "Who do lives here?"
+            ],
+            "correct": 1
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-questions-write",
+        "title": "Письмо: вопросы другу",
+        "kind": "code",
+        "difficulty": 2,
+        "theory": [
+          "Образец: *Where do you live? What do you do in the evening? Do you like football? When does your work start? Are you free on Sunday?*",
+          "Смешай типы: 2 общих вопроса (Do you…, Are you…), 2-3 wh-вопроса (What…, Where…, When…, How…).",
+          "Проверь каждый: есть ли вспомогательный глагол? *What you do* — ошибка, нужно *What **do** you do*."
+        ],
+        "goal": "Напиши 5 вопросов другу о его жизни: общие (Do/Are/Did) и wh-вопросы.",
+        "hints": [
+          "Общий: Do you like…?",
+          "Wh: Where do you…? What does she…?",
+          "О прошлом: Did you… yesterday?"
+        ],
+        "check": "5 вопросов; минимум 2 wh-вопроса с правильным порядком слов; вспомогательные do/does/are/did не пропущены; начальная форма после did/does; уровень A1.",
+        "expected_output": "",
+        "solution": "Where do you live? Do you like your job? What does your sister do? When did you wake up today? Are you busy this weekend?",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8474,39 +8816,52 @@
       },
       {
         "id": "en-negatives",
-        "title": "Отрицания",
+        "title": "Отрицания: don't, doesn't, isn't, aren't, didn't",
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "Отрицание строится через not после вспомогательного: do not, does not, did not, is not, are not, cannot.",
-          "В Present Simple с he/she/it — does not + инфинитив."
+          "Смысловые глаголы (work, like, eat) отрицаются через **don't / doesn't / didn't**: *I don't smoke, She doesn't drive, We didn't go*.",
+          "**Doesn't** — только he/she/it. **Didn't** — всё прошлое, для любых лиц: *I didn't know, They didn't come*.",
+          "To be и модальные отрицаются напрямую: *I'm **not** tired, She **isn't** here, They **aren't** ready, I **can't** swim*.",
+          "После вспомогательного глагол всегда в начальной форме: *doesn't **work***, *didn't **see***. Двойное -s/-ed — классическая ошибка.",
+          "Ответ коротким отрицанием: *No, I don't. / No, she doesn't. / No, they didn't.*"
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Выбери правильный отрицательный помощник для глагольных и be-отрицаний.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "don't/doesn't/didn't + начальная форма",
+          "be и can отрицаются сами: isn't, aren't, can't",
+          "doesn't только для he/she/it"
         ],
-        "check": "Все ответы верны.",
+        "check": "Без ошибок строишь отрицания всех типов на уровне A1.",
         "expected_output": "",
-        "solution": "He does not work. Not идёт после вспомогательного.",
+        "solution": "Смысловые: don't/doesn't/didn't + V. Be: am not/isn't/aren't. Can: can't. После помощника — чистая начальная форма.",
         "quiz": [
           {
-            "question": "Как сказать «Он не работает»?",
+            "question": "He ___ like fish.",
             "options": [
-              "He does not work",
-              "He not works",
-              "He do not works"
+              "don't",
+              "doesn't",
+              "isn't"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Где стоит not?",
+            "question": "Как правильно?",
             "options": [
-              "После вспомогательного",
-              "Перед подлежащим",
-              "В конце"
+              "She didn't went.",
+              "She didn't go.",
+              "She doesn't went."
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "Отрицание can:",
+            "options": [
+              "don't can",
+              "can't",
+              "doesn't can"
+            ],
+            "correct": 1
           }
         ],
         "start_state": {
@@ -8527,42 +8882,139 @@
         }
       },
       {
-        "id": "en-possessive",
-        "title": "Притяжательные",
-        "kind": "quiz",
+        "id": "en-negatives-write",
+        "title": "Письмо: чего я не делаю",
+        "kind": "code",
         "difficulty": 2,
         "theory": [
-          "My, your, his, her, its, our, their показывают принадлежность. ’s — притяжательная форма существительного.",
-          "Не путай its (его/её для вещи) и it’s (it is)."
+          "Образец: *I don't drink coffee. My brother doesn't eat meat. We don't watch TV. I didn't go out yesterday. I can't swim very well.*",
+          "Смешай формы: don't (I/we/they), doesn't (he/she/it), didn't (вчера), can't/isn't.",
+          "Проверь: после didn't/doesn't глагол без -s и без -ed."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Напиши 5 предложений о том, чего ты (или близкие) не делаешь: don't/doesn't/didn't/can't.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "I don't…",
+          "My friend doesn't…",
+          "Прошлое: Yesterday I didn't…"
         ],
-        "check": "Все ответы верны.",
+        "check": "5 отрицательных предложений; верный выбор don't/doesn't/didn't по лицу и времени; глагол в начальной форме после помощника; минимум одна форма be/can; уровень A1.",
         "expected_output": "",
-        "solution": "Her name is Anna. It’s = it is.",
+        "solution": "I don't smoke. My sister doesn't drink coffee. We don't play computer games. I didn't watch TV yesterday. I can't drive a car.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-possessive",
+        "title": "Притяжательные: my, his, her и 's",
+        "kind": "quiz",
+        "difficulty": 1,
+        "theory": [
+          "Притяжательные местоимения: **my** (мой), **your** (твой), **his** (его), **her** (её), **our** (наш), **their** (их). Они всегда перед существительным: *my car, her name, their house*.",
+          "Принадлежность через **'s**: *Anna**'s** book* (книга Анны), *my brother**'s** car*. Для множественного с -s просто апостроф: *the students**'** room*. Особые: *children**'s** toys*.",
+          "**its** (принадлежит предмету) без апострофа — *the dog and **its** tail*; **it's** с апострофом = it is. Это самая частая опечатка в английском.",
+          "Whose — «чей»: ***Whose** phone is this? — It's **mine***. mine/yours/hers/ours/theirs — самостоятельные, без существительного: *This is **mine***.",
+          "Отличие от русского: «моя книга» → *my book* (не my's!), «у Анны есть» → *Anna has*, не Anna's there is."
+        ],
+        "goal": "Разберись в my/his/her/'s и разнице its / it's.",
+        "hints": [
+          "'s — принадлежность человека: Anna's",
+          "its = принадлежит, it's = it is",
+          "mine/yours — самостоятельно, без существительного"
+        ],
+        "check": "Правильно используешь притяжательные местоимения и 's, не путаешь its/it's.",
+        "expected_output": "",
+        "solution": "my/your/his/her/our/their + предмет. Принадлежность: Anna's, my brother's, students' (мн.ч.). it's = it is, its — принадлежность.",
         "quiz": [
           {
-            "question": "Выбери правильное: ___ name is Anna.",
+            "question": "Это машина Анны: ___ car.",
             "options": [
-              "Her",
-              "She",
-              "Hers"
+              "Annas",
+              "Anna's",
+              "Anna"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Что означает it’s?",
+            "question": "The dog licked ___ paw.",
             "options": [
-              "it is",
-              "принадлежит ему",
-              "множественное число"
+              "it's",
+              "its",
+              "its'"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "«Это моя» (без слова книга):",
+            "options": [
+              "This is my.",
+              "This is mine.",
+              "This is me."
+            ],
+            "correct": 1
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-possessive-write",
+        "title": "Письмо: моя семья и вещи",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Образец: *My mother's name is Olga. Her job is interesting. My brother's room is bigger than mine. Our dog's name is Rex. His favourite toy is a ball.*",
+          "Используй минимум два 's (Anna's, brother's) и три притяжательных (my, her, his, our).",
+          "Не забудь: it's = it is, а принадлежность предмета — its."
+        ],
+        "goal": "Опиши семью и вещи: 5 предложений с my/his/her/our и минимум двумя 's.",
+        "hints": [
+          "Начни с My mother's name is…",
+          "Her/His… о каждом члене семьи",
+          "Вещь семьи: Our dog's name is…"
+        ],
+        "check": "5 предложений; минимум 2 верных 's-формы; 3 разных притяжательных местоимения; нет путаницы its/it's; уровень A1.",
+        "expected_output": "",
+        "solution": "My mother's name is Olga. She is a teacher. Her students love her. My father's hobby is fishing. Our flat is small but cosy.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8586,37 +9038,92 @@
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "In — внутри/в период, on — на поверхности/в день, at — в точке/во время. At 7 o’clock, on Monday, in July.",
-          "Предлоги не переводятся один-в-один: учи их в фразах."
+          "**Место:** *in* — внутри (in the room, in the box); *on* — на поверхности (on the table, on the wall); *under* — под; *next to / near* — рядом; *between* — между (between two chairs); *in front of* — перед; *behind* — за.",
+          "**Время — in:** месяцы, годы, сезоны, части суток: *in May, in 2026, in winter, in the morning*.",
+          "**Время — on:** дни и даты: *on Monday, on my birthday, on the 5th of June*.",
+          "**Время — at:** точное время и моменты: *at 7 o'clock, at noon, at night*.",
+          "Ловушка: *in the morning*, но *at night*; *on Monday morning* (день + время суток → on)."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Выбирай in/on/under/next to для места и in/on/at для времени.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "in — внутри и месяцы/годы; on — поверхность и дни; at — точное время и night",
+          "between — между двумя предметами",
+          "on Monday morning — день + время суток → on"
         ],
-        "check": "Все ответы верны.",
+        "check": "Правильно используешь предлоги места и времени на уровне A1.",
         "expected_output": "",
-        "solution": "On Monday, at 7 o’clock, in July.",
+        "solution": "Место: in (внутри), on (на), under (под), next to (рядом), between (между). Время: in May/in the morning, on Monday, at 7/at night.",
         "quiz": [
           {
-            "question": "Выбери: ___ Monday.",
+            "question": "The book is ___ the table.",
             "options": [
-              "on",
               "in",
+              "on",
               "at"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Выбери: ___ 7 o’clock.",
+            "question": "___ Monday:",
             "options": [
-              "at",
-              "on",
-              "in"
+              "In",
+              "On",
+              "At"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "___ night:",
+            "options": [
+              "In",
+              "On",
+              "At"
+            ],
+            "correct": 2
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-prepositions-write",
+        "title": "Письмо: где что находится",
+        "kind": "code",
+        "difficulty": 2,
+        "theory": [
+          "Образец: *My keys are on the table. The cat is under the bed. The shop is next to my house. I work in the morning. We meet on Friday at 6 o'clock.*",
+          "Используй минимум 4 предлога места (in, on, under, next to, behind, between) и 2 времени (in/on/at).",
+          "Каждое предложение — одна позиция: предмет + предлог + место."
+        ],
+        "goal": "Опиши, где находятся 3–5 предметов, и добавь 2 фразы о времени с in/on/at.",
+        "hints": [
+          "Предмет + is/are + предлог + место",
+          "The cat is under the…",
+          "Время: in the evening, on Monday, at 7"
+        ],
+        "check": "5 предложений; 4 разных предлога места без ошибок; 2 временных фразы с верным in/on/at; уровень A1.",
+        "expected_output": "",
+        "solution": "My laptop is on the desk. My bag is under the table. The lamp is next to the bed. I study in the evening. We meet on Saturday at 5 o'clock.",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8638,39 +9145,94 @@
         "id": "en-there",
         "title": "There is / There are",
         "kind": "quiz",
-        "difficulty": 2,
+        "difficulty": 1,
         "theory": [
-          "There is + единственное число, There are + множественное. Вопрос: Is there...? Are there...?",
-          "Конструкция говорит, что что-то существует/находится."
+          "**There is / There are** — «есть, находится» (когда сообщаешь о существовании чего-то). *There **is** a shop near my house*, *There **are** two windows in the room*. Выбор: is — один предмет, are — много.",
+          "Отрицание: *There **isn't** any milk*, *There **aren't** many cars here*. Вопрос: ***Is** there a bank near here? **Are** there any questions?*",
+          "Перечисление — по первому предмету: *There **is** a table and two chairs* (первый — единственное).",
+          "any в отрицаниях и вопросах с неисчисляемыми/множественными: *There aren't **any** eggs*. some — в утверждениях: *There are **some** apples*.",
+          "Не путай с *It is*: *There is a problem* (существует проблема) — *It is cold* (характеристика)."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Выбирай is/are по числу первого предмета и строй отрицания/вопросы.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "is — один; are — два и больше",
+          "Перечисление: по ПЕРВОМУ предмету",
+          "any — в отрицаниях и вопросах; some — в утверждениях"
         ],
-        "check": "Все ответы верны.",
+        "check": "Правильно используешь there is/are в утверждениях, отрицаниях и вопросах.",
         "expected_output": "",
-        "solution": "There are two cats. Is there a table?",
+        "solution": "There is a shop. There are two shops. Isn't/Aren't — отрицание. Is there…? Are there…? — вопросы. any/some — по типу предложения.",
         "quiz": [
           {
-            "question": "Выбери: ___ two cats in the room.",
+            "question": "___ two chairs in the kitchen.",
             "options": [
-              "There are",
               "There is",
-              "There be"
+              "There are",
+              "It is"
+            ],
+            "correct": 1
+          },
+          {
+            "question": "Вопрос: ___ a bank near here?",
+            "options": [
+              "Is there",
+              "There is",
+              "Are there"
             ],
             "correct": 0
           },
           {
-            "question": "Как спросить о наличии одного стола?",
+            "question": "Отрицание с milk (неисчисляемое):",
             "options": [
-              "Is there a table?",
-              "Are there a table?",
-              "There is table?"
+              "There aren't any milk",
+              "There isn't any milk",
+              "There is not some milk"
             ],
-            "correct": 0
+            "correct": 1
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-there-write",
+        "title": "Письмо: мой район",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Образец: *There is a park near my house. There are two cafes on my street. There isn't a cinema, unfortunately. There are some shops. Is there a gym in your area?*",
+          "Смешай: есть/нет/сколько — утверждение, отрицание и вопрос.",
+          "Помни про some/any: some shops (утверждение), aren't any (отрицание)."
+        ],
+        "goal": "Опиши свой район: 5 предложений с there is / there are (одно отрицание, один вопрос).",
+        "hints": [
+          "There is a… near my house",
+          "There are two/three…",
+          "Отрицание: There isn't/aren't any…"
+        ],
+        "check": "5 предложений there is/are; is/are согласованы с числом; есть 1 отрицание с any и 1 вопрос; уровень A1.",
+        "expected_output": "",
+        "solution": "There is a small park near my house. There are three cafes on my street. There isn't a swimming pool here. There are some trees in the yard. Is there a bank near you?",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},
@@ -8692,35 +9254,48 @@
         "id": "en-can",
         "title": "Can и умения",
         "kind": "quiz",
-        "difficulty": 2,
+        "difficulty": 1,
         "theory": [
-          "Can + инфинитив без to. Отрицание cannot/can’t, вопрос Can you...?",
-          "Can говорит о возможности или умении, а не о планах."
+          "**Can** — «могу, умею»: *I **can** swim*, *She **can** drive*. После can глагол всегда в начальной форме, без to: *can swim* (не can to swim).",
+          "Can не меняется по лицам: *I can, he can, they can* — никаких cans.",
+          "Отрицание: **can't** (cannot): *I **can't** dance*. Вопрос: can вперёд: ***Can** you help me?* Короткий ответ: *Yes, I can. / No, I can't.*",
+          "Просьбы и разрешения: ***Can** you open the window?* (просьба), ***Can** I sit here?* (разрешение). Вежливая версия — Could you…?",
+          "Полезные глаголы умений: *swim, drive, cook, sing, dance, play the guitar, speak English, ride a bike*."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Строй умения, просьбы и разрешения с can.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "can + начальная форма без to",
+          "can одинаков для всех лиц",
+          "Can you…? — просьба, Can I…? — разрешение"
         ],
-        "check": "Все ответы верны.",
+        "check": "Правильно используешь can/can't для умений, просьб и разрешений.",
         "expected_output": "",
-        "solution": "I can swim. Can you help? После can нет to.",
+        "solution": "I can swim. She can't dance. Can you help me? Can I come in? После can — начальный глагол без to и без -s.",
         "quiz": [
           {
-            "question": "Выбери правильное.",
+            "question": "I ___ swim very well.",
             "options": [
-              "I can swim",
-              "I can to swim",
-              "I can swimming"
+              "can to",
+              "can",
+              "cans"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Как построить вопрос?",
+            "question": "Просьба открыть окно:",
             "options": [
-              "Can you help?",
-              "Do you can help?",
-              "You can help?"
+              "Can you to open the window?",
+              "Can you open the window?",
+              "You can open the window?"
+            ],
+            "correct": 1
+          },
+          {
+            "question": "He ___ play the guitar.",
+            "options": [
+              "can",
+              "cans",
+              "can plays"
             ],
             "correct": 0
           }
@@ -8743,42 +9318,139 @@
         }
       },
       {
+        "id": "en-can-write",
+        "title": "Письмо: что я умею",
+        "kind": "code",
+        "difficulty": 1,
+        "theory": [
+          "Образец: *I can cook well. I can swim, but I can't dive. My sister can speak three languages. Can you play chess? I can't drive a car yet.*",
+          "Напиши 3 умения (can), 2 неумения (can't) и один вопрос с Can you…?",
+          "После can/can't — только начальная форма глагола."
+        ],
+        "goal": "Напиши 5 предложений об умениях: 3 с can, 2 с can't (или вопрос Can you…?).",
+        "hints": [
+          "I can… well",
+          "I can't … yet (ещё не умею)",
+          "Вопрос: Can you…?"
+        ],
+        "check": "5 предложений; can/can't + начальная форма без to и -s; есть и умения, и неумения; уровень A1.",
+        "expected_output": "",
+        "solution": "I can cook simple meals. I can ride a bike. I can't sing at all. My friend can speak English well. Can you swim?",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
         "id": "en-daily",
-        "title": "Повседневная лексика",
+        "title": "Повседневная лексика: день, еда, покупки",
         "kind": "quiz",
         "difficulty": 2,
         "theory": [
-          "Полезные фразы: get up, have breakfast, go to work, check email, have lunch, go home, go to bed.",
-          "Учи глаголы вместе с предлогами и типичными существительными."
+          "**День:** *wake up* (проснуться), *get up* (встать), *have breakfast/lunch/dinner*, *go to work/school*, *come home*, *go to bed* (ложиться спать).",
+          "**Еда и напитки:** *water, tea, coffee, bread, cheese, eggs, chicken, rice, apples*. Неисчисляемые (water, bread, rice) — без a и без -s: *I drink **water***, *I eat **bread***.",
+          "**Покупки:** *How much is it?* (сколько стоит), *Can I pay by card?* (можно картой?), *a bag, please*. Числа: *twenty, thirty, fifty* — цены: *It costs twenty euros*.",
+          "**Вежливость:** *please, thank you, excuse me, sorry*. Просьба: *Can I have…, please?* — стандартная форма в магазине и кафе.",
+          "Словосочетания важнее отдельных слов: учи *have breakfast* (не eat breakfast), *take a bus* (не sit in a bus), *make friends*."
         ],
-        "goal": "Разбери материал и ответь на вопросы без подсказок.",
+        "goal": "Освой базовые фразы дня, еды и покупок.",
         "hints": [
-          "Вернись к примеру в теории.",
-          "Проверь, что именно спрашивают."
+          "have breakfast/lunch/dinner — устойчивые",
+          "water, bread, rice — неисчисляемые: без a и -s",
+          "How much is it? — цена"
         ],
-        "check": "Все ответы верны.",
+        "check": "Используешь базовую повседневную лексику и фразы вежливости без прямых переводов с русского.",
         "expected_output": "",
-        "solution": "Get up — вставать. Check email — проверять почту.",
+        "solution": "wake up → have breakfast → go to work. water/bread/rice без a. How much is it? Can I have a bag, please?",
         "quiz": [
           {
-            "question": "Что означает get up?",
+            "question": "Как правильно «завтракать»?",
             "options": [
-              "Вставать",
-              "Завтракать",
-              "Ложиться"
+              "eat breakfast",
+              "have breakfast",
+              "do breakfast"
             ],
-            "correct": 0
+            "correct": 1
           },
           {
-            "question": "Выбери фразу «проверить почту».",
+            "question": "Неисчисляемое:",
             "options": [
-              "check email",
-              "make email",
-              "do email"
+              "an apple",
+              "bread",
+              "two eggs"
             ],
-            "correct": 0
+            "correct": 1
+          },
+          {
+            "question": "«Сколько это стоит?»",
+            "options": [
+              "How many is it?",
+              "How much is it?",
+              "What cost it?"
+            ],
+            "correct": 1
           }
         ],
+        "start_state": {
+          "workdir": "/workspace",
+          "files": {},
+          "images": {},
+          "containers": {},
+          "volumes": {},
+          "networks": [
+            "bridge",
+            "host",
+            "none"
+          ],
+          "events": [],
+          "k8s": {},
+          "k8s_events": [],
+          "last_output": ""
+        }
+      },
+      {
+        "id": "en-daily-write",
+        "title": "Письмо: мои покупки и еда",
+        "kind": "code",
+        "difficulty": 2,
+        "theory": [
+          "Образец: *I usually have breakfast at home. I drink tea, but I don't drink coffee. Every Saturday I go to the shop. I buy bread, eggs and apples. How much is this cheese?*",
+          "Используй 3 продукта еды и одну фразу магазина (How much is…? / Can I have…, please?).",
+          "Неисчисляемые (bread, water, rice) — без a и без -s."
+        ],
+        "goal": "Напиши 5 предложений о еде и покупках: что ешь/пьёшь, что покупаешь, вопрос о цене.",
+        "hints": [
+          "I have… for breakfast",
+          "Every week I buy…",
+          "Вопрос: How much is…?"
+        ],
+        "check": "5 предложений; 3 продукта еды; 1 магазинная фраза; неисчисляемые без артикля и -s; уровень A1.",
+        "expected_output": "",
+        "solution": "I have tea and bread for breakfast. I don't eat meat. Every Sunday I go to the market. I buy fruit, rice and cheese. How much is this coffee?",
+        "quiz": [],
+        "editor": {
+          "language": "text",
+          "starter": "",
+          "description": "Письменная работа: проверяет ИИ-преподаватель."
+        },
         "start_state": {
           "workdir": "/workspace",
           "files": {},

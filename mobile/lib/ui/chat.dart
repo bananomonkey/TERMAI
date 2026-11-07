@@ -450,7 +450,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               );
                             }
-                            return _Bubble(msg: msgs[i]);
+                            return _Bubble(
+                              msg: msgs[i],
+                              onResend: (text) {
+                                // Повторная отправка: положить текст в поле
+                                // и отправить; при занятом менторе останется
+                                // в поле ввода — можно отредактировать.
+                                _input.text = text;
+                                _send();
+                              },
+                            );
                           },
                         ),
                 ),
@@ -640,7 +649,8 @@ class _SpeakButton extends StatelessWidget {
 
 class _Bubble extends StatelessWidget {
   final ChatMsg msg;
-  const _Bubble({required this.msg});
+  final void Function(String text)? onResend;
+  const _Bubble({required this.msg, this.onResend});
 
   @override
   Widget build(BuildContext context) {
@@ -659,20 +669,36 @@ class _Bubble extends StatelessWidget {
       case 'user':
         return Align(
           alignment: Alignment.centerRight,
-          child: Column(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _wrap(msg.text, C.accentDark, isUser: true),
-              if (msg.attachments.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Wrap(
-                    spacing: 5,
-                    runSpacing: 4,
-                    alignment: WrapAlignment.end,
-                    children: attachmentBadges(msg.attachments),
-                  ),
+              if (msg.text.trim().isNotEmpty && onResend != null)
+                IconButton(
+                  tooltip: 'Отправить снова',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => onResend!(msg.text),
+                  icon: Icon(Icons.refresh,
+                      size: 18, color: C.muted.withAlpha(190)),
                 ),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _wrap(msg.text, C.accentDark, isUser: true),
+                    if (msg.attachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Wrap(
+                          spacing: 5,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.end,
+                          children: attachmentBadges(msg.attachments),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -770,18 +796,21 @@ class _Bubble extends StatelessWidget {
           bottomRight: Radius.circular(isUser ? 4 : 16),
         ),
       ),
-      child: MarkdownBody(
-        data: text,
-        styleSheet: MarkdownStyleSheet(
-          p: TextStyle(fontSize: 14, height: 1.4, color: C.text),
-          code: TextStyle(
-              fontSize: 12.5,
-              color: C.accent,
-              fontFamily: 'monospace',
-              backgroundColor: C.bg),
-          codeblockDecoration: BoxDecoration(
-              color: C.bg, borderRadius: BorderRadius.circular(10)),
-          codeblockPadding: const EdgeInsets.all(10),
+      // SelectionArea: текст сообщения можно выделять и копировать.
+      child: SelectionArea(
+        child: MarkdownBody(
+          data: text,
+          styleSheet: MarkdownStyleSheet(
+            p: TextStyle(fontSize: 14, height: 1.4, color: C.text),
+            code: TextStyle(
+                fontSize: 12.5,
+                color: C.accent,
+                fontFamily: 'monospace',
+                backgroundColor: C.bg),
+            codeblockDecoration: BoxDecoration(
+                color: C.bg, borderRadius: BorderRadius.circular(10)),
+            codeblockPadding: const EdgeInsets.all(10),
+          ),
         ),
       ),
     );

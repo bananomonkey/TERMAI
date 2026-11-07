@@ -11,6 +11,7 @@ import 'background_settings.dart';
 import 'chat.dart';
 import 'dialogs.dart';
 import 'help.dart';
+import 'notes_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -50,6 +51,16 @@ void showMoreSheet(BuildContext context) {
             onTap: () {
               Navigator.pop(ctx);
               Navigator.of(context).push(pageRoute(const HelpScreen()));
+            },
+          ),
+          const SizedBox(height: 8),
+          _SheetButton(
+            icon: Icons.sticky_note_2_outlined,
+            title: 'Блокнот',
+            subtitle: 'Заметки с ИИ: проверить английский, перевести, улучшить',
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(pageRoute(const NotesScreen()));
             },
           ),
           const SizedBox(height: 8),

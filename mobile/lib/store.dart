@@ -20,7 +20,7 @@ import 'notifications.dart';
 import 'sandbox.dart';
 import 'diag.dart';
 import 'secret_store.dart';
-import 'shared_ai.dart';
+import 'free_ai.dart';
 import 'sync_service.dart';
 import 'theme_refresh.dart';
 import 'tts_service.dart';
@@ -196,7 +196,6 @@ class AppController extends ChangeNotifier {
     C.p = presetById(config.theme);
     C.buttonBrightness = config.buttonBrightness.clamp(0.6, 1.4);
     _initAI();
-    SharedAiService.instance.addListener(_onSharedAiChanged);
 
     if (!prog.genCleaned) {
       // одноразовая чистка: задачи ранних версий могли смешивать предметы
@@ -209,27 +208,12 @@ class AppController extends ChangeNotifier {
     resetCourseState();
     ready = true;
     notifyListeners();
-    unawaited(refreshSharedAi());
-    unawaited(SharedAiService.instance.bindAuth());
     unawaited(() async {
       try {
         await _initSync();
       } catch (_) {}
       await autoFillAll();
     }());
-  }
-
-  void _onSharedAiChanged() {
-    _initAI();
-    notifyListeners();
-  }
-
-  /// refreshSharedAi — обновляет публичные условия акции с серверного шлюза.
-  /// Ключ и срок акции меняются на сервере без обновления приложения.
-  Future<void> refreshSharedAi() async {
-    await SharedAiService.instance.refresh();
-    _initAI();
-    notifyListeners();
   }
 
   /// _initSync — тихо поднимает Firebase и подтягивает облачный прогресс,
@@ -832,7 +816,6 @@ void _syncCustomDirections() {
       // В общем режиме шлюз живёт по своим правилам: не переносим его ошибки
       // на личные настройки пользователя, чтобы после акции ничего не
       // выглядело «сломанным» без причины.
-      if (SharedAiService.instance.isUsable(config)) return;
       final isPrimary =
           client.endpoints.isNotEmpty && identical(ep, client.endpoints.first);
       var changed = false;
@@ -1787,8 +1770,23 @@ extension AppCourses on AppController {
   }
 
   /// submitEditorTask — детерминированная проверка YAML/кода из редактора.
+  /// Задачи без машинных проверок (письменные работы) оценивает ИИ.
   Future<String> submitEditorTask(Task t, String text) async {
     if (isDone(t)) return 'Эта задача уже решена.';
+    final checks = t.verify['checks'];
+    final hasChecks = checks is List ? checks.isNotEmpty : t.verify.isNotEmpty;
+    if (!hasChecks) {
+      if (ai == null || !ai!.ready) {
+        return 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки. Текст сохранён в редакторе.';
+      }
+      final res = await ai!.verifyWriting(cur, t, text);
+      if (res.solved) {
+        saveEditorDraft(t, text);
+        await _completeTask(t, res.comment, res.difficulty);
+        return '';
+      }
+      return 'Пока не зачтено: ${res.comment}';
+    }
     final result = verifyEditorTask(t, text);
     if (!result.ok) return result.message;
     saveEditorDraft(t, text);
@@ -2083,7 +2081,7 @@ extension AppCourses on AppController {
         'Текущая задача: ${task?.title ?? '—'}. '
         'XP: ${prog.xp}, серия: ${prog.streak}, решено: ${prog.solvedTotal}. '
         'Токены: ${prog.tokensTotal}. '
-        'ИИ: ${ai == null ? 'не настроен' : (SharedAiService.instance.isUsable(config) ? 'TERMAI общий доступ' : config.provider)}/${ai?.model ?? '—'}.';
+        'ИИ: ${ai == null ? 'не настроен' : config.provider}/${ai?.model ?? '—'}${FreeAiPool.instance.configured && config.apiKey.trim().isEmpty ? ' (бесплатный доступ)' : ''}.';
   }
 
   Future<String> sendChat(String question,
@@ -2123,20 +2121,8 @@ extension AppCourses on AppController {
       return '';
     }
     if (ai == null || !ai!.ready) {
-      final promo = SharedAiService.instance;
-      final String hint;
-      if (promo.promoActive && !promo.signedIn) {
-        hint =
-            'Общий бесплатный ИИ работает после входа через Google. Войди в настройках или добавь свой API-ключ.';
-      } else if (promo.promoActive) {
-        hint = 'Общий доступ ещё не включён: прими условия в настройках ИИ.';
-      } else if (promo.endsAt != null) {
-        hint =
-            'Общий бесплатный доступ закончился. Добавь свой API-ключ в настройках ИИ.';
-      } else {
-        hint = 'Нет API-ключа — настрой ИИ в «Ещё» → Настройки.';
-      }
-      this.addChatMessage('system', hint);
+      this.addChatMessage('system',
+          'ИИ недоступен: в этой сборке нет бесплатного пула, а свой API-ключ не настроен. Добавь ключ в «Ещё» → Настройки.');
       return '';
     }
     if (attachments.isEmpty && _looksLikeDrawingRequest(question)) {
