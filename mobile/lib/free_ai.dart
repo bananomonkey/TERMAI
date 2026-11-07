@@ -24,11 +24,12 @@ class FreeAiPool {
   /// glm-4.7-flash — 1 запрос на ключ. Слоты считаются на модель отдельно.
   static const List<String> models = ['glm-4.5-flash', 'glm-4.7-flash'];
 
-  static final List<String> keys = String.fromEnvironment('TERMAI_ZAI_KEYS')
-      .split(',')
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toList();
+  // ВАЖНО: String.fromEnvironment возвращает значение dart-define только
+  // внутри const-выражения. В static final без const компилятор подставляет
+  // пустую строку — из-за этого пул был «не задан» даже с секретом в CI.
+  static const String _keysRaw = String.fromEnvironment('TERMAI_ZAI_KEYS');
+  static final List<String> keys =
+      _keysRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
   int _cursor = 0;
 
