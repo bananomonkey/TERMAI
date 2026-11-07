@@ -72,7 +72,7 @@ jobs:
         run: |
           set -o pipefail
           flutter build apk --release --split-per-abi \
-            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL || 'https://termai-token-harbor-proxy.slaytt1o.workers.dev' }} 2>&1 | tee build.log
+            --dart-define=TERMAI_ZAI_KEYS=${{ secrets.TERMAI_ZAI_KEYS }} 2>&1 | tee build.log
         working-directory: mobile
       - name: Build failure details
         if: failure()
@@ -106,7 +106,7 @@ jobs:
         run: |
           set -o pipefail
           flutter build appbundle --release \
-            --dart-define=TERMAI_AI_PROXY_URL=${{ vars.TERMAI_AI_PROXY_URL || 'https://termai-token-harbor-proxy.slaytt1o.workers.dev' }} 2>&1 | tee aab.log
+            --dart-define=TERMAI_ZAI_KEYS=${{ secrets.TERMAI_ZAI_KEYS }} 2>&1 | tee aab.log
         working-directory: mobile
       - name: AAB failure details
         if: failure()
