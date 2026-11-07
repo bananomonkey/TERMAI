@@ -435,25 +435,41 @@ class DownloadManager extends ChangeNotifier {
         case 'successful':
           final f = File(job.finalPath);
           if (!await f.exists()) {
+            // Системный загрузчик отрапортовал успех, но файла нет: часть
+            // прошивок не пишет в Android/data. Докачиваем своим клиентом —
+            // сохранённый .part будет использован для Range-докачки.
+            job.systemId = null;
+            _stripPartSuffix(job);
+            job.updatedAt = DateTime.now().millisecondsSinceEpoch;
+            await _save();
+            unawaited(_startDart(job, await _tokenForRetry()));
+            return;
+          }
+          final size = await f.length();
+          if (job.totalBytes > 0 && size != job.totalBytes) {
             job.status = DownloadStatus.failed;
-            job.error = 'Файл не найден после загрузки.';
+            job.error = 'Размер файла не совпадает с ожидаемым.';
           } else {
-            final size = await f.length();
-            if (job.totalBytes > 0 && size != job.totalBytes) {
-              job.status = DownloadStatus.failed;
-              job.error = 'Размер файла не совпадает с ожидаемым.';
-            } else {
-              job.receivedBytes = size;
-              job.totalBytes = size;
-              job.status = DownloadStatus.completed;
-              job.error = '';
-            }
+            job.receivedBytes = size;
+            job.totalBytes = size;
+            job.status = DownloadStatus.completed;
+            job.error = '';
           }
           job.systemId = null;
         case 'failed':
-          job.status = DownloadStatus.failed;
           final nativeMsg = (result['message'] as String?)?.trim() ?? '';
           final reason = (result['reason'] as num?)?.toInt() ?? 0;
+          if (reason == -2) {
+            // Переезд файла внутри нативного слоя не удался — свой клиент
+            // качает напрямую в finalPath, минуя капризы DownloadManager.
+            job.systemId = null;
+            _stripPartSuffix(job);
+            job.updatedAt = DateTime.now().millisecondsSinceEpoch;
+            await _save();
+            unawaited(_startDart(job, await _tokenForRetry()));
+            return;
+          }
+          job.status = DownloadStatus.failed;
           job.error = nativeMsg.isEmpty
               ? _reasonText(reason)
               : 'Системная загрузка: $nativeMsg (код $reason).';
@@ -469,6 +485,15 @@ class DownloadManager extends ChangeNotifier {
       await _save();
     } catch (_) {
       // Нативный слой может быть недоступен в тестах.
+    }
+  }
+
+  /// _stripPartSuffix — нативный слой может вернуть путь .part, если
+  /// переезд не состоялся; дартовский докачиватель сам добавляет суффикс.
+  void _stripPartSuffix(DownloadJob job) {
+    if (job.finalPath.endsWith('.part')) {
+      job.finalPath =
+          job.finalPath.substring(0, job.finalPath.length - '.part'.length);
     }
   }
 
