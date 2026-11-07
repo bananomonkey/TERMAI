@@ -321,24 +321,45 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                           onChangeEnd: (_) => _save(),
                         ),
                         const SizedBox(height: 8),
-                        Row(children: [
-                          Expanded(
-                            flex: 2,
-                            child: FilledButton.icon(
-                              onPressed: () => TtsService.instance.sample(c),
-                              icon: const Icon(Icons.play_arrow_rounded,
-                                  size: 19),
-                              label: const Text('Прослушать'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => TtsService.instance.stop(),
-                              child: const Text('Стоп'),
-                            ),
-                          ),
-                        ]),
+                        // Состояние озвучки видно: пока движок говорит,
+                        // кнопки отражают процесс, а не молчат.
+                        ListenableBuilder(
+                          listenable: TtsService.instance,
+                          builder: (context, _) {
+                            final speaking = TtsService.instance.speaking;
+                            return Row(children: [
+                              Expanded(
+                                flex: 2,
+                                child: FilledButton.icon(
+                                  onPressed: speaking
+                                      ? null
+                                      : () => TtsService.instance.sample(c),
+                                  icon: speaking
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: C.bg))
+                                      : const Icon(Icons.play_arrow_rounded,
+                                          size: 19),
+                                  label: Text(speaking
+                                      ? 'Говорит…'
+                                      : 'Прослушать'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: speaking
+                                      ? () => TtsService.instance.stop()
+                                      : null,
+                                  child: const Text('Стоп'),
+                                ),
+                              ),
+                            ]);
+                          },
+                        ),
                       ],
                     ],
                   ),

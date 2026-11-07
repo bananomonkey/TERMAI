@@ -804,6 +804,13 @@ void _syncCustomDirections() {
 
   /// _initAI — собирает клиент из основного и резервных подключений.
   /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
+  /// reinitAi — пересобрать ИИ-клиент (после смены ключа или тумблера
+  /// бесплатного доступа) и перерисовать зависимые экраны.
+  void reinitAi() {
+    _initAI();
+    notifyListeners();
+  }
+
   void _initAI() {
     final client = AIClient(config);
     client.onUsage = recordUsage;
@@ -2121,8 +2128,15 @@ extension AppCourses on AppController {
       return '';
     }
     if (ai == null || !ai!.ready) {
-      this.addChatMessage('system',
-          'ИИ недоступен: в этой сборке нет бесплатного пула, а свой API-ключ не настроен. Добавь ключ в «Ещё» → Настройки.');
+      final String hint;
+      if (FreeAiPool.instance.configured && !config.freeAiEnabled) {
+        hint =
+            'ИИ недоступен: бесплатный доступ выключен в настройках, а свой ключ не задан. Включи «Бесплатный ИИ» или добавь ключ в «Ещё» → Настройки.';
+      } else {
+        hint =
+            'ИИ недоступен: бесплатный пул не задан в этой сборке, а свой API-ключ не настроен. Добавь ключ в «Ещё» → Настройки.';
+      }
+      this.addChatMessage('system', hint);
       return '';
     }
     if (attachments.isEmpty && _looksLikeDrawingRequest(question)) {

@@ -709,6 +709,10 @@ class Config {
   bool ttsUseLocal;
   String ttsLocalModelId;
 
+  /// Бесплатный доступ через пул ключей z.ai из сборки. По умолчанию
+  /// включён; выключается тумблером в настройках ИИ.
+  bool freeAiEnabled;
+
   /// Автоматическая проверка обновлений и уведомления о новой версии.
   bool updatesAutoCheck;
   bool updatesNotifications;
@@ -769,6 +773,7 @@ class Config {
     this.ttsVolume = 1.0,
     this.ttsUseLocal = false,
     this.ttsLocalModelId = '',
+    this.freeAiEnabled = true,
     this.updatesAutoCheck = true,
     this.updatesNotifications = true,
     this.lastNotifiedUpdate = '',
@@ -850,6 +855,7 @@ class Config {
             .toDouble(),
         ttsUseLocal: j['tts_use_local'] as bool? ?? false,
         ttsLocalModelId: j['tts_local_model_id'] as String? ?? '',
+        freeAiEnabled: j['free_ai_enabled'] as bool? ?? true,
         updatesAutoCheck: j['updates_auto_check'] as bool? ?? true,
         updatesNotifications: j['updates_notifications'] as bool? ?? true,
         lastNotifiedUpdate: j['last_notified_update'] as String? ?? '',
@@ -905,6 +911,7 @@ class Config {
         'tts_pitch': ttsPitch,
         'tts_use_local': ttsUseLocal,
         'tts_local_model_id': ttsLocalModelId,
+        'free_ai_enabled': freeAiEnabled,
         'updates_auto_check': updatesAutoCheck,
         'updates_notifications': updatesNotifications,
         'last_notified_update': lastNotifiedUpdate,

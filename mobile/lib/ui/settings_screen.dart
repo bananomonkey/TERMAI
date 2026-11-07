@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../ai.dart';
+import '../free_ai.dart';
 import '../main.dart';
 import '../models.dart';
 import '../notifications.dart';
@@ -623,6 +624,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const SizedBox(height: 4),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      // Бесплатный доступ: пул ключей z.ai из сборки.
+                      // Включён по умолчанию, работает когда нет своего ключа.
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(Icons.free_breakfast_outlined,
+                            size: 20, color: C.accent),
+                        title: Text('Бесплатный ИИ TERMAI (GLM)',
+                            style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: C.text)),
+                        subtitle: Text(
+                          FreeAiPool.instance.configured
+                              ? 'Готов к работе: ключей в пуле — ${FreeAiPool.keys.length}. '
+                                  'Используется, когда у тебя нет своего ключа.'
+                              : 'В этой сборке пул не задан — нужен свой API-ключ.',
+                          style: TextStyle(
+                              fontSize: 11.5, color: C.muted, height: 1.35),
+                        ),
+                        value: controller.config.freeAiEnabled,
+                        activeThumbColor: C.accent,
+                        onChanged: (v) async {
+                          controller.config.freeAiEnabled = v;
+                          await controller.saveConfig(autofill: false);
+                          controller.reinitAi();
+                          if (mounted) setState(() {});
+                        },
                       ),
                       const SizedBox(height: 6),
                       appRow(

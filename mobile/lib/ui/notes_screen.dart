@@ -300,7 +300,17 @@ class _NoteScreenState extends State<NoteScreen> {
             children: [
               TextField(
                 controller: _title,
-                decoration: const InputDecoration(labelText: 'Заголовок'),
+                decoration: InputDecoration(
+                  labelText: 'Заголовок',
+                  filled: true,
+                  fillColor: C.card,
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: C.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: C.accent, width: 1.5)),
+                ),
                 onChanged: (_) => _save(),
               ),
               const SizedBox(height: 10),
@@ -310,9 +320,17 @@ class _NoteScreenState extends State<NoteScreen> {
                   maxLines: null,
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
-                  decoration: const InputDecoration(
-                      hintText: 'Пиши здесь… ИИ поможет проверить, '
-                          'перевести и продолжить.'),
+                  decoration: InputDecoration(
+                    hintText: 'Пиши здесь…',
+                    filled: true,
+                    fillColor: C.card,
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: C.border)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: C.accent, width: 1.5)),
+                  ),
                   onChanged: (_) => _save(),
                 ),
               ),
@@ -336,27 +354,16 @@ class _NoteScreenState extends State<NoteScreen> {
                   ]),
                 )
               else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    OutlinedButton(
-                        onPressed: () => _run('check_en'),
-                        child: const Text('Проверить английский',
-                            style: TextStyle(fontSize: 12.5))),
-                    OutlinedButton(
-                        onPressed: () => _run('translate'),
-                        child: const Text('Перевести',
-                            style: TextStyle(fontSize: 12.5))),
-                    OutlinedButton(
-                        onPressed: () => _run('improve'),
-                        child: const Text('Улучшить',
-                            style: TextStyle(fontSize: 12.5))),
-                    OutlinedButton(
-                        onPressed: () => _run('continue_text'),
-                        child: const Text('Продолжить',
-                            style: TextStyle(fontSize: 12.5))),
-                  ],
+                // Одна ИИ-кнопка: блокнот — это блокнот. Остальные действия
+                // доступны через ментора в чате.
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _run('improve'),
+                    icon: Icon(Icons.auto_fix_high, size: 18, color: C.accent),
+                    label: const Text('Улучшить (ИИ)',
+                        style: TextStyle(fontSize: 13)),
+                  ),
                 ),
             ],
           ),

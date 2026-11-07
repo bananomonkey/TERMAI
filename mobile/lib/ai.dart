@@ -215,7 +215,7 @@ class AIClient {
     // Round-robin распределяет нагрузку между ключами сборки.
     final hasOwnKey = cfg.apiKey.trim().isNotEmpty ||
         cfg.fallbacks.any((f) => f.apiKey.trim().isNotEmpty);
-    if (!hasOwnKey) {
+    if (!hasOwnKey && cfg.freeAiEnabled) {
       for (final ep in FreeAiPool.instance.rotate()) {
         eps.add(ep);
         labels.add('TERMAI · бесплатный доступ');
