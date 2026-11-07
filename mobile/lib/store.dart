@@ -57,6 +57,10 @@ class AppController extends ChangeNotifier {
   Progress prog = Progress();
   AIClient? ai;
 
+  /// Заметки блокнота — ТОЛЬКО локально (файл на устройстве), в облако
+  /// не синхронизируются и в прогресс не попадают.
+  List<Note> notes = [];
+
   /// Тема, из которой включили светлую: быстрый тумблер возвращает её.
   String _themeBeforeLight = 'dark';
 
@@ -191,6 +195,7 @@ class AppController extends ChangeNotifier {
         prog = Progress();
       }
     }
+    await _loadNotes(dir);
     rebuildCustomThemePresets(config.customThemes);
     _migrateTheme();
     C.p = presetById(config.theme);
@@ -804,6 +809,37 @@ void _syncCustomDirections() {
 
   /// _initAI — собирает клиент из основного и резервных подключений.
   /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
+  Future<void> _loadNotes(String dir) async {
+    try {
+      final f = io.File('$dir/termai-notes.json');
+      if (await f.exists()) {
+        final list = jsonDecode(await f.readAsString()) as List;
+        notes = list
+            .map((e) => Note.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {
+      notes = [];
+    }
+  }
+
+  /// saveNotes — пишет заметки в локальный файл (без облака).
+  Future<void> saveNotes() async {
+    try {
+      final dir = await _dataDir();
+      final f = io.File('$dir/termai-notes.json');
+      await f.writeAsString(
+          jsonEncode(notes.map((n) => n.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  /// deleteNote — удаляет заметку сразу из списка и с диска.
+  Future<void> deleteNote(Note note) async {
+    notes.removeWhere((n) => n.id == note.id);
+    notifyListeners();
+    await saveNotes();
+  }
+
   /// reinitAi — пересобрать ИИ-клиент (после смены ключа или тумблера
   /// бесплатного доступа) и перерисовать зависимые экраны.
   void reinitAi() {

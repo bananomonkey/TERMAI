@@ -304,8 +304,8 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                         Slider(
                           value: c.ttsPitch,
                           min: 0.5,
-                          max: 1.5,
-                          divisions: 20,
+                          max: 2.0,
+                          divisions: 30,
                           label: '${(c.ttsPitch * 100).round()}%',
                           onChanged: (v) => setState(() => c.ttsPitch = v),
                           onChangeEnd: (_) => _save(),

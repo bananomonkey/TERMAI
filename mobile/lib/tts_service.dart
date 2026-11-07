@@ -142,7 +142,7 @@ class TtsService extends ChangeNotifier {
         });
       }
       await tts.setSpeechRate(c.ttsRate.clamp(0.2, 1.0));
-      await tts.setPitch(c.ttsPitch.clamp(0.5, 1.5));
+      await tts.setPitch(c.ttsPitch.clamp(0.5, 2.0));
       await tts.setVolume(c.ttsVolume.clamp(0.0, 1.0));
     } catch (e) {
       _lastError = 'Не удалось применить голос: $e';
@@ -241,6 +241,15 @@ String sanitizeForSpeech(String raw) {
   text = text.replaceAll(RegExp(r'^\s*\d+[.)]\s+', multiLine: true), '');
   text = text.replaceAll(RegExp(r'^\s*[\[{].*[\]}]\s*$', multiLine: true), ' ');
   text = text.replaceAll(RegExp(r'[*_~|>]'), ' ');
+  // Эмодзи и прочие символы (не буквы/цифры/пунктуация) — прочь: системный
+  // движок произносит их как «смайлик» и ломает фразы.
+  text = text.replaceAll(
+      RegExp(r'[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]',
+          unicode: true),
+      ' ');
+  // Латиница → кириллица для озвучки: русский голос читает латинские слова
+  // искажённо. В чате текст остаётся прежним — транслитерация только здесь.
+  text = transliterateLatinToRussian(text);
   text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
   // Чистый JSON/массив без обычного текста не озвучиваем.
   if (RegExp(r'^\s*[\[{].*[\]}]\s*$', dotAll: true).hasMatch(text)) {
@@ -248,6 +257,53 @@ String sanitizeForSpeech(String raw) {
   }
   if (!RegExp(r'[A-Za-zА-Яа-яЁё0-9]').hasMatch(text)) return '';
   return text;
+}
+
+/// transliterateLatinToRussian — латиница в кириллицу для озвучки.
+/// Диграфы обрабатываются до одиночных букв. Цифры и прочее не трогаем.
+const Map<String, String> _latinToRuDigraphs = {
+  'sch': 'щ', 'SCH': 'Щ',
+  'sh': 'ш', 'SH': 'Ш', 'Sh': 'Ш',
+  'ch': 'ч', 'CH': 'Ч', 'Ch': 'Ч',
+  'zh': 'ж', 'ZH': 'Ж', 'Zh': 'Ж',
+  'th': 'т', 'TH': 'Т', 'Th': 'Т',
+  'ph': 'ф', 'PH': 'Ф', 'Ph': 'Ф',
+  'ya': 'я', 'YA': 'Я', 'Ya': 'Я',
+  'yu': 'ю', 'YU': 'Ю', 'Yu': 'Ю',
+  'ts': 'ц', 'TS': 'Ц', 'Ts': 'Ц',
+};
+
+const Map<String, String> _latinToRuSingle = {
+  'a': 'а', 'b': 'б', 'c': 'к', 'd': 'д', 'e': 'е', 'f': 'ф',
+  'g': 'г', 'h': 'х', 'i': 'и', 'j': 'й', 'k': 'к', 'l': 'л',
+  'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'q': 'к', 'r': 'р',
+  's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс',
+  'y': 'ы', 'z': 'з',
+  'A': 'А', 'B': 'Б', 'C': 'К', 'D': 'Д', 'E': 'Е', 'F': 'Ф',
+  'G': 'Г', 'H': 'Х', 'I': 'И', 'J': 'Й', 'K': 'К', 'L': 'Л',
+  'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'Q': 'К', 'R': 'Р',
+  'S': 'С', 'T': 'Т', 'U': 'У', 'V': 'В', 'W': 'В', 'X': 'КС',
+  'Y': 'Ы', 'Z': 'З',
+};
+
+String transliterateLatinToRussian(String text) {
+  final b = StringBuffer();
+  var i = 0;
+  while (i < text.length) {
+    if (i + 2 <= text.length) {
+      final lower = text.substring(i, i + 2).toLowerCase();
+      final d = _latinToRuDigraphs[lower];
+      if (d != null) {
+        b.write(d);
+        i += 2;
+        continue;
+      }
+    }
+    final ch = text[i];
+    b.write(_latinToRuSingle[ch] ?? ch);
+    i += 1;
+  }
+  return b.toString();
 }
 
 /// chunkForSpeech — делит длинный ответ на безопасные куски по словам.

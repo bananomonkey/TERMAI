@@ -34,7 +34,7 @@ class NotesScreen extends StatelessWidget {
         child: ListenableBuilder(
           listenable: controller,
           builder: (context, _) {
-            final notes = controller.prog.notes;
+            final notes = controller.notes;
             if (notes.isEmpty) {
               return Center(
                 child: Padding(
@@ -112,8 +112,7 @@ class NotesScreen extends StatelessWidget {
                                 ),
                               );
                               if (ok == true) {
-                                controller.prog.notes.removeAt(i);
-                                await controller.saveProgress();
+                                await controller.deleteNote(n);
                               }
                             },
                             icon: Icon(Icons.delete_outline,
@@ -130,9 +129,12 @@ class NotesScreen extends StatelessWidget {
                         const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerRight,
-                          child: TextButton(
+                          child: OutlinedButton.icon(
                             onPressed: () => _open(context, n),
-                            child: const Text('Открыть'),
+                            icon: Icon(Icons.edit_outlined,
+                                size: 16, color: C.accent),
+                            label: const Text('Открыть',
+                                style: TextStyle(fontSize: 12.5)),
                           ),
                         ),
                       ],
@@ -152,8 +154,8 @@ class NotesScreen extends StatelessWidget {
         Note(id: DateTime.now().microsecondsSinceEpoch.toString());
     final isNew = existing == null;
     if (isNew) {
-      controller.prog.notes.add(note);
-      await controller.saveProgress();
+      controller.notes.add(note);
+      await controller.saveNotes();
     }
     if (!context.mounted) return;
     await Navigator.of(context)
@@ -179,7 +181,7 @@ class _NoteScreenState extends State<NoteScreen> {
   String _error = '';
 
   Note? get _note {
-    for (final n in controller.prog.notes) {
+    for (final n in controller.notes) {
       if (n.id == widget.noteId) return n;
     }
     return null;
@@ -207,7 +209,7 @@ class _NoteScreenState extends State<NoteScreen> {
     n.title = _title.text;
     n.text = _text.text;
     n.updatedAt = DateTime.now().toIso8601String();
-    await controller.saveProgress();
+    await controller.saveNotes();
   }
 
   Future<void> _run(String action) async {
@@ -252,17 +254,19 @@ class _NoteScreenState extends State<NoteScreen> {
                     fontSize: 13.5, height: 1.45, color: C.text)),
           ),
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
+          OutlinedButton.icon(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: result));
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Скопировано')));
             },
-            child: Text('Скопировать', style: TextStyle(color: C.muted)),
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('Скопировать'),
           ),
-          TextButton(
+          OutlinedButton.icon(
             onPressed: () {
               setState(() {
                 _text.text = _text.text.trim().isEmpty
@@ -271,14 +275,16 @@ class _NoteScreenState extends State<NoteScreen> {
               });
               Navigator.pop(ctx);
             },
-            child: Text('Вставить ниже', style: TextStyle(color: C.muted)),
+            icon: const Icon(Icons.subdirectory_arrow_left, size: 16),
+            label: const Text('Вставить ниже'),
           ),
-          FilledButton(
+          FilledButton.icon(
             onPressed: () {
               setState(() => _text.text = result);
               Navigator.pop(ctx);
             },
-            child: const Text('Заменить текст'),
+            icon: const Icon(Icons.check_rounded, size: 16),
+            label: const Text('Заменить'),
           ),
         ],
       ),

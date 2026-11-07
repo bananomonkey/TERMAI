@@ -25,11 +25,15 @@ docker run hello-world
 ''';
     final clean = sanitizeForSpeech(raw);
     expect(clean, contains('Итог'));
-    expect(clean, contains('Docker'));
+    // Латиница транслитерируется в кириллицу для озвучки (требование:
+    // русский голос не должен коверкать латинские слова).
+    expect(clean, contains('Доккер'));
     expect(clean, isNot(contains('docker run')));
     expect(clean, isNot(contains('termai')));
     expect(clean, isNot(contains('https://')));
     expect(clean, isNot(contains('solved')));
+    // Эмодзи не озвучиваются.
+    expect(clean, isNot(contains('🚀')));
   });
 
   test('long answers are split into bounded chunks without losing words', () {

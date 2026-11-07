@@ -325,7 +325,9 @@ class LocalTtsService extends ChangeNotifier {
       if (espeakDir.isEmpty) {
         throw Exception('espeak-ng-data не найден');
       }
-      final speed = (0.65 + config.ttsRate * 0.7).clamp(0.6, 1.4);
+      // 50% (дефолт) ≈ 0.75 — заметно медленнее естественного: Piper
+      // на полном темпе звучит слишком быстро для обучения.
+      final speed = (0.45 + config.ttsRate * 0.6).clamp(0.4, 1.2);
       final ok = await Isolate.run(() => _generateWav(
             modelPath: files.model,
             tokensPath: files.tokens,

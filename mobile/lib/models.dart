@@ -851,7 +851,7 @@ class Config {
             .clamp(0.0, 1.0)
             .toDouble(),
         ttsPitch: ((j['tts_pitch'] as num?)?.toDouble() ?? 1.0)
-            .clamp(0.5, 1.5)
+            .clamp(0.5, 2.0)
             .toDouble(),
         ttsUseLocal: j['tts_use_local'] as bool? ?? false,
         ttsLocalModelId: j['tts_local_model_id'] as String? ?? '',
@@ -975,7 +975,6 @@ class Progress {
   Map<String, String> achieved = {};
   Map<String, Bookmark> bookmarks = {};
   List<MentorChat> mentorChats = [];
-  List<Note> notes = [];
   String activeChatId = '';
   bool genCleaned = false;
   Map<String, String> courseTitles = {};
@@ -1103,9 +1102,6 @@ class Progress {
     p.achieved = (j['achievements'] as Map?)?.cast<String, String>() ?? {};
     p.bookmarks = ((j['bookmarks'] as Map?) ?? {}).map((k, v) =>
         MapEntry(k as String, Bookmark.fromJson(v as Map<String, dynamic>)));
-    p.notes = ((j['notes'] as List?) ?? [])
-        .map((e) => Note.fromJson(e as Map<String, dynamic>))
-        .toList();
     p.mentorChats = ((j['mentor_chats'] as List?) ?? [])
         .map((c) => MentorChat.fromJson(c as Map<String, dynamic>))
         .toList();
@@ -1161,7 +1157,6 @@ class Progress {
         'achievements': achieved,
         'bookmarks': bookmarks.map((k, v) => MapEntry(k, v.toJson())),
         'mentor_chats': mentorChats.map((c) => c.toJson()).toList(),
-        'notes': notes.map((n) => n.toJson()).toList(),
         'active_chat': activeChatId,
         'gen_cleaned': genCleaned,
         'course_titles': courseTitles,
