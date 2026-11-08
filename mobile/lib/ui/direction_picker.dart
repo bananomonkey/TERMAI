@@ -30,6 +30,7 @@ class DirectionOptionList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Категории с направлениями — компактными рядами.
         for (final entry in categories) ...[
           Padding(
             padding: EdgeInsets.fromLTRB(2, dense ? 14 : 18, 2, 6),
@@ -47,13 +48,18 @@ class DirectionOptionList extends StatelessWidget {
             if (i < entry.value.length - 1)
               Divider(color: C.border.withAlpha(110), height: 1),
           ],
-          Padding(
-            padding: EdgeInsets.fromLTRB(2, dense ? 14 : 18, 2, 6),
-            child: Text('СОЗДАТЬ',
-                style: AppText.section.copyWith(color: C.muted)),
-          ),
-          _CreateDirectionRow(onCreate: onCreate),
         ],
+        // Раздел «Создать» — один, в самом конце списка.
+        if (categories.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Divider(color: C.border.withAlpha(110), height: 1),
+        ],
+        Padding(
+          padding: EdgeInsets.fromLTRB(2, dense ? 12 : 14, 2, 6),
+          child: Text('СОЗДАТЬ',
+              style: AppText.section.copyWith(color: C.muted)),
+        ),
+        _CreateDirectionRow(onCreate: onCreate),
       ],
     );
   }

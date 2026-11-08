@@ -167,6 +167,12 @@ void main() {
     ));
     await tester.pump();
 
+    // Теперьа-дизайн выше тестового экрана: доскролливаем до кнопки.
+    await tester.scrollUntilVisible(
+      find.text('Выбрать направление'),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Выбрать направление'));
     await tester.pumpAndSettle();
 
@@ -239,6 +245,11 @@ void main() {
     ));
     await tester.pump();
 
+    await tester.scrollUntilVisible(
+      find.text('Пропустить'),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Пропустить'));
     // даём реальному I/O (запись termai.json) завершиться и доигрываем переход
     for (var i = 0; i < 12; i++) {
