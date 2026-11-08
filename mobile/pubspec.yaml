@@ -104,6 +104,18 @@ flutter:
       fonts:
         - asset: assets/fonts/Intel One Mono.ttf
 
+    - family: Press Start 2P
+      fonts:
+        - asset: assets/fonts/Press Start 2P.ttf
+    - family: Pixelify Sans
+      fonts:
+        - asset: assets/fonts/Pixelify Sans.ttf
+    - family: Silkscreen
+      fonts:
+        - asset: assets/fonts/Silkscreen.ttf
+    - family: Fira Code
+      fonts:
+        - asset: assets/fonts/Fira Code.ttf
 flutter_launcher_icons:
   android: true
   image_path: "assets/icon/termai.png"

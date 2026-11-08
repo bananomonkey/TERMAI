@@ -8,6 +8,7 @@ import '../main.dart';
 import 'app_background.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
 
 class BackgroundSettingsScreen extends StatefulWidget {
   const BackgroundSettingsScreen({super.key});
@@ -16,6 +17,7 @@ class BackgroundSettingsScreen extends StatefulWidget {
       _BackgroundSettingsScreenState();
 }
 
+@NowaGenerated()
 class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
   bool _picking = false;
 
@@ -153,8 +155,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                       value: cfg.bgBlur,
                       min: 0,
                       max: 40,
-                      divisions: 40,
-                      label: cfg.bgBlur.round().toString(),
                       onChanged: has
                           ? (v) => controller.setBackgroundTuning(blur: v)
                           : null,
@@ -185,7 +185,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                       value: cfg.bgDim,
                       min: 0,
                       max: 0.9,
-                      divisions: 18,
                       label: '${(cfg.bgDim * 100).round()}%',
                       onChanged: has
                           ? (v) => controller.setBackgroundTuning(dim: v)
@@ -214,8 +213,7 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen> {
                     style: TextStyle(fontSize: 11.5, color: C.muted)),
                 const SizedBox(height: 20),
                 Text(
-                  'Фото копируется в папку приложения, поэтому работает и после удаления '
-                  'из галереи. Ничего никуда не отправляется.',
+                  'Фото копируется в папку приложения, поэтому работает и после удаления из галереи. Ничего никуда не отправляется.',
                   style:
                       TextStyle(fontSize: 11.5, color: C.muted, height: 1.45),
                 ),

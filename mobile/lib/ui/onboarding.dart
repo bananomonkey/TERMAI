@@ -96,38 +96,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       backgroundColor: C.bg,
       body: SafeArea(
-        child: Stack(
-          children: [
-            PageView(
-              controller: _page,
-              onPageChanged: (i) => setState(() => _idx = i),
-              children: [_intro(), _directionsStep(), _nameStep(), _setup()],
-            ),
-            Positioned(
-              top: 4.0,
-              right: 6.0,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(pageRoute(const HelpScreen())),
-                    child: Text(
-                      'Инструкция',
-                      style: TextStyle(color: C.muted, fontSize: 12.5),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _starting ? null : () => _finish(saveKey: false),
-                    child: Text(
-                      'Пропустить',
-                      style: TextStyle(color: C.accent, fontSize: 12.5),
-                    ),
-                  )
-                ],
-              ),
-            )
-          ],
+        child: PageView(
+          controller: _page,
+          onPageChanged: (i) => setState(() => _idx = i),
+          children: [_intro(), _directionsStep(), _nameStep(), _setup()],
         ),
       ),
     );
@@ -155,64 +127,80 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         24.0,
-        48.0,
+        36.0,
         24.0,
         24.0,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Center(
+          Container(
+            width: 88.0,
+            height: 88.0,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: C.accent.withValues(alpha: 0.18),
+                  blurRadius: 28.0,
+                  spreadRadius: 2.0,
+                ),
+              ],
+            ),
             child: ClipOval(
               child: Image.asset(
                 'assets/icon/termai.png',
-                width: 92.0,
-                height: 92.0,
-                cacheWidth: 184,
+                width: 88.0,
+                height: 88.0,
+                cacheWidth: 176,
                 fit: BoxFit.cover,
               ),
             ),
           ),
-          const SizedBox(
-            height: 17.0,
-          ),
-          Center(
+          const SizedBox(height: 14.0),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            decoration: BoxDecoration(
+              color: C.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12.0),
+            ),
             child: Text(
               'TERMAI',
-              textAlign: TextAlign.center,
-              style: AppText.section.copyWith(
+              style: AppText.mono.copyWith(
                 color: C.accent,
-                letterSpacing: 2.4,
-                fontSize: 11.0,
+                fontSize: 15.0,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.0,
               ),
             ),
           ),
-          const SizedBox(
-            height: 7.0,
-          ),
-          Center(
-            child: Text(
-              'Учись делать',
-              style: TextStyle(
-                fontSize: 31.0,
-                height: 1.05,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.8,
-                color: C.text,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(
-            height: 8.0,
-          ),
+          const SizedBox(height: 10.0),
           Text(
-            'Направления, уроки и проверяемая практика — в одном месте.',
-            style: AppText.body.copyWith(color: C.muted),
+            'Учись делать.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 32.0,
+              height: 1.12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.6,
+              color: C.text,
+            ),
           ),
-          const SizedBox(
-            height: 28.0,
+          const SizedBox(height: 8.0),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Text(
+              'Направления, уроки и проверяемая практика — в одном месте',
+              textAlign: TextAlign.center,
+              style: AppText.body.copyWith(
+                color: C.muted,
+                fontSize: 14.0,
+                height: 1.35,
+              ),
+            ),
           ),
+          const SizedBox(height: 24.0),
           const _IntroPoint(
             number: '01',
             title: 'Выбери направление',
@@ -231,24 +219,46 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             text:
                 'Наставник разбирает ошибки, объясняет команды и возвращает к практике.',
           ),
-          const SizedBox(
-            height: 22.0,
-          ),
+          const SizedBox(height: 20.0),
           SizedBox(
             width: double.infinity,
+            height: 52.0,
             child: FilledButton(
               onPressed: _next,
-              child: const Text(
-                'Выбрать направление',
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16.0),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Выбрать направление',
+                    style:
+                        TextStyle(fontSize: 15.0, fontWeight: FontWeight.w700),
+                  ),
+                  SizedBox(width: 8.0),
+                  Icon(Icons.arrow_forward_rounded, size: 18.0),
+                ],
               ),
             ),
           ),
-          const SizedBox(
-            height: 10.0,
-          ),
+          const SizedBox(height: 8.0),
           Center(
-            child: _dots(),
-          )
+            child: TextButton(
+              onPressed: _starting ? null : () => _finish(saveKey: false),
+              style: TextButton.styleFrom(
+                foregroundColor: C.muted,
+              ),
+              child: const Text(
+                'Пропустить',
+                style: TextStyle(fontSize: 14.0),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10.0),
+          _dots(),
         ],
       ),
     );
@@ -300,7 +310,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             onCreate: (title) async {
               final err = await controller.addCustomDirection(title);
               if (err.isEmpty) {
-                setState(() => _selected.add(controller.config.activeDirection));
+                setState(
+                    () => _selected.add(controller.config.activeDirection));
               }
             },
             dense: true,
@@ -585,45 +596,72 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
+@NowaGenerated()
 class _IntroPoint extends StatelessWidget {
-  final String number, title, text;
-  const _IntroPoint({
-    required this.number,
-    required this.title,
-    required this.text,
-  });
+  final String number;
+
+  final String title;
+
+  final String text;
+
+  @NowaGenerated({'loader': 'auto-constructor'})
+  const _IntroPoint(
+      {required this.number, required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.all(14.0),
+      decoration: BoxDecoration(
+        color: C.card,
+        borderRadius: BorderRadius.circular(16.0),
+        border: Border.all(color: C.border.withValues(alpha: 0.7)),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 30,
+          Container(
+            width: 34.0,
+            height: 34.0,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: C.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10.0),
+            ),
             child: Text(
               number,
               style: AppText.mono.copyWith(
                 color: C.accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+                fontSize: 13.0,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
+          const SizedBox(width: 14.0),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: AppText.title.copyWith(color: C.text),
+                  style: TextStyle(
+                    fontSize: 15.0,
+                    fontWeight: FontWeight.w700,
+                    color: C.text,
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  text,
-                  style: AppText.caption.copyWith(color: C.muted),
-                ),
+                if (text.isNotEmpty) ...[
+                  const SizedBox(height: 4.0),
+                  Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 13.0,
+                      height: 1.35,
+                      color: C.muted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

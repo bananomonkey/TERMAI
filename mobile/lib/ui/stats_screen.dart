@@ -1,10 +1,5 @@
-// stats_screen.dart — честная статистика TERMAI: только реальные события.
-// Периоды «неделя / месяц / всё время», общий и разрез по направлениям,
-// графики активности/XP/времени, уроки, практика и достижения.
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-
 import '../directions.dart';
 import '../main.dart';
 import '../models.dart';
@@ -12,6 +7,7 @@ import '../store.dart';
 import 'app_background.dart';
 import 'design_system.dart';
 import 'theme.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
 
 enum _Period { week, month, all }
 
@@ -26,10 +22,14 @@ class StatsScreen extends StatefulWidget {
   State<StatsScreen> createState() => _StatsScreenState();
 }
 
+@NowaGenerated()
 class _StatsScreenState extends State<StatsScreen> {
   _Period _period = _Period.week;
+
   _Metric _metric = _Metric.solved;
+
   _Scope _scope = _Scope.overall;
+
   String? _detailDirection;
 
   @override
@@ -37,7 +37,10 @@ class _StatsScreenState extends State<StatsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Статистика', style: AppText.screenTitle),
+        title: const Text(
+          'Статистика',
+          style: AppText.screenTitle,
+        ),
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -59,47 +62,46 @@ class _StatsScreenState extends State<StatsScreen> {
               now: now,
             );
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
+              padding: const EdgeInsets.fromLTRB(
+                16.0,
+                10.0,
+                16.0,
+                32.0,
+              ),
               children: [
                 _periodSelector(),
-                const SizedBox(height: 10),
+                const SizedBox(
+                  height: 10.0,
+                ),
                 _scopeSelector(dirs),
                 if (_scope == _Scope.directions && dirs.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  _directionSelector(dirs, detail?.id),
+                  const SizedBox(
+                    height: 10.0,
+                  ),
+                  _directionSelector(dirs, detail?.id)
                 ],
-                const SizedBox(height: 14),
+                const SizedBox(
+                  height: 14.0,
+                ),
                 _heroCard(snapshot, detail),
-                const SizedBox(height: 12),
+                const SizedBox(
+                  height: 12.0,
+                ),
                 _summaryGrid(snapshot),
-                const SizedBox(height: 18),
+                const SizedBox(
+                  height: 18.0,
+                ),
                 _chartCard(points, snapshot),
                 if (controller.prog.dailySolved.isEmpty) ...[
-                  const SizedBox(height: 10),
-                  appCard(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline, size: 17, color: C.muted),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            'История по дням начнёт заполняться с первого '
-                            'решённого урока в этой версии. Старые XP и '
-                            'решённые задачи показаны в общей статистике, '
-                            'но не приписаны к выдуманным датам.',
-                            style: AppText.caption.copyWith(color: C.muted),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(
+                    height: 10.0,
+                  )
                 ],
-                const SizedBox(height: 18),
                 _directionsSection(dirs, start),
-                const SizedBox(height: 18),
-                _achievementsSection(),
+                const SizedBox(
+                  height: 18.0,
+                ),
+                _achievementsSection()
               ],
             );
           },
@@ -118,7 +120,11 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   DateTime? _rangeStart(DateTime now) {
-    final today = DateTime(now.year, now.month, now.day);
+    final today = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    );
     switch (_period) {
       case _Period.week:
         return today.subtract(const Duration(days: 6));
@@ -136,15 +142,17 @@ class _StatsScreenState extends State<StatsScreen> {
       _Period.all: 'Всё время',
     };
     return Wrap(
-      spacing: 7,
-      runSpacing: 7,
+      spacing: 7.0,
+      runSpacing: 7.0,
       children: [
         for (final p in _Period.values)
           ChoiceChip(
-            label: Text(labels[p]!),
+            label: Text(
+              labels[p]!,
+            ),
             selected: _period == p,
             onSelected: (_) => setState(() => _period = p),
-          ),
+          )
       ],
     );
   }
@@ -160,7 +168,9 @@ class _StatsScreenState extends State<StatsScreen> {
             onTap: () => setState(() => _scope = _Scope.overall),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(
+          width: 8.0,
+        ),
         Expanded(
           child: _ScopeButton(
             label: 'По направлениям',
@@ -170,22 +180,24 @@ class _StatsScreenState extends State<StatsScreen> {
                 ? null
                 : () => setState(() => _scope = _Scope.directions),
           ),
-        ),
+        )
       ],
     );
   }
 
   Widget _directionSelector(List<DirectionDef> dirs, String? selected) {
     return Wrap(
-      spacing: 7,
-      runSpacing: 7,
+      spacing: 7.0,
+      runSpacing: 7.0,
       children: [
         for (final d in dirs)
           ChoiceChip(
-            label: Text(d.shortTitle),
+            label: Text(
+              d.shortTitle,
+            ),
             selected: d.id == selected,
             onSelected: (_) => setState(() => _detailDirection = d.id),
-          ),
+          )
       ],
     );
   }
@@ -201,12 +213,17 @@ class _StatsScreenState extends State<StatsScreen> {
     final periodLabel = switch (_period) {
       _Period.week => 'за 7 дней',
       _Period.month => 'за 30 дней',
-      _Period.all => 'за всё время',
+      _Period.all => 'за всё время'
     };
     return appCard(
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+      padding: const EdgeInsets.fromLTRB(
+        14.0,
+        13.0,
+        14.0,
+        13.0,
+      ),
       accent: C.accent.withAlpha(C.isLight ? 80 : 105),
-      glowAlpha: 24,
+      glowAlpha: 24.0,
       glowColor: C.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,20 +234,29 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.title.copyWith(fontSize: 16)),
-                    Text(subtitle,
-                        style: AppText.caption.copyWith(color: C.muted)),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.title.copyWith(fontSize: 16.0),
+                    ),
+                    Text(
+                      subtitle,
+                      style: AppText.caption.copyWith(color: C.muted),
+                    )
                   ],
                 ),
               ),
-              appStatusPill('ур. ${controller.prog.level}',
-                  color: C.accent, icon: Icons.bolt_rounded),
+              appStatusPill(
+                'ур. ${controller.prog.level}',
+                color: C.accent,
+                icon: Icons.bolt_rounded,
+              )
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(
+            height: 12.0,
+          ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -238,43 +264,61 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('${s.xp}',
-                        style: TextStyle(
-                            fontSize: 30,
-                            height: 1,
-                            fontWeight: FontWeight.w900,
-                            color: C.text)),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text('XP $periodLabel',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.caption.copyWith(color: C.muted)),
+                    Text(
+                      '${s.xp}',
+                      style: TextStyle(
+                        fontSize: 30.0,
+                        height: 1.0,
+                        fontWeight: FontWeight.w900,
+                        color: C.text,
                       ),
                     ),
+                    const SizedBox(
+                      width: 5.0,
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 2.0),
+                        child: Text(
+                          'XP ${periodLabel}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(color: C.muted),
+                        ),
+                      ),
+                    )
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text('серия ${controller.prog.streak} дн.',
-                  maxLines: 1, style: AppText.caption.copyWith(color: C.warn)),
+              const SizedBox(
+                width: 8.0,
+              ),
+              Text(
+                'серия ${controller.prog.streak} дн.',
+                maxLines: 1,
+                style: AppText.caption.copyWith(color: C.warn),
+              )
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(
+            height: 9.0,
+          ),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(4.0),
             child: LinearProgressIndicator(
               value: inLevel / 100,
-              minHeight: 5,
+              minHeight: 5.0,
               backgroundColor: C.card2,
               color: C.accent,
             ),
           ),
-          const SizedBox(height: 5),
-          Text('до следующего уровня ${100 - inLevel} XP',
-              style: AppText.caption.copyWith(color: C.muted)),
+          const SizedBox(
+            height: 5.0,
+          ),
+          Text(
+            'до следующего уровня ${100 - inLevel} XP',
+            style: AppText.caption.copyWith(color: C.muted),
+          )
         ],
       ),
     );
@@ -283,34 +327,42 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _summaryGrid(_Snapshot s) {
     final cards = [
       _SummaryCard(
-          icon: Icons.check_circle_outline,
-          label: 'Решено',
-          value: '${s.solved}',
-          color: C.good),
+        icon: Icons.check_circle_outline,
+        label: 'Решено',
+        value: '${s.solved}',
+        color: C.good,
+      ),
       _SummaryCard(
-          icon: Icons.school_outlined,
-          label: 'Уроки',
-          value: '${s.lessons}',
-          color: C.secondary),
+        icon: Icons.school_outlined,
+        label: 'Уроки',
+        value: '${s.lessons}',
+        color: C.secondary,
+      ),
       _SummaryCard(
-          icon: Icons.terminal_outlined,
-          label: 'Практика',
-          value: '${s.practice}',
-          color: C.accent),
+        icon: Icons.terminal_outlined,
+        label: 'Практика',
+        value: '${s.practice}',
+        color: C.accent,
+      ),
       _SummaryCard(
-          icon: Icons.timer_outlined,
-          label: 'Время',
-          value: _formatDuration(s.seconds),
-          color: C.warn),
+        icon: Icons.timer_outlined,
+        label: 'Время',
+        value: _formatDuration(s.seconds),
+        color: C.warn,
+      )
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = math.max(130.0, (constraints.maxWidth - 9) / 2);
         return Wrap(
-          spacing: 9,
-          runSpacing: 9,
+          spacing: 9.0,
+          runSpacing: 9.0,
           children: [
-            for (final card in cards) SizedBox(width: width, child: card),
+            for (final card in cards)
+              SizedBox(
+                width: width,
+                child: card,
+              )
           ],
         );
       },
@@ -322,76 +374,111 @@ class _StatsScreenState extends State<StatsScreen> {
     final metricLabel = switch (_metric) {
       _Metric.solved => 'решено',
       _Metric.xp => 'XP',
-      _Metric.minutes => 'минут',
+      _Metric.minutes => 'минут'
     };
     return appCard(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('График активности',
-                        style: AppText.title.copyWith(fontSize: 14)),
-                    Text(
-                      '${points.length} ${_bucketWord(points.length)} · '
-                      '$total $metricLabel',
-                      style: AppText.caption.copyWith(color: C.muted),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<_Metric>(
-                tooltip: 'Показатель графика',
-                initialValue: _metric,
-                onSelected: (m) => setState(() => _metric = m),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: _Metric.solved, child: Text('Решено')),
-                  PopupMenuItem(value: _Metric.xp, child: Text('XP')),
-                  PopupMenuItem(value: _Metric.minutes, child: Text('Минуты')),
-                ],
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: C.card2,
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                    border: Border.all(color: C.border),
+        padding: const EdgeInsets.fromLTRB(
+          12.0,
+          12.0,
+          12.0,
+          8.0,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'График активности',
+                        style: AppText.title.copyWith(fontSize: 14.0),
+                      ),
+                      Text(
+                        '${points.length} ${_bucketWord(points.length)} · ${total} ${metricLabel}',
+                        style: AppText.caption.copyWith(color: C.muted),
+                      )
+                    ],
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_metricTitle(_metric),
-                        style: AppText.caption.copyWith(color: C.text)),
-                    const SizedBox(width: 3),
-                    Icon(Icons.expand_more, size: 15, color: C.muted),
-                  ]),
                 ),
+                PopupMenuButton<_Metric>(
+                  tooltip: 'Показатель графика',
+                  initialValue: _metric,
+                  onSelected: (m) => setState(() => _metric = m),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _Metric.solved,
+                      child: Text(
+                        'Решено',
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _Metric.xp,
+                      child: Text(
+                        'XP',
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _Metric.minutes,
+                      child: Text(
+                        'Минуты',
+                      ),
+                    )
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10.0, vertical: 7.0),
+                    decoration: BoxDecoration(
+                      color: C.card2,
+                      borderRadius: BorderRadius.circular(AppRadius.chip),
+                      border: Border.all(color: C.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _metricTitle(_metric),
+                          style: AppText.caption.copyWith(color: C.text),
+                        ),
+                        const SizedBox(
+                          width: 3.0,
+                        ),
+                        Icon(
+                          Icons.expand_more,
+                          size: 15.0,
+                          color: C.muted,
+                        )
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(
+              height: 8.0,
+            ),
+            SizedBox(
+              height: 168.0,
+              child: _ActivityChart(
+                points: points,
+                color: _metric == _Metric.xp
+                    ? C.secondary
+                    : (_metric == _Metric.minutes ? C.warn : C.accent),
+                emptyText: total == 0 ? 'Нет данных за период' : null,
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 168,
-            child: _ActivityChart(
-              points: points,
-              color: _metric == _Metric.xp
-                  ? C.secondary
-                  : (_metric == _Metric.minutes ? C.warn : C.accent),
-              emptyText: total == 0 ? 'Нет данных за период' : null,
             ),
-          ),
-          if (_period == _Period.all && points.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text('По месяцам · последние ${points.length}',
-                  style: AppText.caption.copyWith(color: C.muted)),
-            ),
-        ],
-      ),
-    );
+            if (_period == _Period.all && points.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 2.0),
+                child: Text(
+                  'По месяцам · последние ${points.length}',
+                  style: AppText.caption.copyWith(color: C.muted),
+                ),
+              )
+          ],
+        ));
   }
 
   Widget _directionsSection(List<DirectionDef> dirs, DateTime? start) {
@@ -401,9 +488,14 @@ class _StatsScreenState extends State<StatsScreen> {
       children: [
         appSectionTitle('По направлениям'),
         for (final d in dirs) ...[
-          _DirectionStatsRow(direction: d, start: start),
-          const SizedBox(height: 8),
-        ],
+          _DirectionStatsRow(
+            direction: d,
+            start: start,
+          ),
+          const SizedBox(
+            height: 8.0,
+          )
+        ]
       ],
     );
   }
@@ -414,29 +506,29 @@ class _StatsScreenState extends State<StatsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         appSectionTitle('Достижения',
-            trailing: Text('${achieved.length}/${achievementList.length}',
-                style: AppText.caption.copyWith(color: C.muted))),
+            trailing: Text(
+              '${achieved.length}/${achievementList.length}',
+              style: AppText.caption.copyWith(color: C.muted),
+            )),
         appCard(
-          padding: const EdgeInsets.all(11),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final a in achievementList)
-                _AchievementChip(
-                    achievement: a, unlocked: achieved.containsKey(a.id)),
-            ],
-          ),
-        ),
+            padding: const EdgeInsets.all(11.0),
+            child: Wrap(
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: [
+                for (final a in achievementList)
+                  _AchievementChip(
+                    achievement: a,
+                    unlocked: achieved.containsKey(a.id),
+                  )
+              ],
+            ))
       ],
     );
   }
 
-  List<_ChartPoint> _chartPoints({
-    required String? directionId,
-    required DateTime? start,
-    required DateTime now,
-  }) {
+  List<_ChartPoint> _chartPoints(
+      {String? directionId, DateTime? start, required DateTime now}) {
     if (_period == _Period.all) {
       return _monthPoints(directionId);
     }
@@ -449,7 +541,11 @@ class _StatsScreenState extends State<StatsScreen> {
       points.add(_ChartPoint(
         label: '${day.day}',
         fullLabel: _dayFull(day),
-        value: _metricValue(controller.prog, directionId, key),
+        value: _metricValue(
+          controller.prog,
+          directionId,
+          key,
+        ),
       ));
     }
     return points;
@@ -477,7 +573,11 @@ class _StatsScreenState extends State<StatsScreen> {
       for (var d = cursor;
           d.isBefore(next);
           d = d.add(const Duration(days: 1))) {
-        value += _metricValue(controller.prog, directionId, Progress.dayKey(d));
+        value += _metricValue(
+          controller.prog,
+          directionId,
+          Progress.dayKey(d),
+        );
       }
       months.add(_ChartPoint(
         label: _monthShort(cursor.month),
@@ -712,16 +812,13 @@ class _BarChartPainter extends CustomPainter {
     final pts = <Offset>[];
     for (var i = 0; i < points.length; i++) {
       final v = points[i].value.toDouble();
-      final y = v <= 0
-          ? baseline
-          : baseline - chartHeight * (v / niceMax);
+      final y = v <= 0 ? baseline : baseline - chartHeight * (v / niceMax);
       pts.add(Offset(slot * i + slot / 2, y));
     }
 
     // мягкая заливка под линией
     if (pts.isNotEmpty) {
-      final fill = Path()
-        ..moveTo(pts.first.dx, baseline);
+      final fill = Path()..moveTo(pts.first.dx, baseline);
       for (final p in pts) {
         fill.lineTo(p.dx, p.dy);
       }
@@ -739,8 +836,13 @@ class _BarChartPainter extends CustomPainter {
       final r = i == pts.length - 1 ? 4.0 : 2.8;
       canvas.drawCircle(pts[i], r, dotPaint);
       if (points[i].value > 0 && points[i].value == maxValue.round()) {
-        canvas.drawCircle(pts[i], r + 2.2,
-            Paint()..style = PaintingStyle.stroke ..strokeWidth = 1.6 ..color = C.accent);
+        canvas.drawCircle(
+            pts[i],
+            r + 2.2,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.6
+              ..color = C.accent);
       }
       final showLabel = _showLabel(i, points.length);
       if (showLabel) {

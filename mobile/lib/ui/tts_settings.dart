@@ -12,6 +12,7 @@ import 'design_system.dart';
 import 'local_tts_screen.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'package:nowa_runtime/nowa_runtime.dart';
 
 class TtsSettingsScreen extends StatefulWidget {
   const TtsSettingsScreen({super.key});
@@ -20,6 +21,7 @@ class TtsSettingsScreen extends StatefulWidget {
   State<TtsSettingsScreen> createState() => _TtsSettingsScreenState();
 }
 
+@NowaGenerated()
 class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
   List<TtsEngineOption> _engines = const [];
   List<TtsVoiceOption> _voices = const [];
@@ -73,6 +75,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Озвучивание', style: AppText.screenTitle),
+        centerTitle: false,
       ),
       body: AppBackdrop(
         child: ListenableBuilder(
@@ -98,8 +101,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                                   fontWeight: FontWeight.w700,
                                   color: C.text)),
                           subtitle: Text(
-                            'Android произносит только готовые ответы: без '
-                            'кода, Markdown и служебных команд.',
+                            'Android произносит только готовые ответы: без кода, Markdown и служебных команд.',
                             style: TextStyle(fontSize: 11.5, color: C.muted),
                           ),
                           value: c.ttsEnabled,
@@ -140,9 +142,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                               border: Border.all(color: C.warn.withAlpha(95)),
                             ),
                             child: Text(
-                              'Русский голос не подтверждён системой. '
-                              'Установи русский язык в настройках Android '
-                              '(Настройки → Система → Языки → Синтез речи).',
+                              'Русский голос не подтверждён системой. Установи русский язык в настройках Android (Настройки → Система → Языки → Синтез речи).',
                               style: TextStyle(
                                   fontSize: 11.5, height: 1.35, color: C.text),
                             ),
@@ -150,7 +150,8 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                         const SizedBox(height: 8),
                         _label('Движок'),
                         DropdownButtonFormField<String>(
-                          initialValue: _engineValue(c.ttsUseLocal ? 'local' : c.ttsEngine),
+                          initialValue: _engineValue(
+                              c.ttsUseLocal ? 'local' : c.ttsEngine),
                           isExpanded: true,
                           decoration: const InputDecoration(
                               hintText: 'Системный по умолчанию'),
@@ -197,9 +198,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Система не вернула ни одного русского голоса. '
-                                'Это не ошибка приложения: установи голосовой '
-                                'пакет Android.',
+                                'Система не вернула ни одного русского голоса. Это не ошибка приложения: установи голосовой пакет Android.',
                                 style:
                                     TextStyle(fontSize: 11.5, color: C.muted),
                               ),
@@ -339,13 +338,11 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                                           width: 16,
                                           height: 16,
                                           child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: C.bg))
+                                              strokeWidth: 2, color: C.bg))
                                       : const Icon(Icons.play_arrow_rounded,
                                           size: 19),
-                                  label: Text(speaking
-                                      ? 'Говорит…'
-                                      : 'Прослушать'),
+                                  label: Text(
+                                      speaking ? 'Говорит…' : 'Прослушать'),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -421,10 +418,7 @@ class _TtsSettingsScreenState extends State<TtsSettingsScreen> {
                       const SizedBox(width: 9),
                       Expanded(
                         child: Text(
-                          'Системный голос Android не занимает место и не '
-                          'скачивается. Piper-голоса лежат локально, работают '
-                          'офлайн и загружаются только вручную из каталога. '
-                          'Silero с неясной лицензией в приложение не входит.',
+                          'Системный голос не занимает место. Piper-голоса лежат локально, работают офлайн и загружаются только вручную из каталога.',
                           style: AppText.caption.copyWith(color: C.muted),
                         ),
                       ),
