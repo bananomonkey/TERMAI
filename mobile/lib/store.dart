@@ -13,6 +13,7 @@ import 'diagnostics.dart';
 import 'directions.dart';
 import 'editor_verify.dart';
 import 'generation_operation.dart';
+import 'incidents.dart';
 import 'k8s_sandbox.dart';
 import 'models.dart';
 import 'navigation.dart';
@@ -176,7 +177,21 @@ class AppController extends ChangeNotifier {
 
   // ---------- инициализация ----------
 
+  bool _initializing = false;
+  bool _initialized = false;
+
   Future<void> init() async {
+    if (_initializing) return; // повторный вызов перезатёр бы состояние
+    _initializing = true;
+    try {
+      await _initOnce();
+    } finally {
+      _initializing = false;
+      _initialized = true;
+    }
+  }
+
+  Future<void> _initOnce() async {
     final dir = await _dataDir();
     final cfgFile = io.File('$dir/termai.json');
     if (await cfgFile.exists()) {
@@ -570,6 +585,18 @@ void _syncCustomDirections() {
 
   Future<void> setDirections(Iterable<String> ids,
       {String? active, bool protectStarted = true}) async {
+    if (operations.isBusy) {
+      lastFillError =
+          'Дождись завершения генерации, потом меняй направления.';
+      notifyListeners();
+      return;
+    }
+    await _setDirectionsInner(ids,
+        active: active, protectStarted: protectStarted);
+  }
+
+  Future<void> _setDirectionsInner(Iterable<String> ids,
+      {String? active, bool protectStarted = true}) async {
     final valid = allDirectionDefs.map((d) => d.id).toSet();
     final next = ids.where(valid.contains).toSet().toList();
     if (next.isEmpty) next.add('devops');
@@ -600,6 +627,11 @@ void _syncCustomDirections() {
 
   Future<void> switchDirection(String id) async {
     if (!config.directions.contains(id) || id == config.activeDirection) return;
+    if (operations.isBusy) {
+      lastFillError = 'Дождись завершения генерации, потом переключай.';
+      notifyListeners();
+      return;
+    }
     config.activeDirection = id;
     courseIdx = 0;
     viewIdx = 0;
@@ -809,17 +841,40 @@ void _syncCustomDirections() {
 
   /// _initAI — собирает клиент из основного и резервных подключений.
   /// Если основной ключ пуст, но есть рабочий резервный — ИИ всё равно доступен.
+  /// _atomicWrite — пишет файл через временный файл и rename: прерванная
+  /// запись больше не оставляет битый json, который тихо сбрасывает данные.
+  Future<void> _atomicWrite(io.File target, String data) async {
+    final tmp = io.File('${target.path}.tmp');
+    await tmp.writeAsString(data, flush: true);
+    try {
+      await tmp.rename(target.path);
+    } catch (_) {
+      // rename может не сработать на некоторых ФС — тогда прямая запись.
+      await target.writeAsString(data, flush: true);
+      try {
+        await tmp.delete();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _loadNotes(String dir) async {
+    // Неразрушающая загрузка: битая строка отбрасывается по одной, файл
+    // не перезаписывается пустым списком — иначе одна ошибка стирает весь
+    // блокнот (баг из аудита).
     try {
       final f = io.File('$dir/termai-notes.json');
-      if (await f.exists()) {
-        final list = jsonDecode(await f.readAsString()) as List;
-        notes = list
-            .map((e) => Note.fromJson(e as Map<String, dynamic>))
-            .toList();
+      if (!await f.exists()) return;
+      final decoded = jsonDecode(await f.readAsString());
+      if (decoded is! List) return;
+      final loaded = <Note>[];
+      for (final e in decoded) {
+        try {
+          loaded.add(Note.fromJson(e as Map<String, dynamic>));
+        } catch (_) {}
       }
-    } catch (_) {
-      notes = [];
+      notes = loaded;
+    } catch (e) {
+      appendDiag('Заметки: файл не прочитан, оставляю пустым. $e');
     }
   }
 
@@ -828,8 +883,8 @@ void _syncCustomDirections() {
     try {
       final dir = await _dataDir();
       final f = io.File('$dir/termai-notes.json');
-      await f.writeAsString(
-          jsonEncode(notes.map((n) => n.toJson()).toList()));
+      await _atomicWrite(
+          f, jsonEncode(notes.map((n) => n.toJson()).toList()));
     } catch (_) {}
   }
 
@@ -923,7 +978,7 @@ void _syncCustomDirections() {
     final dir = await _dataDir();
     await _writeAiSecrets();
     final localJson = jsonEncode(config.toLocalJson());
-    await io.File('$dir/termai.json').writeAsString(localJson);
+    await _atomicWrite(io.File('$dir/termai.json'), localJson);
     _initAI();
     notifyListeners();
     // Автосохранение в облако: имя, тема, уведомления и (по тумблеру) ключи.
@@ -1331,7 +1386,7 @@ void _syncCustomDirections() {
   Future<void> _writeProgress() async {
     final json = jsonEncode(prog.toJson());
     final dir = await _dataDir();
-    await io.File('$dir/termai-progress.json').writeAsString(json);
+    await _atomicWrite(io.File('$dir/termai-progress.json'), json);
     sync.schedulePush(json);
   }
   // ---------- экспорт / импорт ----------
@@ -1568,7 +1623,34 @@ Future<String> Function() loadCoursesAsset = () async => '[]';
 // ---------- курсы и задачи ----------
 
 extension AppCourses on AppController {
-  Course get cur => courses[courseIdx];
+  Course get cur {
+    if (courses.isEmpty) {
+      // Пустой список курсов легален (новое кастомное направление, скрытые
+      // курсы): без guard'а это RangeError на главном экране.
+      return _fallbackCourse();
+    }
+    if (courseIdx >= courses.length) courseIdx = 0;
+    return courses[courseIdx];
+  }
+
+  Course _fallbackCourse() {
+    // Отдаём резервный курс, чтобы UI не упал; prefer активного направления.
+    for (final c in allCourses) {
+      if (c.direction == config.activeDirection) return c;
+    }
+    return allCourses.isNotEmpty
+        ? allCourses.first
+        : Course.fromJson(const {
+            'id': 'empty',
+            'title': 'Нет курсов',
+            'desc': 'Добавь курс или направление.',
+            'category': 'custom',
+            'direction': 'devops',
+            'mode': 'theory',
+            'syllabus': [],
+            'tasks': [],
+          });
+  }
 
   /// Песочница принадлежит конкретной задаче, а не всему курсу. Раньше
   /// переход на соседнюю задачу перезаписывал состояние и историю курса.
@@ -1932,8 +2014,19 @@ extension AppCourses on AppController {
 
   Future<void> _completeTask(Task t, String note, int checkerDiff) async {
     var diff = t.difficulty.clamp(1, 5);
-    if (checkerDiff >= 1 && checkerDiff <= 5) {
-      diff = checkerDiff;
+    // Инцидент разобран: курс-однодневка удаляется сразу после завершения
+    // его задачи (с достижение и сообщением ментора).
+    if (cur.id.startsWith('incident-') && isCourseDone(courseIdx)) {
+      final incidentId = cur.id;
+      await _completeTaskInner(t, note, diff);
+      await _cleanupIncident(incidentId);
+      return;
+    }
+    await _completeTaskInner(t, note, diff);
+  }
+
+  Future<void> _completeTaskInner(Task t, String note, int diff) async {
+    if (diff >= 1 && diff <= 5) {
       t.difficulty = diff;
     }
     if (reviewKey != null) {
@@ -2972,7 +3065,63 @@ extension AppCourses on AppController {
     notifyListeners();
   }
 
+  /// startIncident — запускает разбор инцидента: создаёт скрытый курс из
+  /// сценария, переключается на него. UI после этого открывает урок.
+  Future<String> startIncident(IncidentScenario sc) async {
+    if (operations.isBusy) return 'Дождись завершения генерации.';
+    final id = incidentCourseId(sc);
+    // Прежняя попытка этого сценария не нужна.
+    allCourses.removeWhere((c) => c.id == id);
+    prog.extraCourses.removeWhere((c) => c.id == id);
+    _removeFromCourseOrder(id);
+    prog.hiddenCourses.remove(id);
+    prog.archived.remove(id);
+    prog.completed.remove(id);
+    final course = buildIncidentCourse(sc);
+    allCourses.add(course);
+    prog.extraCourses.add(course);
+    await saveProgress();
+    if (config.activeDirection != 'devops') {
+      await switchDirection('devops');
+    }
+    _applyCourseFilter();
+    final idx = courses.indexWhere((c) => c.id == id);
+    if (idx >= 0) {
+      switchCourse(idx);
+    } else {
+      // курс скрыт авто-ремонтом — снимаем скрытие
+      prog.hiddenCourses.remove(id);
+      _applyCourseFilter();
+      final i2 = courses.indexWhere((c) => c.id == id);
+      if (i2 >= 0) switchCourse(i2);
+    }
+    notifyListeners();
+    return '';
+  }
+
+  /// _cleanupIncident — инцидент разобран: курс удаляется, выдаётся
+  /// достижение. Вызывается после завершения его единственной задачи.
+  Future<void> _cleanupIncident(String courseId) async {
+    final i = allCourses.indexWhere((c) => c.id == courseId);
+    if (i < 0) return;
+    final title = allCourses[i].title;
+    allCourses.removeAt(i);
+    prog.extraCourses.removeWhere((c) => c.id == courseId);
+    _removeFromCourseOrder(courseId);
+    await saveProgress();
+    grant('firefighter');
+    addChatMessage('mentor',
+        'Инцидент «$title» закрыт. Достижение «Пожарный» — твоё. Система работает, отходи на обед.');
+    _applyCourseFilter();
+    notifyListeners();
+  }
+
   void deleteCourse(int i) {
+    if (operations.isBusy) {
+      lastFillError = 'Нельзя удалять курс, пока идёт генерация.';
+      notifyListeners();
+      return;
+    }
     if (i < 0 || i >= courses.length || courses.length <= 1) return;
     final currentId = cur.id;
     final wasCurrent = i == courseIdx;

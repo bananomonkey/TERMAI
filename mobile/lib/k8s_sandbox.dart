@@ -464,6 +464,21 @@ LocalResult _rollout(SandboxState st, List<String> a, String namespace) {
   }
   if (action == 'undo') {
     r['revision'] = ((r['revision'] as num?)?.toInt() ?? 1) + 1;
+    // Откат возвращает предыдущую рабочую версию: поды деплоймента
+    // оживают (для учебного инцидента это и есть проверка успеха).
+    final replicas = (r['replicas'] as num?)?.toInt() ?? 0;
+    r['ready'] = replicas;
+    r['status'] = 'Running';
+    final prefix = '$name-';
+    for (final e in st.k8s.entries) {
+      if (!e.key.startsWith('pod/')) continue;
+      final pod = e.value;
+      if (pod['namespace'] != (r['namespace'] ?? namespace)) continue;
+      if ((pod['name'] ?? '').toString().startsWith(prefix)) {
+        pod['status'] = 'Running';
+        pod['ready'] = 1;
+      }
+    }
     _out(st, 'deployment.apps/$name rolled back');
   } else {
     _out(st, 'deployment "$name" successfully rolled out');

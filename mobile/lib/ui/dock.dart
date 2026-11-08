@@ -27,8 +27,7 @@ class GlassDock extends StatelessWidget {
             icon: Icons.route_outlined,
             label: 'Карта',
             tooltip: 'Карта прогресса',
-            onTap: () => Navigator.of(context)
-                .push(pageRoute(const ProgressMapScreen())),
+            onTap: () => pushUnique(context, const ProgressMapScreen()),
           ),
           const SizedBox(width: 4),
           _DockButton(
@@ -36,7 +35,7 @@ class GlassDock extends StatelessWidget {
             label: 'Архив',
             tooltip: 'Архив курсов',
             onTap: () =>
-                Navigator.of(context).push(pageRoute(const ArchiveScreen())),
+                pushUnique(context, const ArchiveScreen()),
           ),
           const SizedBox(width: 4),
           _DockButton(
@@ -44,7 +43,7 @@ class GlassDock extends StatelessWidget {
             label: 'Расход',
             tooltip: 'Расход токенов',
             onTap: () =>
-                Navigator.of(context).push(pageRoute(const UsageScreen())),
+                pushUnique(context, const UsageScreen()),
           ),
         ],
       ),

@@ -159,3 +159,18 @@ Widget sectionHeader(String text) => Padding(
           style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.w800, color: C.accent)),
     );
+
+/// _lastPushAt — дебаунс навигации: двойной тап во время анимации перехода
+/// открывал вторую копию экрана, и Back «ничего не делал».
+DateTime _lastPushAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+/// pushUnique — push с защитой от дублирования (двойной тап по нижней
+/// панели, спам по кнопкам). Повторный вызов внутри 600 мс игнорируется.
+/// Future — чтобы вызовы с `await` (возврат из урока) продолжали работать.
+Future<void> pushUnique(BuildContext context, Widget page,
+    {String? name}) async {
+  final now = DateTime.now();
+  if (now.difference(_lastPushAt).inMilliseconds < 600) return;
+  _lastPushAt = now;
+  await Navigator.of(context).push(pageRoute(page, name: name));
+}

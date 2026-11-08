@@ -1116,6 +1116,14 @@ class _CustomThemes extends StatelessWidget {
                   InkWell(
                     borderRadius: BorderRadius.circular(20),
                     onTap: () async {
+                      final ok = await showConfirmDialog(
+                        context,
+                        title: 'Удалить тему «${t.title}»?',
+                        message:
+                            'Своя палитра будет удалена безвозвратно. Стандартные темы останутся.',
+                        confirmLabel: 'Удалить',
+                      );
+                      if (!ok) return;
                       await controller.deleteCustomTheme(t.id);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

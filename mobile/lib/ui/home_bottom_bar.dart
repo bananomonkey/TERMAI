@@ -143,7 +143,7 @@ class _BarItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           onTap: () {
             HapticFeedback.selectionClick();
-            Navigator.of(context).push(pageRoute(destination));
+            pushUnique(context, destination);
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),

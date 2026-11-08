@@ -11,6 +11,7 @@ import 'background_settings.dart';
 import 'chat.dart';
 import 'dialogs.dart';
 import 'help.dart';
+import 'incident_screen.dart';
 import 'notes_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
@@ -50,7 +51,17 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Как учиться и что делает каждый экран',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context).push(pageRoute(const HelpScreen()));
+              pushUnique(context, const HelpScreen());
+            },
+          ),
+          const SizedBox(height: 8),
+          _SheetButton(
+            icon: Icons.local_fire_department_rounded,
+            title: 'Инциденты',
+            subtitle: 'Сломанная система: диагностируй и почини',
+            onTap: () {
+              Navigator.pop(ctx);
+              pushUnique(context, const IncidentScreen());
             },
           ),
           const SizedBox(height: 8),
@@ -60,7 +71,7 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Заметки с ИИ: проверить английский, перевести, улучшить',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context).push(pageRoute(const NotesScreen()));
+              pushUnique(context, const NotesScreen());
             },
           ),
           const SizedBox(height: 8),
@@ -88,8 +99,7 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Спроси о задаче, синтаксисе, ошибке',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context)
-                  .push(pageRoute(const ChatScreen(scope: ChatScope.general)));
+              pushUnique(context, const ChatScreen(scope: ChatScope.general));
             },
           ),
           const SizedBox(height: 8),
@@ -99,8 +109,7 @@ void showMoreSheet(BuildContext context) {
             subtitle: 'Своё фото, размытие и затемнение',
             onTap: () {
               Navigator.pop(ctx);
-              Navigator.of(context)
-                  .push(pageRoute(const BackgroundSettingsScreen()));
+              pushUnique(context, const BackgroundSettingsScreen());
             },
           ),
           const SizedBox(height: 8),
@@ -130,11 +139,21 @@ void showMoreSheet(BuildContext context) {
             icon: Icons.cleaning_services_outlined,
             title: 'Очистить генерацию курса',
             subtitle: 'Убрать задачи от ИИ из текущего курса',
-            onTap: () {
+            onTap: () async {
               Navigator.pop(ctx);
+              final ok = await showConfirmDialog(
+                context,
+                title: 'Очистить генерацию?',
+                message:
+                    'Все задачи курса, созданные ИИ, будут удалены. Встроенные задачи останутся.',
+                confirmLabel: 'Удалить',
+              );
+              if (!ok) return;
               controller.clearGeneratedTasks();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Сгенерированные задачи курса удалены')));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Сгенерированные задачи курса удалены')));
+              }
             },
           ),
           const SizedBox(height: 8),

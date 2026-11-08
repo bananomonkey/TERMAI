@@ -21,6 +21,18 @@ class NotesScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Блокнот', style: AppText.screenTitle),
+        actions: [
+          ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => IconButton(
+              tooltip: 'Экспорт заметок',
+              onPressed: controller.notes.isEmpty
+                  ? null
+                  : () => _exportNotes(context),
+              icon: const Icon(Icons.ios_share_outlined, size: 20),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: C.accent,
@@ -149,6 +161,46 @@ class NotesScreen extends StatelessWidget {
     );
   }
 
+  /// _exportNotes — плагин-free экспорт: весь блокнот одним текстом
+  /// в диалоге с копированием (как экспорт прогресса).
+  Future<void> _exportNotes(BuildContext context) async {
+    final b = StringBuffer('Мои заметки TERMAI\n\n');
+    for (final n in controller.notes) {
+      b.write('=== ${n.title.isEmpty ? 'Без заголовка' : n.title} ===\n');
+      b.write('${n.text.trim()}\n\n');
+    }
+    final text = b.toString().trim();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.surface,
+        title: Text('Экспорт заметок (${controller.notes.length})',
+            style: TextStyle(color: C.text, fontSize: 16)),
+        content: SizedBox(
+          width: 340,
+          height: 320,
+          child: SingleChildScrollView(
+            child: Text(text,
+                style: TextStyle(fontSize: 12.5, height: 1.4, color: C.text)),
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          FilledButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: text));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Заметки скопированы')));
+            },
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('Скопировать всё'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _open(BuildContext context, Note? existing) async {
     final note = existing ??
         Note(id: DateTime.now().microsecondsSinceEpoch.toString());
@@ -158,9 +210,14 @@ class NotesScreen extends StatelessWidget {
       await controller.saveNotes();
     }
     if (!context.mounted) return;
-    await Navigator.of(context)
-        .push(pageRoute(NoteScreen(noteId: note.id)));
-    // Возврат на список: перерисоваться (заметка могла измениться).
+    await pushUnique(context, NoteScreen(noteId: note.id));
+    // Возврат на список: перерисоваться + убрать пустую заметку.
+    final n = controller.notes
+        .where((x) => x.id == note.id)
+        .toList();
+    if (n.isNotEmpty && n.first.text.trim().isEmpty && n.first.title.isEmpty) {
+      await controller.deleteNote(note);
+    }
     // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
     controller.notifyListeners();
   }
