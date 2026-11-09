@@ -108,6 +108,9 @@ class DownloadManager extends ChangeNotifier {
 
   final Map<String, DownloadJob> _jobs = {};
   final Map<String, http.Client> _dartClients = {};
+  /// id задачи → (последнее число байт, когда оно изменилось). Нужно, чтобы
+  /// отличить медленную загрузку от зависшей.
+  final Map<String, (int, DateTime)> _progressMark = {};
 
   Timer? _poll;
   Timer? _saveTimer;
@@ -415,9 +418,52 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// _promoteCompleted — страховка от «зависания» DownloadManager на
+  /// последних процентах. На части прошивок системная загрузка дописывает
+  /// файл (в проводнике он выглядит скачанным), но COLUMN_STATUS ещё долго
+  /// остаётся RUNNING или прогресс не доходит до 100%. Если файл на диске уже
+  /// нужного размера — завершаем задачу сами.
+  Future<bool> _promoteCompleted(DownloadJob job) async {
+    Future<bool> check(File f) async {
+      if (!await f.exists()) return false;
+      final size = await f.length();
+      if (size <= 0) return false;
+      if (job.totalBytes > 0 && size != job.totalBytes) return false;
+      _progressMark.remove(job.id);
+      job
+        ..receivedBytes = size
+        ..totalBytes = size
+        ..status = DownloadStatus.completed
+        ..error = ''
+        ..systemId = null
+        ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+      await _save();
+      notifyListeners();
+      return true;
+    }
+
+    final target = File(job.finalPath);
+    if (await check(target)) return true;
+    final part = File('${job.finalPath}.part');
+    if (!await part.exists()) return false;
+    final size = await part.length();
+    if (size <= 0) return false;
+    if (job.totalBytes > 0 && size != job.totalBytes) return false;
+    try {
+      if (await target.exists()) await target.delete();
+      await part.rename(target.path);
+    } catch (_) {
+      return false;
+    }
+    return check(target);
+  }
+
   Future<void> _refreshAndroid(DownloadJob job) async {
     final id = job.systemId;
     if (id == null) return;
+    // Сначала проверяем, не дописан ли файл до конца: это дешевле запроса
+    // к системе и работает даже если DownloadManager «завис».
+    if (await _promoteCompleted(job)) return;
     try {
       final result = await _channel.invokeMapMethod<String, dynamic>(
         'status',
@@ -480,12 +526,44 @@ class DownloadManager extends ChangeNotifier {
           job.systemId = null;
         default:
           job.status = DownloadStatus.downloading;
+          // Watchdog: системная загрузка может «повиснуть» на последних
+          // процентах. Если байты не меняются 2 минуты — переходим на свой
+          // HTTP-клиент, он устойчивее к таким зависаниям.
+          final now = DateTime.now();
+          final mark = _progressMark[job.id];
+          if (mark == null || mark.$1 != received) {
+            _progressMark[job.id] = (received, now);
+          } else if (now.difference(mark.$2) > const Duration(minutes: 2)) {
+            _progressMark.remove(job.id);
+            await _recoverStalled(job);
+            return;
+          }
       }
       job.updatedAt = DateTime.now().millisecondsSinceEpoch;
       await _save();
     } catch (_) {
       // Нативный слой может быть недоступен в тестах.
     }
+  }
+
+  /// _recoverStalled — снимает зависшую системную загрузку и докачивает файл
+  /// собственным клиентом (Range), не теряя уже скачанные байты, если они на
+  /// диске и доступны.
+  Future<void> _recoverStalled(DownloadJob job) async {
+    final id = job.systemId;
+    if (id != null) {
+      try {
+        await _channel.invokeMethod<void>('cancel', {'id': id});
+      } catch (_) {}
+    }
+    job.systemId = null;
+    _stripPartSuffix(job);
+    job.status = DownloadStatus.downloading;
+    job.error = '';
+    job.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    await _save();
+    notifyListeners();
+    unawaited(_startDart(job, await _tokenForRetry()));
   }
 
   /// _stripPartSuffix — нативный слой может вернуть путь .part, если
