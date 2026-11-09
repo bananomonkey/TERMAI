@@ -5,7 +5,7 @@ compatibility_date = "2026-10-01"
 # Public promo metadata. The API key is NOT here: set it with
 #   npx wrangler secret put TOKEN_HARBOR_API_KEY
 [vars]
-PROMO_ENABLED = "true"
+PROMO_ENABLED = "false"
 # Один общий срок: дата деплоя + 7 дней. Поставьте точное UTC-время.
 PROMO_ENDS_AT = "2026-11-09T23:59:59Z"
 PROMO_MODEL = "deepseek-v4.1-flash:free"
